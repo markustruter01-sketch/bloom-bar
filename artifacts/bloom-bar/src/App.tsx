@@ -44,12 +44,13 @@ import {
   Router as WouterRouter,
 } from 'wouter';
 
-import logoImage from '@assets/52BDD7EC-3FFC-4B86-B92F-AF3D8AA0F7B7_1787904150832.PNG';
-import posterImage from '@assets/Sign_Umbrella_Bouquet_Botanical_Poster_1787904150833.png';
-import bannerImage from '@assets/5B6123F0-2696-437A-B3F7-BFBB0D2A5F6A_1787904150833.PNG';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
+const assetBase = `${import.meta.env.BASE_URL}assets`;
+const logoImage = `${assetBase}/bloom-bar-logo.png`;
+const posterImage = `${assetBase}/umbrella-bouquet-poster.png`;
+const bannerImage = `${assetBase}/floral-banner.png`;
 
 type Flower = {
   id: number;
