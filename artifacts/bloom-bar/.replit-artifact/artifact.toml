@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Bloom Bar"
+description = "A warm, mobile-first market stall manager for Bloom Bar, helping a flower and handmade jewellery seller prepare for Redcliffe Markets, track flowers, and see the next market at a glance."
+version = "1.0.0"
+id = "artifacts/bloom-bar"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 26164
+
+[services.development]
+run = "pnpm --filter @workspace/bloom-bar run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/bloom-bar", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/bloom-bar/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26164"
+BASE_PATH = "/"
