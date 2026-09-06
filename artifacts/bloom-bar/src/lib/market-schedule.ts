@@ -7,6 +7,7 @@ const longMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'Jul
 const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export type MarketDateFormat = 'full' | 'short' | 'table';
+export type MarketStatus = 'Closed' | 'Next up' | 'Upcoming';
 
 /**
  * Returns the market date for a fortnightly cycle relative to the confirmed
@@ -59,6 +60,14 @@ export function getNextMarketCycle(today = new Date()): number {
   return Math.max(0, Math.ceil(daysSinceAnchor / DAYS_IN_FORTNIGHT));
 }
 
+export function getMarketStatus(cycle: number, nextCycle: number): MarketStatus {
+  if (cycle < nextCycle) {
+    return 'Closed';
+  }
+
+  return cycle === nextCycle ? 'Next up' : 'Upcoming';
+}
+
 export const marketSchedule = {
   recurrence: 'Every fortnight on Sunday',
   dateForCycle: getMarketDate,
@@ -66,4 +75,5 @@ export const marketSchedule = {
   formatDay: formatMarketDay,
   daysUntil: daysUntilMarket,
   nextCycle: getNextMarketCycle,
+  statusForCycle: getMarketStatus,
 } as const;

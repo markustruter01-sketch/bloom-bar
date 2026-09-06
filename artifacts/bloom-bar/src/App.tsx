@@ -45,7 +45,7 @@ import {
 } from 'wouter';
 
 import NotFound from '@/pages/not-found';
-import { daysUntilMarket, formatMarketDate, formatMarketDay, getMarketDate, marketSchedule } from '@/lib/market-schedule';
+import { daysUntilMarket, formatMarketDate, formatMarketDay, getMarketDate, getMarketStatus, marketSchedule } from '@/lib/market-schedule';
 
 const queryClient = new QueryClient();
 const assetBase = `${import.meta.env.BASE_URL}assets`;
@@ -127,7 +127,7 @@ const markets = marketDefinitions.map((market) => {
     ...market,
     date: formatMarketDate(date, 'table'),
     day: formatMarketDay(date),
-    status: market.cycle < nextMarketCycle ? 'Closed' : market.cycle === nextMarketCycle ? 'Next up' : 'Upcoming',
+    status: getMarketStatus(market.cycle, nextMarketCycle),
   };
 });
 
