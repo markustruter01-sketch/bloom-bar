@@ -1,0 +1,1 @@
+- [OpenAPI integer compatibility](openapi-zod-compatibility.md) — use numeric transport fields until the generated client/runtime Zod versions are aligned.

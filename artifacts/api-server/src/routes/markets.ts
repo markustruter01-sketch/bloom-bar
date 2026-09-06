@@ -1,0 +1,175 @@
+import { Router, type IRouter } from "express";
+import { and, eq } from "drizzle-orm";
+import { db, buyItemsTable, bouquetPlansTable, closeMarketsTable, marketsTable } from "@workspace/db";
+import {
+  GetMarketContextParams,
+  GetMarketContextResponse,
+  ListMarketsResponse,
+  UpdateMarketBouquetPlanBody,
+  UpdateMarketBouquetPlanParams,
+  UpdateMarketBouquetPlanResponse,
+  UpdateMarketBuyItemBody,
+  UpdateMarketBuyItemParams,
+  UpdateMarketBuyItemResponse,
+  UpdateMarketCloseBody,
+  UpdateMarketCloseParams,
+  UpdateMarketCloseResponse,
+} from "@workspace/api-zod";
+import { formatScheduledMarketDate, getScheduledMarketDate } from "../lib/market-schedule";
+
+const router: IRouter = Router();
+
+const seededMarkets = [
+  { cycle: 0, venue: "Redcliffe Markets", spend: 642.8, revenue: 1846, margin: 65.2 },
+  { cycle: -40, venue: "Redcliffe Markets", spend: 598.4, revenue: 1712, margin: 65.0 },
+  { cycle: -41, venue: "Redcliffe Markets", spend: 621.1, revenue: 1938, margin: 67.9 },
+  { cycle: -42, venue: "Redcliffe Markets", spend: 560.5, revenue: 1587, margin: 64.7 },
+];
+
+const defaultBuyItems = [
+  { flower: "Lisianthus", detail: "White · classic blooms", qty: 4, unit: "bunches", lastPrice: 18.5, checked: true, category: "Classic Blooms" },
+  { flower: "Disbud chrysanthemum", detail: "Apricot · statement blooms", qty: 3, unit: "bunches", lastPrice: 22, checked: false, category: "Statement Blooms" },
+  { flower: "Snapdragon", detail: "Blush · classic blooms", qty: 4, unit: "bunches", lastPrice: 16, checked: false, category: "Classic Blooms" },
+  { flower: "Daisy", detail: "White · classic blooms", qty: 3, unit: "bunches", lastPrice: 12.5, checked: false, category: "Classic Blooms" },
+  { flower: "Queen Anne’s lace", detail: "White · textural foliage", qty: 2, unit: "bunches", lastPrice: 19, checked: false, category: "Textural Foliage" },
+  { flower: "Eucalyptus foliage", detail: "Silver dollar · gum", qty: 4, unit: "bunches", lastPrice: 10, checked: false, category: "Gum" },
+  { flower: "Billy buttons", detail: "Golden · textural foliage", qty: 2, unit: "bunches", lastPrice: 13.5, checked: false, category: "Textural Foliage" },
+];
+
+const defaultCloseCounts = { Lisianthus: 2, Daisy: 7, Snapdragon: 3, "Eucalyptus foliage": 5 };
+
+function parseCycle(raw: string | string[] | undefined): number | null {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (value == null || !/^-?\d+$/.test(value)) return null;
+  return Number(value);
+}
+
+async function ensureMarketContext(cycle: number) {
+  await db.transaction(async (tx) => {
+    for (const market of seededMarkets) {
+      await tx.insert(marketsTable).values(market).onConflictDoNothing({ target: marketsTable.cycle });
+    }
+
+    await tx
+      .insert(marketsTable)
+      .values({ cycle, venue: "Redcliffe Markets", spend: 0, revenue: 0, margin: 0 })
+      .onConflictDoNothing({ target: marketsTable.cycle });
+
+    const existingItems = await tx
+      .select({ id: buyItemsTable.id })
+      .from(buyItemsTable)
+      .where(eq(buyItemsTable.marketCycle, cycle));
+    if (existingItems.length === 0) {
+      await tx.insert(buyItemsTable).values(defaultBuyItems.map((item) => ({ ...item, marketCycle: cycle })));
+    }
+
+    const existingPlan = await tx
+      .select({ marketCycle: bouquetPlansTable.marketCycle })
+      .from(bouquetPlansTable)
+      .where(eq(bouquetPlansTable.marketCycle, cycle));
+    if (existingPlan.length === 0) {
+      await tx.insert(bouquetPlansTable).values({ marketCycle: cycle, selectedBand: "Market", count: 18 });
+    }
+
+    const existingClose = await tx
+      .select({ marketCycle: closeMarketsTable.marketCycle })
+      .from(closeMarketsTable)
+      .where(eq(closeMarketsTable.marketCycle, cycle));
+    if (existingClose.length === 0) {
+      await tx.insert(closeMarketsTable).values({ marketCycle: cycle, counts: defaultCloseCounts, closed: false });
+    }
+  });
+}
+
+async function readMarketContext(cycle: number) {
+  await ensureMarketContext(cycle);
+  const [market] = await db.select().from(marketsTable).where(eq(marketsTable.cycle, cycle));
+  const buyItems = await db.select().from(buyItemsTable).where(eq(buyItemsTable.marketCycle, cycle)).orderBy(buyItemsTable.id);
+  const [bouquetPlan] = await db.select().from(bouquetPlansTable).where(eq(bouquetPlansTable.marketCycle, cycle));
+  const [closeMarket] = await db.select().from(closeMarketsTable).where(eq(closeMarketsTable.marketCycle, cycle));
+
+  return {
+    cycle,
+    date: getScheduledMarketDate(cycle),
+    venue: market.venue,
+    spend: market.spend,
+    revenue: market.revenue,
+    margin: market.margin,
+    buyItems,
+    bouquetPlan,
+    closeMarket,
+  };
+}
+
+router.get("/markets", async (_req, res): Promise<void> => {
+  for (const market of seededMarkets) {
+    await db.insert(marketsTable).values(market).onConflictDoNothing({ target: marketsTable.cycle });
+  }
+  const markets = await db.select().from(marketsTable).orderBy(marketsTable.cycle);
+  res.json(ListMarketsResponse.parse(markets.map((market) => ({
+    ...market,
+    date: formatScheduledMarketDate(market.cycle),
+  }))));
+});
+
+router.get("/markets/context/:cycle", async (req, res): Promise<void> => {
+  const params = GetMarketContextParams.safeParse(req.params);
+  if (!params.success || !Number.isInteger(params.data.cycle)) {
+    res.status(400).json({ error: "Market cycle must be an integer." });
+    return;
+  }
+  res.json(GetMarketContextResponse.parse(await readMarketContext(params.data.cycle)));
+});
+
+router.patch("/markets/context/:cycle/buy-items/:id", async (req, res): Promise<void> => {
+  const params = UpdateMarketBuyItemParams.safeParse(req.params);
+  const body = UpdateMarketBuyItemBody.safeParse(req.body);
+  if (!params.success || !body.success || !Number.isInteger(params.data.cycle) || !Number.isInteger(params.data.id)) {
+    res.status(400).json({ error: "Invalid market cycle, item ID, or checked value." });
+    return;
+  }
+  const [item] = await db
+    .update(buyItemsTable)
+    .set({ checked: body.data.checked })
+    .where(and(eq(buyItemsTable.id, params.data.id), eq(buyItemsTable.marketCycle, params.data.cycle)))
+    .returning();
+  if (!item) {
+    res.status(404).json({ error: "Buy-list item not found." });
+    return;
+  }
+  res.json(UpdateMarketBuyItemResponse.parse(item));
+});
+
+router.patch("/markets/context/:cycle/bouquet-plan", async (req, res): Promise<void> => {
+  const params = UpdateMarketBouquetPlanParams.safeParse(req.params);
+  const body = UpdateMarketBouquetPlanBody.safeParse(req.body);
+  if (!params.success || !body.success || !Number.isInteger(params.data.cycle) || !Number.isInteger(body.data.count)) {
+    res.status(400).json({ error: "Invalid market cycle or bouquet plan." });
+    return;
+  }
+  await ensureMarketContext(params.data.cycle);
+  const [plan] = await db
+    .update(bouquetPlansTable)
+    .set({ selectedBand: body.data.selectedBand, count: body.data.count })
+    .where(eq(bouquetPlansTable.marketCycle, params.data.cycle))
+    .returning();
+  res.json(UpdateMarketBouquetPlanResponse.parse(plan));
+});
+
+router.patch("/markets/context/:cycle/close", async (req, res): Promise<void> => {
+  const params = UpdateMarketCloseParams.safeParse(req.params);
+  const body = UpdateMarketCloseBody.safeParse(req.body);
+  if (!params.success || !body.success || !Number.isInteger(params.data.cycle)) {
+    res.status(400).json({ error: "Invalid market cycle or close-market data." });
+    return;
+  }
+  await ensureMarketContext(params.data.cycle);
+  const [closeMarket] = await db
+    .update(closeMarketsTable)
+    .set({ counts: body.data.counts, closed: body.data.closed })
+    .where(eq(closeMarketsTable.marketCycle, params.data.cycle))
+    .returning();
+  res.json(UpdateMarketCloseResponse.parse(closeMarket));
+});
+
+export default router;

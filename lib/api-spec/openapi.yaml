@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: markets
+    description: Market history and schedule-linked planning
 paths:
   /healthz:
     get:
@@ -24,7 +26,109 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /markets:
+    get:
+      operationId: listMarkets
+      tags: [markets]
+      summary: List market history
+      responses:
+        "200":
+          description: Market history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Market"
+  /markets/context/{cycle}:
+    get:
+      operationId: getMarketContext
+      tags: [markets]
+      summary: Get the saved context for a scheduled market cycle
+      parameters:
+        - $ref: "#/components/parameters/MarketCycle"
+      responses:
+        "200":
+          description: Schedule-linked market context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketContext"
+  /markets/context/{cycle}/buy-items/{id}:
+    patch:
+      operationId: updateMarketBuyItem
+      tags: [markets]
+      summary: Update a buy-list item
+      parameters:
+        - $ref: "#/components/parameters/MarketCycle"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BuyItemUpdate"
+      responses:
+        "200":
+          description: Updated buy-list item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuyItem"
+        "404":
+          description: Buy-list item not found
+  /markets/context/{cycle}/bouquet-plan:
+    patch:
+      operationId: updateMarketBouquetPlan
+      tags: [markets]
+      summary: Save the bouquet plan for a market cycle
+      parameters:
+        - $ref: "#/components/parameters/MarketCycle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BouquetPlanUpdate"
+      responses:
+        "200":
+          description: Updated bouquet plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BouquetPlan"
+  /markets/context/{cycle}/close:
+    patch:
+      operationId: updateMarketClose
+      tags: [markets]
+      summary: Save close-market counts for a market cycle
+      parameters:
+        - $ref: "#/components/parameters/MarketCycle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloseMarketUpdate"
+      responses:
+        "200":
+          description: Updated close-market record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloseMarket"
 components:
+  parameters:
+    MarketCycle:
+      name: cycle
+      in: path
+      required: true
+      schema:
+        type: number
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +137,117 @@ components:
           type: string
       required:
         - status
+    Market:
+      type: object
+      required: [id, cycle, date, venue, spend, revenue, margin]
+      properties:
+        id:
+          type: number
+        cycle:
+          type: number
+        date:
+          type: string
+        venue:
+          type: string
+        spend:
+          type: number
+        revenue:
+          type: number
+        margin:
+          type: number
+    BuyItem:
+      type: object
+      required: [id, marketCycle, flower, detail, qty, unit, lastPrice, checked, category]
+      properties:
+        id:
+          type: number
+        marketCycle:
+          type: number
+        flower:
+          type: string
+        detail:
+          type: string
+        qty:
+          type: number
+        unit:
+          type: string
+        lastPrice:
+          type: number
+        checked:
+          type: boolean
+        category:
+          type: string
+    BuyItemUpdate:
+      type: object
+      required: [checked]
+      properties:
+        checked:
+          type: boolean
+    BouquetPlan:
+      type: object
+      required: [marketCycle, selectedBand, count]
+      properties:
+        marketCycle:
+          type: number
+        selectedBand:
+          type: string
+        count:
+          type: number
+    BouquetPlanUpdate:
+      type: object
+      required: [selectedBand, count]
+      properties:
+        selectedBand:
+          type: string
+        count:
+          type: number
+          minimum: 0
+    CloseMarket:
+      type: object
+      required: [marketCycle, counts, closed]
+      properties:
+        marketCycle:
+          type: number
+        counts:
+          type: object
+          additionalProperties:
+            type: number
+            minimum: 0
+        closed:
+          type: boolean
+    CloseMarketUpdate:
+      type: object
+      required: [counts, closed]
+      properties:
+        counts:
+          type: object
+          additionalProperties:
+            type: number
+            minimum: 0
+        closed:
+          type: boolean
+    MarketContext:
+      type: object
+      required: [cycle, date, venue, spend, revenue, margin, buyItems, bouquetPlan, closeMarket]
+      properties:
+        cycle:
+          type: number
+        date:
+          type: string
+        venue:
+          type: string
+        spend:
+          type: number
+        revenue:
+          type: number
+        margin:
+          type: number
+        buyItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/BuyItem"
+        bouquetPlan:
+          $ref: "#/components/schemas/BouquetPlan"
+        closeMarket:
+          $ref: "#/components/schemas/CloseMarket"
 

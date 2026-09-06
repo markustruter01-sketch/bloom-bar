@@ -1,5 +1,20 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  getGetMarketContextQueryKey,
+  useGetMarketContext,
+  useListMarkets,
+  useUpdateMarketBouquetPlan,
+  useUpdateMarketBuyItem,
+  useUpdateMarketClose,
+} from '@workspace/api-client-react';
+import type {
+  BouquetPlan,
+  BuyItem as ApiBuyItem,
+  CloseMarket,
+  Market,
+  MarketContext,
+} from '@workspace/api-client-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -85,16 +100,7 @@ type Flower = {
   colour: string;
 };
 
-type BuyItem = {
-  id: number;
-  flower: string;
-  detail: string;
-  qty: number;
-  unit: string;
-  lastPrice: number;
-  checked: boolean;
-  category: FlowerCategory;
-};
+type BuyItem = ApiBuyItem;
 
 const flowers: Flower[] = [
   { id: 1, common: 'Lisianthus', botanical: 'Eustoma grandiflorum', category: 'Classic Blooms', retail: 8.5, wholesale: 3.2, margin: 62, role: 'Soft bloom', seasonality: 'Autumn · Winter', enrichment: 'Ready', colour: '#b6a1c8' },
@@ -115,38 +121,6 @@ const priceBands = [
   { name: 'Generous', price: 75, stems: '18–22 stems', note: 'For the full table' },
 ];
 
-const marketDefinitions = [
-  { id: 1, cycle: 0, venue: 'Redcliffe Markets', spend: 642.8, revenue: 1846, margin: 65.2 },
-  { id: 2, cycle: -40, venue: 'Redcliffe Markets', spend: 598.4, revenue: 1712, margin: 65.0 },
-  { id: 3, cycle: -41, venue: 'Redcliffe Markets', spend: 621.1, revenue: 1938, margin: 67.9 },
-  { id: 4, cycle: -42, venue: 'Redcliffe Markets', spend: 560.5, revenue: 1587, margin: 64.7 },
-];
-const markets = marketDefinitions.map((market) => {
-  const date = getMarketDate(market.cycle);
-  return {
-    ...market,
-    date: formatMarketDate(date, 'table'),
-    day: formatMarketDay(date),
-    status: getMarketStatus(market.cycle, nextMarketCycle),
-  };
-});
-
-const recentPerformance = [
-  { cycle: -42, value: 1587, height: '54%' },
-  { cycle: -41, value: 1938, height: '86%' },
-  { cycle: -40, value: 1712, height: '68%' },
-  { cycle: nextMarketCycle, value: 1846, height: '77%' },
-].map((item) => ({ ...item, label: formatMarketDate(getMarketDate(item.cycle), 'short') }));
-const initialBuyItems: BuyItem[] = [
-  { id: 1, flower: 'Lisianthus', detail: 'White · classic blooms', qty: 4, unit: 'bunches', lastPrice: 18.5, checked: true, category: 'Classic Blooms' },
-  { id: 2, flower: 'Disbud chrysanthemum', detail: 'Apricot · statement blooms', qty: 3, unit: 'bunches', lastPrice: 22, checked: false, category: 'Statement Blooms' },
-  { id: 3, flower: 'Snapdragon', detail: 'Blush · classic blooms', qty: 4, unit: 'bunches', lastPrice: 16, checked: false, category: 'Classic Blooms' },
-  { id: 4, flower: 'Daisy', detail: 'White · classic blooms', qty: 3, unit: 'bunches', lastPrice: 12.5, checked: false, category: 'Classic Blooms' },
-  { id: 5, flower: 'Queen Anne’s lace', detail: 'White · textural foliage', qty: 2, unit: 'bunches', lastPrice: 19, checked: false, category: 'Textural Foliage' },
-  { id: 6, flower: 'Eucalyptus foliage', detail: 'Silver dollar · gum', qty: 4, unit: 'bunches', lastPrice: 10, checked: false, category: 'Gum' },
-  { id: 7, flower: 'Billy buttons', detail: 'Golden · textural foliage', qty: 2, unit: 'bunches', lastPrice: 13.5, checked: false, category: 'Textural Foliage' },
-];
-
 const navItems = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/flowers', label: 'Flower library', icon: Flower2 },
@@ -161,7 +135,7 @@ function Button({ children, className = '', onClick, type = 'button', testId, di
   return <button type={type} onClick={onClick} disabled={disabled} data-testid={testId} className={`inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-45 ${className}`}>{children}</button>;
 }
 
-function AppShell({ children }: { children: ReactNode }) {
+function AppShell({ children, remainingBuyItems }: { children: ReactNode; remainingBuyItems: number }) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const pageTitle = location === '/' ? 'Good morning, florist' : location.includes('/buy') ? 'Buy list' : location.includes('/close') ? 'Close market' : location.includes('/bouquets') ? 'Bouquet planning' : location === '/flowers' ? 'Flower library' : location === '/markets' ? 'Markets' : 'Bloom Bar';
@@ -183,7 +157,7 @@ function AppShell({ children }: { children: ReactNode }) {
             return <Link key={href} href={href} data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`} className={`group flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${active ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/20 hover:text-sidebar-primary'}`}><Icon size={17} strokeWidth={active ? 2.2 : 1.7} /><span>{label}</span>{active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-accent" />}</Link>;
           })}
           <p className="mb-3 mt-8 px-3 font-mono text-[9px] uppercase tracking-[.2em] text-sidebar-foreground/45">Next market</p>
-          <Link href="/markets/next/buy" data-testid="link-nav-buy-list" className={`group flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${location.includes('/buy') ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/20 hover:text-sidebar-primary'}`}><ShoppingBasket size={17} /><span>Buy list</span><span className="ml-auto rounded-full bg-accent/80 px-1.5 py-0.5 font-mono text-[10px] text-sidebar-primary-foreground">6</span></Link>
+          <Link href="/markets/next/buy" data-testid="link-nav-buy-list" className={`group flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${location.includes('/buy') ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/20 hover:text-sidebar-primary'}`}><ShoppingBasket size={17} /><span>Buy list</span><span className="ml-auto rounded-full bg-accent/80 px-1.5 py-0.5 font-mono text-[10px] text-sidebar-primary-foreground">{remainingBuyItems}</span></Link>
           <Link href="/markets/next/bouquets" data-testid="link-nav-bouquets" className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${location.includes('/bouquets') ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/20 hover:text-sidebar-primary'}`}><Sparkles size={17} /><span>Bouquets</span></Link>
           <Link href="/markets/next/close" data-testid="link-nav-close-market" className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${location.includes('/close') ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/20 hover:text-sidebar-primary'}`}><ClipboardCheck size={17} /><span>Close market</span></Link>
         </nav>
@@ -202,7 +176,7 @@ function AppShell({ children }: { children: ReactNode }) {
             <div className="font-serif text-lg md:hidden">{pageTitle}</div>
           </div>
           <div className="flex items-center gap-2.5">
-            <div className="hidden items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-xs text-muted-foreground sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-[#94aa67]" /> Saved locally</div>
+            <div className="hidden items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-xs text-muted-foreground sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-[#94aa67]" /> Saved to market plan</div>
             <Button className="h-9 w-9 rounded-full border border-foreground/10 bg-card p-0 text-muted-foreground hover:bg-muted" onClick={() => window.alert('No new notes — you are all caught up.')} testId="button-notifications"><Bell size={16} /></Button>
             <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-secondary font-serif text-sm text-secondary-foreground sm:flex" data-testid="avatar-owner">B</div>
           </div>
@@ -226,8 +200,25 @@ function MetricCard({ label, value, detail, accent = 'sage', icon: Icon }: { lab
   return <div className="paper-card rounded-lg border border-card-border p-5" data-testid={`metric-${label.toLowerCase().replaceAll(' ', '-')}`}><div className="mb-5 flex items-start justify-between"><span className="font-mono text-[10px] uppercase tracking-[.14em] text-muted-foreground">{label}</span><span className={`flex h-8 w-8 items-center justify-center rounded-full ${accents[accent]} text-foreground`}><Icon size={15} strokeWidth={1.8} /></span></div><div className="font-serif text-3xl tracking-[-.04em]" data-testid={`value-${label.toLowerCase().replaceAll(' ', '-')}`}>{value}</div><div className="mt-1 text-xs text-muted-foreground">{detail}</div></div>;
 }
 
-function Dashboard({ buyItems }: { buyItems: BuyItem[] }) {
+function Dashboard({ buyItems, markets }: { buyItems: BuyItem[]; markets: Market[] }) {
   const checkedCount = buyItems.filter((item) => item.checked).length;
+  const recentPerformance = markets
+    .slice()
+    .sort((a, b) => a.cycle - b.cycle)
+    .slice(-4)
+    .map((market, index, recent) => {
+      const maxRevenue = Math.max(...recent.map((item) => item.revenue), 1);
+      return {
+        ...market,
+        label: formatMarketDate(getMarketDate(market.cycle), 'short'),
+        height: `${Math.max(18, Math.round((market.revenue / maxRevenue) * 100))}%`,
+        current: market.cycle === nextMarketCycle,
+        index,
+      };
+    });
+  const lastMarket = markets
+    .filter((market) => market.cycle < nextMarketCycle)
+    .sort((a, b) => b.cycle - a.cycle)[0];
   return <div className="space-y-8">
     <section className="relative overflow-hidden rounded-xl border border-foreground/10 bg-[#e8e4cd] px-6 py-8 md:px-10 md:py-11">
       <div className="relative max-w-2xl">
@@ -240,9 +231,9 @@ function Dashboard({ buyItems }: { buyItems: BuyItem[] }) {
     </section>
 
     <section className="grid gap-3 md:grid-cols-3">
-      <MetricCard label="Last market" value="$1,712" detail="+8.4% on the previous Sunday" icon={TrendingUp} accent="sage" />
-      <MetricCard label="Gross margin" value="65.0%" detail="$1,113.60 after flower spend" icon={BarChart3} accent="lilac" />
-      <MetricCard label="Next market" value={nextMarket.daysUntil} detail={`${nextMarket.shortDate} · buy list is 1 of 7 items ready`} icon={Clock3} accent="peach" />
+       <MetricCard label="Last market" value={money(lastMarket?.revenue ?? 0)} detail={lastMarket ? `${money(lastMarket.revenue - lastMarket.spend)} after flower spend` : 'No closed market yet'} icon={TrendingUp} accent="sage" />
+       <MetricCard label="Gross margin" value={`${(lastMarket?.margin ?? 0).toFixed(1)}%`} detail={lastMarket ? `${money(lastMarket.spend)} flower spend` : 'No closed market yet'} icon={BarChart3} accent="lilac" />
+      <MetricCard label="Next market" value={nextMarket.daysUntil} detail={`${nextMarket.shortDate} · buy list is ${checkedCount} of ${buyItems.length} items ready`} icon={Clock3} accent="peach" />
     </section>
 
     <section className="grid gap-5 lg:grid-cols-[1.35fr_.65fr]">
@@ -250,7 +241,7 @@ function Dashboard({ buyItems }: { buyItems: BuyItem[] }) {
         <div className="flex items-center justify-between border-b border-foreground/10 px-5 py-4 md:px-6"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Sunday rhythm</p><h2 className="mt-1 font-serif text-xl">Recent performance</h2></div><Link href="/markets" data-testid="link-dashboard-markets" className="text-xs font-semibold text-primary underline decoration-primary/30 underline-offset-4">View markets</Link></div>
         <div className="p-5 md:p-6">
           <div className="flex h-[168px] items-end gap-2 border-b border-l border-foreground/10 px-2 pb-0 pt-5 md:gap-5">
-            {recentPerformance.map((item, index) => <div key={item.label} className="group flex h-full flex-1 flex-col justify-end gap-2"><div className="relative flex flex-1 items-end"><div className={`relative w-full rounded-t-sm transition-all duration-300 group-hover:opacity-80 ${index === 3 ? 'bg-primary' : 'bg-[#b9c29b]'}`} style={{ height: item.height }}><span className="absolute -top-6 left-1/2 -translate-x-1/2 font-mono text-[9px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">{money(item.value)}</span></div></div><span className={`pb-2 text-center font-mono text-[9px] ${index === 3 ? 'font-semibold text-primary' : 'text-muted-foreground'}`}>{item.label}</span></div>)}
+             {recentPerformance.map((item) => <div key={item.cycle} className="group flex h-full flex-1 flex-col justify-end gap-2"><div className="relative flex flex-1 items-end"><div className={`relative w-full rounded-t-sm transition-all duration-300 group-hover:opacity-80 ${item.current ? 'bg-primary' : 'bg-[#b9c29b]'}`} style={{ height: item.height }}><span className="absolute -top-6 left-1/2 -translate-x-1/2 font-mono text-[9px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">{money(item.revenue)}</span></div></div><span className={`pb-2 text-center font-mono text-[9px] ${item.current ? 'font-semibold text-primary' : 'text-muted-foreground'}`}>{item.label}</span></div>)}
           </div>
           <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>Revenue per market</span><span className="flex items-center gap-1.5 text-[#66804e]"><TrendingUp size={13} /> 16.3% over 4 Sundays</span></div>
         </div>
@@ -288,10 +279,17 @@ function FlowersPage() {
   </div>;
 }
 
-function MarketsPage() {
+function MarketsPage({ markets }: { markets: Market[] }) {
   const [activeTab, setActiveTab] = useState('All markets');
-  const filtered = markets.filter((market) => activeTab === 'All markets' || (activeTab === 'Upcoming' ? market.status !== 'Closed' : market.status === 'Closed'));
-  return <div><PageIntro eyebrow="The studio / market history" title="Every Sunday, accounted for." description="A clear view of what the stall costs, what it earns, and what to carry forward." action={<Button onClick={() => window.alert('New markets are ready to add when your market calendar is connected.')} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-add-market"><Plus size={15} /> Add market</Button>} /><div className="mb-6 flex items-center gap-1 border-b border-foreground/10"><button onClick={() => setActiveTab('All markets')} data-testid="tab-all-markets" className={`border-b-2 px-3 py-3 text-xs font-semibold ${activeTab === 'All markets' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}>All markets <span className="ml-1 font-mono text-[10px] opacity-60">{markets.length}</span></button><button onClick={() => setActiveTab('Upcoming')} data-testid="tab-upcoming-markets" className={`border-b-2 px-3 py-3 text-xs font-semibold ${activeTab === 'Upcoming' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}>Upcoming <span className="ml-1 font-mono text-[10px] opacity-60">{markets.filter((market) => market.status !== 'Closed').length}</span></button><button onClick={() => setActiveTab('Closed')} data-testid="tab-closed-markets" className={`border-b-2 px-3 py-3 text-xs font-semibold ${activeTab === 'Closed' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}>Closed <span className="ml-1 font-mono text-[10px] opacity-60">{markets.filter((market) => market.status === 'Closed').length}</span></button></div><div className="grid gap-3 md:grid-cols-3"><MetricCard label="Total revenue" value="$7,083" detail="Across 4 Redcliffe Sundays" icon={DollarSign} accent="sage" /><MetricCard label="Average spend" value="$606" detail="Flowers + stall costs" icon={ShoppingBasket} accent="peach" /><MetricCard label="Average margin" value="65.7%" detail="A healthy bunch of trade" icon={BarChart3} accent="lilac" /></div><div className="mt-7 overflow-hidden rounded-lg border border-card-border bg-card"><div className="hidden grid-cols-[1.3fr_1.4fr_.8fr_.8fr_.8fr] border-b border-foreground/10 bg-muted/55 px-5 py-3 font-mono text-[9px] uppercase tracking-[.14em] text-muted-foreground md:grid"><span>Market</span><span>Venue</span><span>Spend</span><span>Revenue</span><span>Margin</span></div>{filtered.map((market) => <div key={market.id} data-testid={`row-market-${market.id}`} className="grid gap-3 border-b border-foreground/10 px-4 py-5 last:border-0 md:grid-cols-[1.3fr_1.4fr_.8fr_.8fr_.8fr] md:items-center md:px-5"><div className="flex items-center justify-between md:block"><div className="flex items-center gap-2"><CalendarDays size={15} className="text-muted-foreground" /><span className="text-sm font-semibold">{market.date}</span><span className={`rounded-full px-2 py-1 font-mono text-[9px] uppercase ${market.status === 'Next up' ? 'bg-[#dce3c2] text-primary' : 'bg-muted text-muted-foreground'}`}>{market.status}</span></div><span className="mt-1 block pl-5 text-xs text-muted-foreground md:pl-0">{market.day}</span></div><div className="hidden text-sm text-muted-foreground md:block">{market.venue}</div><div className="grid grid-cols-3 gap-3 border-t border-foreground/10 pt-3 md:contents"><div><span className="block font-mono text-[9px] uppercase text-muted-foreground md:hidden">Spend</span><span className="font-mono text-sm">{money(market.spend)}</span></div><div><span className="block font-mono text-[9px] uppercase text-muted-foreground md:hidden">Revenue</span><span className="font-mono text-sm">{money(market.revenue)}</span></div><div><span className="block font-mono text-[9px] uppercase text-muted-foreground md:hidden">Margin</span><span className="font-mono text-sm text-[#64804e]">{market.margin}%</span></div></div></div>)}</div></div>;
+  const listedMarkets = markets.map((market) => {
+    const date = getMarketDate(market.cycle);
+    return { ...market, status: getMarketStatus(market.cycle, nextMarketCycle), day: formatMarketDay(date), displayDate: formatMarketDate(date, 'table') };
+  });
+  const filtered = listedMarkets.filter((market) => activeTab === 'All markets' || (activeTab === 'Upcoming' ? market.status !== 'Closed' : market.status === 'Closed'));
+  const totalRevenue = markets.reduce((sum, market) => sum + market.revenue, 0);
+  const averageSpend = markets.length ? markets.reduce((sum, market) => sum + market.spend, 0) / markets.length : 0;
+  const averageMargin = markets.length ? markets.reduce((sum, market) => sum + market.margin, 0) / markets.length : 0;
+  return <div><PageIntro eyebrow="The studio / market history" title="Every Sunday, accounted for." description="A clear view of what the stall costs, what it earns, and what to carry forward." action={<Button onClick={() => window.alert('New markets are ready to add when your market calendar is connected.')} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-add-market"><Plus size={15} /> Add market</Button>} /><div className="mb-6 flex items-center gap-1 border-b border-foreground/10"><button onClick={() => setActiveTab('All markets')} data-testid="tab-all-markets" className={`border-b-2 px-3 py-3 text-xs font-semibold ${activeTab === 'All markets' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}>All markets <span className="ml-1 font-mono text-[10px] opacity-60">{listedMarkets.length}</span></button><button onClick={() => setActiveTab('Upcoming')} data-testid="tab-upcoming-markets" className={`border-b-2 px-3 py-3 text-xs font-semibold ${activeTab === 'Upcoming' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}>Upcoming <span className="ml-1 font-mono text-[10px] opacity-60">{listedMarkets.filter((market) => market.status !== 'Closed').length}</span></button><button onClick={() => setActiveTab('Closed')} data-testid="tab-closed-markets" className={`border-b-2 px-3 py-3 text-xs font-semibold ${activeTab === 'Closed' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}>Closed <span className="ml-1 font-mono text-[10px] opacity-60">{listedMarkets.filter((market) => market.status === 'Closed').length}</span></button></div><div className="grid gap-3 md:grid-cols-3"><MetricCard label="Total revenue" value={money(totalRevenue)} detail={`Across ${markets.length} Redcliffe Sundays`} icon={DollarSign} accent="sage" /><MetricCard label="Average spend" value={money(averageSpend)} detail="Flowers + stall costs" icon={ShoppingBasket} accent="peach" /><MetricCard label="Average margin" value={`${averageMargin.toFixed(1)}%`} detail="A healthy bunch of trade" icon={BarChart3} accent="lilac" /></div><div className="mt-7 overflow-hidden rounded-lg border border-card-border bg-card"><div className="hidden grid-cols-[1.3fr_1.4fr_.8fr_.8fr_.8fr] border-b border-foreground/10 bg-muted/55 px-5 py-3 font-mono text-[9px] uppercase tracking-[.14em] text-muted-foreground md:grid"><span>Market</span><span>Venue</span><span>Spend</span><span>Revenue</span><span>Margin</span></div>{filtered.map((market) => <div key={market.id} data-testid={`row-market-${market.id}`} className="grid gap-3 border-b border-foreground/10 px-4 py-5 last:border-0 md:grid-cols-[1.3fr_1.4fr_.8fr_.8fr_.8fr] md:items-center md:px-5"><div className="flex items-center justify-between md:block"><div className="flex items-center gap-2"><CalendarDays size={15} className="text-muted-foreground" /><span className="text-sm font-semibold">{market.displayDate}</span><span className={`rounded-full px-2 py-1 font-mono text-[9px] uppercase ${market.status === 'Next up' ? 'bg-[#dce3c2] text-primary' : 'bg-muted text-muted-foreground'}`}>{market.status}</span></div><span className="mt-1 block pl-5 text-xs text-muted-foreground md:pl-0">{market.day}</span></div><div className="hidden text-sm text-muted-foreground md:block">{market.venue}</div><div className="grid grid-cols-3 gap-3 border-t border-foreground/10 pt-3 md:contents"><div><span className="block font-mono text-[9px] uppercase text-muted-foreground md:hidden">Spend</span><span className="font-mono text-sm">{money(market.spend)}</span></div><div><span className="block font-mono text-[9px] uppercase text-muted-foreground md:hidden">Revenue</span><span className="font-mono text-sm">{money(market.revenue)}</span></div><div><span className="block font-mono text-[9px] uppercase text-muted-foreground md:hidden">Margin</span><span className="font-mono text-sm text-[#64804e]">{market.margin}%</span></div></div></div>)}</div></div>;
 }
 
 function MarketSubnav({ active }: { active: 'buy' | 'bouquets' | 'close' }) {
@@ -307,29 +305,76 @@ function BuyPage({ buyItems, toggleBuyItem }: { buyItems: BuyItem[]; toggleBuyIt
   return <div><PageIntro eyebrow="Next market / preparation" title="Buy with a clear head." description="A practical list for the flower run. Tick things off as they land in your trolley." action={<div className="rounded-md bg-[#dce3c2] px-3 py-2 text-center"><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">{nextMarket.shortDate}</div><div className="text-sm font-semibold text-primary">{nextMarket.daysUntil} to go</div></div>} /><MarketSubnav active="buy" /><div className="grid gap-5 lg:grid-cols-[1fr_330px]"><div><div className="mb-4 flex items-center justify-between"><div className="flex gap-1 overflow-x-auto rounded-md bg-muted p-1">{categories.map((category) => <button key={category} onClick={() => setFilter(category)} data-testid={`filter-buy-${category.toLowerCase().replaceAll(' ', '-')}`} className={`shrink-0 rounded px-2.5 py-1.5 text-[11px] font-semibold ${filter === category ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground'}`}>{category}</button>)}</div><span className="hidden font-mono text-[10px] text-muted-foreground sm:block">{done}/{buyItems.length} checked</span></div><div className="space-y-2">{items.map((item) => <button type="button" key={item.id} onClick={() => toggleBuyItem(item.id)} data-testid={`button-check-buy-${item.id}`} className={`group flex w-full items-center gap-3 rounded-lg border p-4 text-left transition-all ${item.checked ? 'border-[#ccd6b0] bg-[#edf0df]/75' : 'border-card-border bg-card hover:border-primary/30'}`}><span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all ${item.checked ? 'check-pop border-primary bg-primary text-primary-foreground' : 'border-foreground/20 group-hover:border-primary'}`}>{item.checked && <Check size={14} strokeWidth={3} />}</span><span className="min-w-0 flex-1"><span className={`block text-sm font-semibold ${item.checked ? 'text-muted-foreground line-through' : ''}`}>{item.flower}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.detail}</span></span><span className="text-right"><span className="block font-mono text-sm">{item.qty}</span><span className="block text-[10px] text-muted-foreground">{item.unit}</span></span><span className="hidden w-20 text-right sm:block"><span className="block font-mono text-xs">{money(item.lastPrice)}</span><span className="block text-[10px] text-muted-foreground">last price</span></span><MoreHorizontal size={16} className="text-muted-foreground/50" /></button>)}</div><Button onClick={() => window.alert('A new blank stem row is ready to add in the connected version.')} className="mt-4 w-full border border-dashed border-foreground/20 bg-transparent text-muted-foreground hover:border-primary hover:text-primary" testId="button-add-buy-item"><Plus size={15} /> Add another stem</Button></div><aside className="h-fit space-y-3 lg:sticky lg:top-24"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><DollarSign size={13} /> Sourcing estimate</div><div className="mt-4 font-serif text-4xl tracking-[-.04em] text-primary" data-testid="text-buy-estimate">{money(total)}</div><p className="mt-1 text-xs leading-relaxed text-primary/65">Based on your last recorded prices. Leave a little room for market morning surprises.</p><div className="mt-5 border-t border-primary/15 pt-4"><div className="flex justify-between text-xs"><span className="text-primary/65">Expected flower spend</span><span className="font-mono font-semibold text-primary">{money(total)}</span></div><div className="mt-2 flex justify-between text-xs"><span className="text-primary/65">Target revenue</span><span className="font-mono font-semibold text-primary">$1,846</span></div></div></div><div className="paper-card rounded-lg border border-card-border p-5"><div className="flex items-center gap-2 font-serif text-lg"><Truck size={17} className="text-muted-foreground" /> Sourcing notes</div><ul className="mt-4 space-y-3 text-xs leading-relaxed text-muted-foreground"><li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />Confirm grower availability by Thursday afternoon.</li><li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />Ask for the softest apricot disbuds on the cart.</li><li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />Pick up buckets and extra paper on the way in.</li></ul></div></aside></div></div>;
 }
 
-function BouquetsPage() {
-  const [selectedBand, setSelectedBand] = useState('Market');
-  const [count, setCount] = useState(18);
+function BouquetsPage({ bouquetPlan, saveBouquetPlan }: { bouquetPlan: BouquetPlan; saveBouquetPlan: (selectedBand: string, count: number) => void }) {
+  const [selectedBand, setSelectedBand] = useState(bouquetPlan.selectedBand);
+  const [count, setCount] = useState(bouquetPlan.count);
+  useEffect(() => {
+    setSelectedBand(bouquetPlan.selectedBand);
+    setCount(bouquetPlan.count);
+  }, [bouquetPlan.marketCycle, bouquetPlan.selectedBand, bouquetPlan.count]);
   const band = priceBands.find((item) => item.name === selectedBand) ?? priceBands[1];
-  return <div><PageIntro eyebrow="Next market / making plan" title="A table full of colour." description="Decide the shape of Sunday before the first customer arrives. Your build-your-own bar, made legible." action={<div className="flex items-center gap-3"><div className="rounded-md bg-[#dce3c2] px-3 py-2 text-center"><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">{nextMarket.shortDate}</div><div className="text-sm font-semibold text-primary">Next market</div></div><Button onClick={() => setCount(count + 1)} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-add-bouquet"><Plus size={15} /> Add bouquet</Button></div>} /><MarketSubnav active="bouquets" /><div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]"><div><div className="mb-4 flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Price architecture</p><h2 className="mt-1 font-serif text-2xl">Three sizes, one good day.</h2></div><span className="font-mono text-xs text-muted-foreground">{count} planned</span></div><div className="space-y-3">{priceBands.map((item, index) => <button key={item.name} type="button" onClick={() => setSelectedBand(item.name)} data-testid={`button-price-band-${item.name.toLowerCase()}`} className={`flex w-full items-center gap-4 rounded-lg border p-4 text-left transition-all ${selectedBand === item.name ? 'border-primary bg-[#e8e4cd] shadow-sm' : 'border-card-border bg-card hover:border-primary/30'}`}><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-serif text-lg ${index === 0 ? 'bg-[#e4d7e9]' : index === 1 ? 'bg-[#dce3c2]' : 'bg-[#f1d0c3]'}`}>{index + 1}</span><span className="flex-1"><span className="block font-serif text-xl">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.note} · {item.stems}</span></span><span className="font-mono text-lg">{money(item.price)}</span>{selectedBand === item.name && <CheckCircle2 size={18} className="text-primary" />}</button>)}</div><div className="mt-7 rounded-lg border border-card-border bg-card p-5"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Stem recipe</p><h3 className="mt-1 font-serif text-xl">{band.name} bouquet</h3></div><Pencil size={15} className="text-muted-foreground" /></div><div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">{[{ name: 'Focal', qty: 2, colour: '#e3a38e' }, { name: 'Feature', qty: 5, colour: '#b6a1c8' }, { name: 'Filler', qty: 4, colour: '#e6c26c' }, { name: 'Foliage', qty: 3, colour: '#9aa58b' }].map((item) => <div key={item.name} className="rounded-md bg-muted p-3"><span className="block h-3 w-3 rounded-full" style={{ background: item.colour }} /><span className="mt-3 block text-xs font-semibold">{item.name}</span><span className="mt-1 block font-mono text-[10px] text-muted-foreground">{item.qty} stems</span></div>)}</div></div></div><div className="relative overflow-hidden rounded-xl border border-foreground/10 bg-[#e8e4cd] p-6 md:p-8"><img src={posterImage} alt="Umbrella bouquet poster inspiration" className="absolute -right-16 -top-20 w-[210px] rotate-12 opacity-[.15] mix-blend-multiply" /><div className="relative"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Tag size={13} /> Sunday target</div><div className="mt-8 flex items-end gap-3"><span className="font-serif text-7xl leading-none text-primary">{count}</span><span className="mb-2 font-serif text-xl text-primary/70">bouquets</span></div><p className="mt-4 max-w-xs text-sm leading-relaxed text-primary/70">A gentle target for the umbrella bouquet table. You can always make more when the morning gets busy.</p><div className="mt-8 border-t border-primary/15 pt-5"><div className="flex justify-between text-xs text-primary/70"><span>Target bouquet revenue</span><span className="font-mono font-semibold text-primary">{money(count * 55)}</span></div><div className="mt-3 flex justify-between text-xs text-primary/70"><span>Selected size</span><span className="font-semibold text-primary">{band.name} · {money(band.price)}</span></div></div><Button onClick={() => window.alert(`${count} ${band.name.toLowerCase()} bouquets planned for Sunday.`)} className="mt-8 w-full bg-primary text-primary-foreground hover:bg-primary/90" testId="button-save-bouquet-plan"><Check size={15} /> Save Sunday plan</Button></div></div></div></div>;
+  return <div><PageIntro eyebrow="Next market / making plan" title="A table full of colour." description="Decide the shape of Sunday before the first customer arrives. Your build-your-own bar, made legible." action={<div className="flex items-center gap-3"><div className="rounded-md bg-[#dce3c2] px-3 py-2 text-center"><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">{nextMarket.shortDate}</div><div className="text-sm font-semibold text-primary">Next market</div></div><Button onClick={() => setCount(count + 1)} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-add-bouquet"><Plus size={15} /> Add bouquet</Button></div>} /><MarketSubnav active="bouquets" /><div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]"><div><div className="mb-4 flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Price architecture</p><h2 className="mt-1 font-serif text-2xl">Three sizes, one good day.</h2></div><span className="font-mono text-xs text-muted-foreground">{count} planned</span></div><div className="space-y-3">{priceBands.map((item, index) => <button key={item.name} type="button" onClick={() => setSelectedBand(item.name)} data-testid={`button-price-band-${item.name.toLowerCase()}`} className={`flex w-full items-center gap-4 rounded-lg border p-4 text-left transition-all ${selectedBand === item.name ? 'border-primary bg-[#e8e4cd] shadow-sm' : 'border-card-border bg-card hover:border-primary/30'}`}><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-serif text-lg ${index === 0 ? 'bg-[#e4d7e9]' : index === 1 ? 'bg-[#dce3c2]' : 'bg-[#f1d0c3]'}`}>{index + 1}</span><span className="flex-1"><span className="block font-serif text-xl">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.note} · {item.stems}</span></span><span className="font-mono text-lg">{money(item.price)}</span>{selectedBand === item.name && <CheckCircle2 size={18} className="text-primary" />}</button>)}</div><div className="mt-7 rounded-lg border border-card-border bg-card p-5"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Stem recipe</p><h3 className="mt-1 font-serif text-xl">{band.name} bouquet</h3></div><Pencil size={15} className="text-muted-foreground" /></div><div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">{[{ name: 'Focal', qty: 2, colour: '#e3a38e' }, { name: 'Feature', qty: 5, colour: '#b6a1c8' }, { name: 'Filler', qty: 4, colour: '#e6c26c' }, { name: 'Foliage', qty: 3, colour: '#9aa58b' }].map((item) => <div key={item.name} className="rounded-md bg-muted p-3"><span className="block h-3 w-3 rounded-full" style={{ background: item.colour }} /><span className="mt-3 block text-xs font-semibold">{item.name}</span><span className="mt-1 block font-mono text-[10px] text-muted-foreground">{item.qty} stems</span></div>)}</div></div></div><div className="relative overflow-hidden rounded-xl border border-foreground/10 bg-[#e8e4cd] p-6 md:p-8"><img src={posterImage} alt="Umbrella bouquet poster inspiration" className="absolute -right-16 -top-20 w-[210px] rotate-12 opacity-[.15] mix-blend-multiply" /><div className="relative"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Tag size={13} /> Sunday target</div><div className="mt-8 flex items-end gap-3"><span className="font-serif text-7xl leading-none text-primary">{count}</span><span className="mb-2 font-serif text-xl text-primary/70">bouquets</span></div><p className="mt-4 max-w-xs text-sm leading-relaxed text-primary/70">A gentle target for the umbrella bouquet table. You can always make more when the morning gets busy.</p><div className="mt-8 border-t border-primary/15 pt-5"><div className="flex justify-between text-xs text-primary/70"><span>Target bouquet revenue</span><span className="font-mono font-semibold text-primary">{money(count * band.price)}</span></div><div className="mt-3 flex justify-between text-xs text-primary/70"><span>Selected size</span><span className="font-semibold text-primary">{band.name} · {money(band.price)}</span></div></div><Button onClick={() => saveBouquetPlan(band.name, count)} className="mt-8 w-full bg-primary text-primary-foreground hover:bg-primary/90" testId="button-save-bouquet-plan"><Check size={15} /> Save Sunday plan</Button></div></div></div></div>;
 }
 
-function ClosePage() {
-  const [counts, setCounts] = useState<Record<string, number>>({ 'Lisianthus': 2, 'Daisy': 7, 'Snapdragon': 3, 'Eucalyptus foliage': 5 });
-  const [closed, setClosed] = useState(false);
+function ClosePage({ closeMarket, saveCloseMarket }: { closeMarket: CloseMarket; saveCloseMarket: (counts: Record<string, number>, closed: boolean) => void }) {
+  const [counts, setCounts] = useState<Record<string, number>>(closeMarket.counts);
+  const [closed, setClosed] = useState(closeMarket.closed);
+  useEffect(() => {
+    setCounts(closeMarket.counts);
+    setClosed(closeMarket.closed);
+  }, [closeMarket.marketCycle, closeMarket.counts, closeMarket.closed]);
   const stock = [{ name: 'Lisianthus', note: 'Classic bloom stems', opening: 18 }, { name: 'Daisy', note: 'Classic bloom stems', opening: 30 }, { name: 'Snapdragon', note: 'Classic bloom stems', opening: 20 }, { name: 'Eucalyptus foliage', note: 'Gum stems', opening: 26 }];
   const totalLeft = Object.values(counts).reduce((sum, value) => sum + value, 0);
-  return <div><PageIntro eyebrow="Next market / pack-down" title="Leave the shed lighter." description="A quick count of what came home, what found a vase, and what to carry into the next Sunday." action={<div className={`rounded-md px-3 py-2 text-center ${closed ? 'bg-[#dce3c2]' : 'bg-muted'}`}><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">Market status</div><div className="text-sm font-semibold">{closed ? 'Closed out' : 'Not closed'}</div></div>} /><MarketSubnav active="close" /><div className="grid gap-6 lg:grid-cols-[1fr_340px]"><div><div className="mb-4 flex items-end justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Leftover stock</p><h2 className="mt-1 font-serif text-2xl">What came home?</h2></div><span className="font-mono text-xs text-muted-foreground">{totalLeft} stems counted</span></div><div className="overflow-hidden rounded-lg border border-card-border bg-card">{stock.map((item) => <div key={item.name} className="flex items-center gap-4 border-b border-foreground/10 p-4 last:border-0"><span className="h-9 w-9 rounded-full border border-foreground/10" style={{ background: `radial-gradient(circle at 40% 30%, ${flowers.find((flower) => flower.common === item.name)?.colour ?? '#b6a1c8'}, #eee5dc)` }} /><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.note} · {item.opening} opened</span></span><div className="flex items-center gap-2"><Button onClick={() => setCounts((current) => ({ ...current, [item.name]: Math.max(0, (current[item.name] ?? 0) - 1) }))} className="h-8 w-8 rounded-full border border-foreground/15 bg-background p-0 text-lg font-normal" testId={`button-decrease-${item.name.toLowerCase().replaceAll(' ', '-')}`}>−</Button><span className="w-6 text-center font-mono text-sm" data-testid={`text-leftover-${item.name.toLowerCase().replaceAll(' ', '-')}`}>{counts[item.name] ?? 0}</span><Button onClick={() => setCounts((current) => ({ ...current, [item.name]: (current[item.name] ?? 0) + 1 }))} className="h-8 w-8 rounded-full border border-foreground/15 bg-background p-0 text-lg font-normal" testId={`button-increase-${item.name.toLowerCase().replaceAll(' ', '-')}`}><Plus size={14} /></Button></div></div>)}</div><Button onClick={() => setClosed(!closed)} className={`mt-4 w-full ${closed ? 'border border-primary bg-transparent text-primary' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`} testId="button-save-close">{closed ? <><CheckCircle2 size={15} /> Reopen count</> : <><ClipboardCheck size={15} /> Save pack-down count</>}</Button></div><aside className="h-fit space-y-3"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Package size={13} /> Pack-down notes</div><p className="mt-4 font-serif text-xl leading-snug text-primary">Good flowers deserve<br />a second Sunday.</p><p className="mt-3 text-xs leading-relaxed text-primary/65">Record what is still fresh so it can guide your next buy list. Compost anything that has lost its lift.</p></div><div className="paper-card rounded-lg border border-card-border p-5"><div className="flex items-center gap-2 font-serif text-lg"><ClipboardList size={17} className="text-muted-foreground" /> Close checklist</div><div className="mt-4 space-y-3 text-xs text-muted-foreground"><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-buckets" className="accent-primary" /> Rinse buckets</label><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-tent" className="accent-primary" /> Pack umbrella sign</label><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-till" className="accent-primary" /> Reconcile the till</label></div></div></aside></div></div>;
+  return <div><PageIntro eyebrow="Next market / pack-down" title="Leave the shed lighter." description="A quick count of what came home, what found a vase, and what to carry into the next Sunday." action={<div className={`rounded-md px-3 py-2 text-center ${closed ? 'bg-[#dce3c2]' : 'bg-muted'}`}><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">Market status</div><div className="text-sm font-semibold">{closed ? 'Closed out' : 'Not closed'}</div></div>} /><MarketSubnav active="close" /><div className="grid gap-6 lg:grid-cols-[1fr_340px]"><div><div className="mb-4 flex items-end justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Leftover stock</p><h2 className="mt-1 font-serif text-2xl">What came home?</h2></div><span className="font-mono text-xs text-muted-foreground">{totalLeft} stems counted</span></div><div className="overflow-hidden rounded-lg border border-card-border bg-card">{stock.map((item) => <div key={item.name} className="flex items-center gap-4 border-b border-foreground/10 p-4 last:border-0"><span className="h-9 w-9 rounded-full border border-foreground/10" style={{ background: `radial-gradient(circle at 40% 30%, ${flowers.find((flower) => flower.common === item.name)?.colour ?? '#b6a1c8'}, #eee5dc)` }} /><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.note} · {item.opening} opened</span></span><div className="flex items-center gap-2"><Button onClick={() => setCounts((current) => ({ ...current, [item.name]: Math.max(0, (current[item.name] ?? 0) - 1) }))} className="h-8 w-8 rounded-full border border-foreground/15 bg-background p-0 text-lg font-normal" testId={`button-decrease-${item.name.toLowerCase().replaceAll(' ', '-')}`}>−</Button><span className="w-6 text-center font-mono text-sm" data-testid={`text-leftover-${item.name.toLowerCase().replaceAll(' ', '-')}`}>{counts[item.name] ?? 0}</span><Button onClick={() => setCounts((current) => ({ ...current, [item.name]: (current[item.name] ?? 0) + 1 }))} className="h-8 w-8 rounded-full border border-foreground/15 bg-background p-0 text-lg font-normal" testId={`button-increase-${item.name.toLowerCase().replaceAll(' ', '-')}`}><Plus size={14} /></Button></div></div>)}</div><Button onClick={() => { const nextClosed = !closed; setClosed(nextClosed); saveCloseMarket(counts, nextClosed); }} className={`mt-4 w-full ${closed ? 'border border-primary bg-transparent text-primary' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`} testId="button-save-close">{closed ? <><CheckCircle2 size={15} /> Reopen count</> : <><ClipboardCheck size={15} /> Save pack-down count</>}</Button></div><aside className="h-fit space-y-3"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Package size={13} /> Pack-down notes</div><p className="mt-4 font-serif text-xl leading-snug text-primary">Good flowers deserve<br />a second Sunday.</p><p className="mt-3 text-xs leading-relaxed text-primary/65">Record what is still fresh so it can guide your next buy list. Compost anything that has lost its lift.</p></div><div className="paper-card rounded-lg border border-card-border p-5"><div className="flex items-center gap-2 font-serif text-lg"><ClipboardList size={17} className="text-muted-foreground" /> Close checklist</div><div className="mt-4 space-y-3 text-xs text-muted-foreground"><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-buckets" className="accent-primary" /> Rinse buckets</label><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-tent" className="accent-primary" /> Pack umbrella sign</label><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-till" className="accent-primary" /> Reconcile the till</label></div></div></aside></div></div>;
 }
 
-function Router({ buyItems, toggleBuyItem }: { buyItems: BuyItem[]; toggleBuyItem: (id: number) => void }) {
-  return <AppShell><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} />} /><Route path="/flowers" component={FlowersPage} /><Route path="/markets" component={MarketsPage} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} toggleBuyItem={toggleBuyItem} />} /><Route path="/markets/next/close" component={ClosePage} /><Route path="/markets/next/bouquets" component={BouquetsPage} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
+function Router({ buyItems, markets, bouquetPlan, closeMarket, toggleBuyItem, saveBouquetPlan, saveCloseMarket }: { buyItems: BuyItem[]; markets: Market[]; bouquetPlan: BouquetPlan; closeMarket: CloseMarket; toggleBuyItem: (id: number) => void; saveBouquetPlan: (selectedBand: string, count: number) => void; saveCloseMarket: (counts: Record<string, number>, closed: boolean) => void }) {
+  return <AppShell remainingBuyItems={buyItems.filter((item) => !item.checked).length}><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} markets={markets} />} /><Route path="/flowers" component={FlowersPage} /><Route path="/markets" component={() => <MarketsPage markets={markets} />} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} toggleBuyItem={toggleBuyItem} />} /><Route path="/markets/next/close" component={() => <ClosePage closeMarket={closeMarket} saveCloseMarket={saveCloseMarket} />} /><Route path="/markets/next/bouquets" component={() => <BouquetsPage bouquetPlan={bouquetPlan} saveBouquetPlan={saveBouquetPlan} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
+}
+
+function AppContent() {
+  const marketContextQuery = useGetMarketContext(nextMarketCycle);
+  const marketsQuery = useListMarkets();
+  const buyItemMutation = useUpdateMarketBuyItem();
+  const bouquetPlanMutation = useUpdateMarketBouquetPlan();
+  const closeMarketMutation = useUpdateMarketClose();
+  const context = marketContextQuery.data;
+  const markets = marketsQuery.data ?? [];
+  const buyItems = context?.buyItems ?? [];
+  const updateContext = (patch: Partial<MarketContext>) => {
+    queryClient.setQueryData<MarketContext>(getGetMarketContextQueryKey(nextMarketCycle), (current) => current ? { ...current, ...patch } : current);
+  };
+  const toggleBuyItem = (id: number) => {
+    const item = buyItems.find((candidate) => candidate.id === id);
+    if (!item) return;
+    buyItemMutation.mutate({ cycle: nextMarketCycle, id, data: { checked: !item.checked } }, {
+      onSuccess: (updated) => updateContext({ buyItems: buyItems.map((candidate) => candidate.id === updated.id ? updated : candidate) }),
+      onError: () => window.alert('The buy-list change could not be saved. Please try again.'),
+    });
+  };
+  const saveBouquetPlan = (selectedBand: string, count: number) => {
+    bouquetPlanMutation.mutate({ cycle: nextMarketCycle, data: { selectedBand, count } }, {
+      onSuccess: (bouquetPlan) => updateContext({ bouquetPlan }),
+      onError: () => window.alert('The bouquet plan could not be saved. Please try again.'),
+    });
+  };
+  const saveCloseMarket = (counts: Record<string, number>, closed: boolean) => {
+    closeMarketMutation.mutate({ cycle: nextMarketCycle, data: { counts, closed } }, {
+      onSuccess: (closeMarket) => updateContext({ closeMarket }),
+      onError: () => window.alert('The pack-down count could not be saved. Please try again.'),
+    });
+  };
+  if (marketContextQuery.isError || marketsQuery.isError) {
+    return <TooltipProvider><div className="flex min-h-[100dvh] items-center justify-center bg-background px-6 text-center font-serif text-lg text-muted-foreground">Your market notes could not be loaded. Refresh to try again.</div></TooltipProvider>;
+  }
+  if (marketContextQuery.isLoading || marketsQuery.isLoading || !context) {
+    return <TooltipProvider><div className="flex min-h-[100dvh] items-center justify-center bg-background font-serif text-lg text-muted-foreground">Loading your market notes…</div></TooltipProvider>;
+  }
+  return <TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router buyItems={buyItems} markets={markets} bouquetPlan={context.bouquetPlan} closeMarket={context.closeMarket} toggleBuyItem={toggleBuyItem} saveBouquetPlan={saveBouquetPlan} saveCloseMarket={saveCloseMarket} /></WouterRouter><Toaster /></TooltipProvider>;
 }
 
 function App() {
-  const [buyItems, setBuyItems] = useState(initialBuyItems);
-  const toggleBuyItem = (id: number) => setBuyItems((items) => items.map((item) => item.id === id ? { ...item, checked: !item.checked } : item));
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router buyItems={buyItems} toggleBuyItem={toggleBuyItem} /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><AppContent /></QueryClientProvider>;
 }
 
 export default App;
