@@ -50,12 +50,61 @@ const queryClient = new QueryClient();
 const assetBase = `${import.meta.env.BASE_URL}assets`;
 const logoImage = `${assetBase}/bloom-bar-logo.png`;
 const posterImage = `${assetBase}/umbrella-bouquet-poster.png`;
-const nextMarket = {
-  fullDate: 'Sunday · 13 September 2026',
-  shortDate: 'Sunday 13 Sep',
-  daysUntil: '7 days',
-  recurrence: 'Every fortnight on Sunday',
-};
+const MARKET_ANCHOR_ISO = '2026-09-13';
+const MARKET_INTERVAL_DAYS = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function parseIsoDate(isoDate: string) {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  return Date.UTC(year, month - 1, day);
+}
+
+function toIsoDate(timestamp: number) {
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function addDays(isoDate: string, days: number) {
+  return toIsoDate(parseIsoDate(isoDate) + days * DAY_MS);
+}
+
+function getTodayIso() {
+  const today = new Date();
+  return toIsoDate(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+}
+
+function getNextMarketIso(referenceDate = getTodayIso()) {
+  const daysSinceAnchor = Math.floor((parseIsoDate(referenceDate) - parseIsoDate(MARKET_ANCHOR_ISO)) / DAY_MS);
+  const marketIntervals = Math.max(0, Math.ceil(daysSinceAnchor / MARKET_INTERVAL_DAYS));
+  return addDays(MARKET_ANCHOR_ISO, marketIntervals * MARKET_INTERVAL_DAYS);
+}
+
+function getMarketDateLabels(isoDate: string) {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  const weekday = new Intl.DateTimeFormat('en-AU', { weekday: 'long', timeZone: 'Australia/Brisbane' }).format(date);
+  const day = new Intl.DateTimeFormat('en-AU', { day: 'numeric', timeZone: 'Australia/Brisbane' }).format(date);
+  const month = new Intl.DateTimeFormat('en-AU', { month: 'long', timeZone: 'Australia/Brisbane' }).format(date);
+  const shortMonth = new Intl.DateTimeFormat('en-AU', { month: 'short', timeZone: 'Australia/Brisbane' }).format(date);
+  const year = new Intl.DateTimeFormat('en-AU', { year: 'numeric', timeZone: 'Australia/Brisbane' }).format(date);
+  return {
+    fullDate: `${weekday} · ${day} ${month} ${year}`,
+    shortDate: `${weekday} ${day} ${shortMonth}`,
+    day: weekday,
+  };
+}
+
+function buildNextMarket(referenceDate = getTodayIso()) {
+  const isoDate = getNextMarketIso(referenceDate);
+  const labels = getMarketDateLabels(isoDate);
+  const daysUntil = Math.max(0, Math.round((parseIsoDate(isoDate) - parseIsoDate(referenceDate)) / DAY_MS));
+  return {
+    isoDate,
+    ...labels,
+    daysUntil: daysUntil === 0 ? 'Today' : `${daysUntil} days`,
+    recurrence: 'Every fortnight on Sunday',
+  };
+}
+
+const nextMarket = buildNextMarket();
 
 const flowerCategories = [
   'Gum',
@@ -112,7 +161,7 @@ const priceBands = [
 ];
 
 const markets = [
-  { id: 1, date: '13 Sep 2026', day: 'Sunday', venue: 'Redcliffe Markets', spend: 642.8, revenue: 1846, margin: 65.2, status: 'Next up' },
+  { id: 1, date: nextMarket.shortDate, day: nextMarket.day, venue: 'Redcliffe Markets', spend: 642.8, revenue: 1846, margin: 65.2, status: 'Next up' },
   { id: 2, date: '02 Mar 2025', day: 'Sunday', venue: 'Redcliffe Markets', spend: 598.4, revenue: 1712, margin: 65.0, status: 'Closed' },
   { id: 3, date: '16 Feb 2025', day: 'Sunday', venue: 'Redcliffe Markets', spend: 621.1, revenue: 1938, margin: 67.9, status: 'Closed' },
   { id: 4, date: '02 Feb 2025', day: 'Sunday', venue: 'Redcliffe Markets', spend: 560.5, revenue: 1587, margin: 64.7, status: 'Closed' },
