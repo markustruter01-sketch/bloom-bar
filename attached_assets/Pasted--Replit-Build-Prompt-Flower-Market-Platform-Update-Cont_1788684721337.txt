@@ -1,0 +1,131 @@
+# Replit Build Prompt: Flower Market Platform Update
+
+## Context
+I have an existing flower market management platform built on Replit. I need you to implement a set of feature changes and additions across multiple tabs. Before writing any code, read through this entire prompt and the existing codebase so you understand how current tabs, data models, and navigation are structured. Then produce an implementation plan broken into phases (see "Implementation & Audit Process" below) before touching code.
+
+Treat this as a real production tool I use to run my business — data integrity between tabs (especially the Buy List → Flower Price Tracker → Close Market → Market Day To Do chain) is critical. Nothing should silently fail or lose data.
+
+---
+
+## 1. Implementation & Audit Process (do this for every phase)
+
+For each phase of work below:
+1. **Plan first** — briefly summarize what you're about to change, which files/data models are affected, and how it connects to other tabs.
+2. **Implement.**
+3. **Self-audit before telling me it's done**, explicitly checking:
+   - Does this match every bullet point in the spec below? Go line by line.
+   - Does data actually flow correctly between tabs (e.g., does pressing "Report" in Buy List really populate Flower Price Tracker with the right date, flower, stem qty, and cost)?
+   - Are there edge cases that break it (e.g., no receipt uploaded, a flower type with no purchase history, first-ever market with no prior fortnight data)?
+   - Does anything from a previous phase get broken by this phase?
+4. **Report back** with: what you built, what you tested, any assumptions you made, and any spec items you could not fully complete (and why).
+5. Only move to the next phase once you've confirmed the above.
+
+Suggested phase order (adjust if it makes more technical sense to combine/reorder, but tell me why):
+- Phase 1: Flower category taxonomy change (foundational, affects everything downstream)
+- Phase 2: Market scheduling logic (every 2nd Sunday, next market date)
+- Phase 3: Buy List tab overhaul (lock list, actual-purchase entry, receipt photo analysis, "Report" action)
+- Phase 4: Flower Price Tracker tab (new) + its dashboard
+- Phase 5: Close Market tab → feed sell-through data into Flower Price Tracker analytics
+- Phase 6: Non-Flower Price Tracking tab (new)
+- Phase 7: Market Day To Do tab (new)
+- Phase 8: Flower Care tab (new)
+- Phase 9: Flower Knowledge tab (new)
+
+---
+
+## 2. General
+
+- **Market schedule:** Change markets to recur every 2nd Sunday. My next market is tomorrow, **Sunday 30/08/2026** — use this as the anchor date for calculating all future market dates going forward (and, if useful for the fortnightly tabs, past dates too).
+- **Flower categories (apply platform-wide, replacing whatever categories currently exist):**
+  - Gum
+  - Textural Foliage
+  - Classic Blooms
+  - Statement Blooms
+  - Premium Natives
+  - Audit this specifically: search the whole codebase/data model for old category references (dropdowns, filters, tags, reports, charts) and confirm none are missed.
+
+---
+
+## 3. Buy List Tab
+
+- **Remove** the "sourcing notes" section entirely.
+- **Lock/set purchase list:** Once I've written my proposed list of flowers to buy, add a "Lock List" (or similar) action that freezes the proposed list — no more casual edits to it after this point, similar to submitting an order.
+- **Actual purchase entry:** After locking, add a new section/button (e.g. "Enter Actual Purchases") where I record what I actually bought. This must support:
+  - Adding completely new flower types not on the original proposed list
+  - Removing flower types I'd planned to buy but didn't
+  - Entering stem quantity for each flower type
+  - **Receipt photo upload** with automatic analysis (OCR/vision-based extraction) to pre-fill cost per flower type, which I can then manually edit/correct
+- **Report action:** Once actual purchase data is complete, add a "Report" button that:
+  - Pushes the finalized purchase data (flower type, stem qty, cost) into the **Flower Price Tracker** tab
+  - Creates it under a new sub-tab/entry for that specific market date
+
+---
+
+## 4. Close Market Tab
+
+- When I press **"Save Pack-Down Count"**, this data (what sold, what didn't, remaining stems, etc.) should also flow into the **Flower Price Tracker** tab's analytics — specifically to help calculate, per flower type, what sells well on average vs. what doesn't, to guide future purchase quantities.
+
+---
+
+## 5. New Sidebar Tab: Flower Price Tracker
+
+- **Sub-tabs per market date:** One sub-tab for each market I've held. Clicking it shows: all flowers purchased that market, stem quantity, and wholesale stem cost.
+- **Data flow:** Populated automatically when I press "Report" in the Buy List tab, and updated with sell-through data from Close Market's "Save Pack-Down Count."
+- **Main dashboard** (landing view of this tab) should show:
+  - Average cost per flower type (across all markets)
+  - Trends in flower cost over time/seasonally — e.g., surfacing which months certain flowers (especially natives) are cheapest
+  - Sell-through performance per flower type (from Close Market data) to guide future buy quantities
+
+---
+
+## 6. New Sidebar Tab: Non-Flower Price Tracking
+
+- **Sub-tabs per fortnight** (spanning between market dates), each containing a list of all non-flower business purchases with columns:
+  - Category
+  - Description
+  - Total Price
+  - Qty of items
+  - Cost per piece (calculated)
+- **Item allocation:** Within each fortnight, I should be able to tag/click items to associate them with a specific product type (e.g., bouquet, bookmark) so total cost-per-product-type can be calculated.
+- **Bank export autofill:** I should be able to upload a bank account export (CSV/PDF, whatever's typical for AU bank exports) for that 2-week period, and have it auto-populate a purchase list (e.g., "Purchase: Amazon, Price: $100"). I can then manually break each entry down further (e.g., Category: Packaging, Description: Gift Bags, Total Price: $30, Qty Incl: 30, Unit Price: $1) — so one bank line item can split into multiple detailed sub-entries.
+
+---
+
+## 7. New Sidebar Tab: Market Day To Do
+
+- A to-do list supporting manual item entry.
+- Automatically pulls in all items from the **previous** fortnight's to-do list as a starting guide.
+- Items can be added, removed, and ticked off.
+- A new to-do list should auto-generate for the *next* market as soon as I press "Close Market" on the current one.
+
+---
+
+## 8. New Sidebar Tab: Flower Care
+
+- List of every flower type I've ever purchased (derived from purchase history).
+- For each flower, automatically pull in conditioning best-practice info from the web (e.g., burn poppy stem ends, don't put daffodils in shared water, strip stems below the waterline).
+- Display as a searchable list — search bar to find a flower by name, and clicking a flower expands to show its full care instructions.
+- Flag clearly in the UI when care info is auto-sourced vs. manually verified, since web-sourced horticultural info can vary in accuracy — and let me edit/correct entries.
+
+---
+
+## 9. New Sidebar Tab: Flower Knowledge
+
+- Same flower list as Flower Care (every flower ever purchased), but covering knowledge fields instead:
+  - Vase life and dried life (vase life shown **with vs. without flower food**)
+  - Pairing compatibility — what it can/can't share water with
+  - Fragrance guide
+  - Whether it opens further after being brought inside
+  - Symbolic/traditional meaning
+  - Whether it dries well
+  - Sun sensitivity
+  - Water consumption level
+  - Pet safety
+- Same searchable/expandable list format as Flower Care.
+
+---
+
+## 10. Final Cross-Check (once all phases are done)
+
+Before declaring the project complete, go back through this entire prompt section by section and confirm each bullet was implemented. Give me a final summary table: **Requirement → Status (Done/Partial/Not done) → Notes**. Flag anything that needed a workaround or an assumption on your part so I can review it.
+
