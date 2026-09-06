@@ -45,66 +45,21 @@ import {
 } from 'wouter';
 
 import NotFound from '@/pages/not-found';
+import { daysUntilMarket, formatMarketDate, formatMarketDay, getMarketDate, marketSchedule } from '@/lib/market-schedule';
 
 const queryClient = new QueryClient();
 const assetBase = `${import.meta.env.BASE_URL}assets`;
 const logoImage = `${assetBase}/bloom-bar-logo.png`;
 const posterImage = `${assetBase}/umbrella-bouquet-poster.png`;
-const MARKET_ANCHOR_ISO = '2026-09-13';
-const MARKET_INTERVAL_DAYS = 14;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
-function parseIsoDate(isoDate: string) {
-  const [year, month, day] = isoDate.split('-').map(Number);
-  return Date.UTC(year, month - 1, day);
-}
-
-function toIsoDate(timestamp: number) {
-  return new Date(timestamp).toISOString().slice(0, 10);
-}
-
-function addDays(isoDate: string, days: number) {
-  return toIsoDate(parseIsoDate(isoDate) + days * DAY_MS);
-}
-
-function getTodayIso() {
-  const today = new Date();
-  return toIsoDate(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-}
-
-function getNextMarketIso(referenceDate = getTodayIso()) {
-  const daysSinceAnchor = Math.floor((parseIsoDate(referenceDate) - parseIsoDate(MARKET_ANCHOR_ISO)) / DAY_MS);
-  const marketIntervals = Math.max(0, Math.ceil(daysSinceAnchor / MARKET_INTERVAL_DAYS));
-  return addDays(MARKET_ANCHOR_ISO, marketIntervals * MARKET_INTERVAL_DAYS);
-}
-
-function getMarketDateLabels(isoDate: string) {
-  const date = new Date(`${isoDate}T00:00:00Z`);
-  const weekday = new Intl.DateTimeFormat('en-AU', { weekday: 'long', timeZone: 'Australia/Brisbane' }).format(date);
-  const day = new Intl.DateTimeFormat('en-AU', { day: 'numeric', timeZone: 'Australia/Brisbane' }).format(date);
-  const month = new Intl.DateTimeFormat('en-AU', { month: 'long', timeZone: 'Australia/Brisbane' }).format(date);
-  const shortMonth = new Intl.DateTimeFormat('en-AU', { month: 'short', timeZone: 'Australia/Brisbane' }).format(date);
-  const year = new Intl.DateTimeFormat('en-AU', { year: 'numeric', timeZone: 'Australia/Brisbane' }).format(date);
-  return {
-    fullDate: `${weekday} · ${day} ${month} ${year}`,
-    shortDate: `${weekday} ${day} ${shortMonth}`,
-    day: weekday,
-  };
-}
-
-function buildNextMarket(referenceDate = getTodayIso()) {
-  const isoDate = getNextMarketIso(referenceDate);
-  const labels = getMarketDateLabels(isoDate);
-  const daysUntil = Math.max(0, Math.round((parseIsoDate(isoDate) - parseIsoDate(referenceDate)) / DAY_MS));
-  return {
-    isoDate,
-    ...labels,
-    daysUntil: daysUntil === 0 ? 'Today' : `${daysUntil} days`,
-    recurrence: 'Every fortnight on Sunday',
-  };
-}
-
-const nextMarket = buildNextMarket();
+const nextMarketCycle = marketSchedule.nextCycle(new Date());
+const nextMarketDate = marketSchedule.dateForCycle(nextMarketCycle);
+const nextMarket = {
+  fullDate: formatMarketDate(nextMarketDate, 'full'),
+  shortDate: formatMarketDate(nextMarketDate, 'short'),
+  daysUntil: daysUntilMarket(nextMarketDate) === 0 ? 'Today' : `${daysUntilMarket(nextMarketDate)} days`,
+  recurrence: marketSchedule.recurrence,
+};
 
 const flowerCategories = [
   'Gum',
@@ -160,13 +115,28 @@ const priceBands = [
   { name: 'Generous', price: 75, stems: '18–22 stems', note: 'For the full table' },
 ];
 
-const markets = [
-  { id: 1, date: nextMarket.shortDate, day: nextMarket.day, venue: 'Redcliffe Markets', spend: 642.8, revenue: 1846, margin: 65.2, status: 'Next up' },
-  { id: 2, date: '02 Mar 2025', day: 'Sunday', venue: 'Redcliffe Markets', spend: 598.4, revenue: 1712, margin: 65.0, status: 'Closed' },
-  { id: 3, date: '16 Feb 2025', day: 'Sunday', venue: 'Redcliffe Markets', spend: 621.1, revenue: 1938, margin: 67.9, status: 'Closed' },
-  { id: 4, date: '02 Feb 2025', day: 'Sunday', venue: 'Redcliffe Markets', spend: 560.5, revenue: 1587, margin: 64.7, status: 'Closed' },
+const marketDefinitions = [
+  { id: 1, cycle: 0, venue: 'Redcliffe Markets', spend: 642.8, revenue: 1846, margin: 65.2 },
+  { id: 2, cycle: -40, venue: 'Redcliffe Markets', spend: 598.4, revenue: 1712, margin: 65.0 },
+  { id: 3, cycle: -41, venue: 'Redcliffe Markets', spend: 621.1, revenue: 1938, margin: 67.9 },
+  { id: 4, cycle: -42, venue: 'Redcliffe Markets', spend: 560.5, revenue: 1587, margin: 64.7 },
 ];
+const markets = marketDefinitions.map((market) => {
+  const date = getMarketDate(market.cycle);
+  return {
+    ...market,
+    date: formatMarketDate(date, 'table'),
+    day: formatMarketDay(date),
+    status: market.cycle < nextMarketCycle ? 'Closed' : market.cycle === nextMarketCycle ? 'Next up' : 'Upcoming',
+  };
+});
 
+const recentPerformance = [
+  { cycle: -42, value: 1587, height: '54%' },
+  { cycle: -41, value: 1938, height: '86%' },
+  { cycle: -40, value: 1712, height: '68%' },
+  { cycle: nextMarketCycle, value: 1846, height: '77%' },
+].map((item) => ({ ...item, label: formatMarketDate(getMarketDate(item.cycle), 'short') }));
 const initialBuyItems: BuyItem[] = [
   { id: 1, flower: 'Lisianthus', detail: 'White · classic blooms', qty: 4, unit: 'bunches', lastPrice: 18.5, checked: true, category: 'Classic Blooms' },
   { id: 2, flower: 'Disbud chrysanthemum', detail: 'Apricot · statement blooms', qty: 3, unit: 'bunches', lastPrice: 22, checked: false, category: 'Statement Blooms' },
@@ -280,7 +250,7 @@ function Dashboard({ buyItems }: { buyItems: BuyItem[] }) {
         <div className="flex items-center justify-between border-b border-foreground/10 px-5 py-4 md:px-6"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Sunday rhythm</p><h2 className="mt-1 font-serif text-xl">Recent performance</h2></div><Link href="/markets" data-testid="link-dashboard-markets" className="text-xs font-semibold text-primary underline decoration-primary/30 underline-offset-4">View markets</Link></div>
         <div className="p-5 md:p-6">
           <div className="flex h-[168px] items-end gap-2 border-b border-l border-foreground/10 px-2 pb-0 pt-5 md:gap-5">
-            {[{ label: '02 Feb', value: 1587, height: '54%' }, { label: '16 Feb', value: 1938, height: '86%' }, { label: '02 Mar', value: 1712, height: '68%' }, { label: nextMarket.shortDate.replace(`${nextMarket.day} `, ''), value: 1846, height: '77%' }].map((item, index) => <div key={item.label} className="group flex h-full flex-1 flex-col justify-end gap-2"><div className="relative flex flex-1 items-end"><div className={`relative w-full rounded-t-sm transition-all duration-300 group-hover:opacity-80 ${index === 3 ? 'bg-primary' : 'bg-[#b9c29b]'}`} style={{ height: item.height }}><span className="absolute -top-6 left-1/2 -translate-x-1/2 font-mono text-[9px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">{money(item.value)}</span></div></div><span className={`pb-2 text-center font-mono text-[9px] ${index === 3 ? 'font-semibold text-primary' : 'text-muted-foreground'}`}>{item.label}</span></div>)}
+            {recentPerformance.map((item, index) => <div key={item.label} className="group flex h-full flex-1 flex-col justify-end gap-2"><div className="relative flex flex-1 items-end"><div className={`relative w-full rounded-t-sm transition-all duration-300 group-hover:opacity-80 ${index === 3 ? 'bg-primary' : 'bg-[#b9c29b]'}`} style={{ height: item.height }}><span className="absolute -top-6 left-1/2 -translate-x-1/2 font-mono text-[9px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">{money(item.value)}</span></div></div><span className={`pb-2 text-center font-mono text-[9px] ${index === 3 ? 'font-semibold text-primary' : 'text-muted-foreground'}`}>{item.label}</span></div>)}
           </div>
           <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>Revenue per market</span><span className="flex items-center gap-1.5 text-[#66804e]"><TrendingUp size={13} /> 16.3% over 4 Sundays</span></div>
         </div>
@@ -320,12 +290,12 @@ function FlowersPage() {
 
 function MarketsPage() {
   const [activeTab, setActiveTab] = useState('All markets');
-  const filtered = markets.filter((market) => activeTab === 'All markets' || (activeTab === 'Upcoming' ? market.status === 'Next up' : market.status === 'Closed'));
-  return <div><PageIntro eyebrow="The studio / market history" title="Every second Sunday, accounted for." description="A clear view of what the stall costs, what it earns, and what to carry forward." action={<Button onClick={() => window.alert('New markets are ready to add when your market calendar is connected.')} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-add-market"><Plus size={15} /> Add market</Button>} /><div className="mb-6 flex items-center gap-1 border-b border-foreground/10"><button onClick={() => setActiveTab('All markets')} data-testid="tab-all-markets" className={`border-b-2 px-3 py-3 text-xs font-semibold ${activeTab === 'All markets' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}>All markets <span className="ml-1 font-mono text-[10px] opacity-60">4</span></button><button onClick={() => setActiveTab('Upcoming')} data-testid="tab-upcoming-markets" className={`border-b-2 px-3 py-3 text-xs font-semibold ${activeTab === 'Upcoming' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}>Upcoming <span className="ml-1 font-mono text-[10px] opacity-60">1</span></button><button onClick={() => setActiveTab('Closed')} data-testid="tab-closed-markets" className={`border-b-2 px-3 py-3 text-xs font-semibold ${activeTab === 'Closed' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}>Closed <span className="ml-1 font-mono text-[10px] opacity-60">3</span></button></div><div className="grid gap-3 md:grid-cols-3"><MetricCard label="Total revenue" value="$7,083" detail="Across 4 Redcliffe Sundays" icon={DollarSign} accent="sage" /><MetricCard label="Average spend" value="$606" detail="Flowers + stall costs" icon={ShoppingBasket} accent="peach" /><MetricCard label="Average margin" value="65.7%" detail="A healthy bunch of trade" icon={BarChart3} accent="lilac" /></div><div className="mt-7 overflow-hidden rounded-lg border border-card-border bg-card"><div className="hidden grid-cols-[1.3fr_1.4fr_.8fr_.8fr_.8fr] border-b border-foreground/10 bg-muted/55 px-5 py-3 font-mono text-[9px] uppercase tracking-[.14em] text-muted-foreground md:grid"><span>Market</span><span>Venue</span><span>Spend</span><span>Revenue</span><span>Margin</span></div>{filtered.map((market) => <div key={market.id} data-testid={`row-market-${market.id}`} className="grid gap-3 border-b border-foreground/10 px-4 py-5 last:border-0 md:grid-cols-[1.3fr_1.4fr_.8fr_.8fr_.8fr] md:items-center md:px-5"><div className="flex items-center justify-between md:block"><div className="flex items-center gap-2"><CalendarDays size={15} className="text-muted-foreground" /><span className="text-sm font-semibold">{market.date}</span>{market.status === 'Next up' && <span className="rounded-full bg-[#dce3c2] px-2 py-1 font-mono text-[9px] uppercase text-primary">Next up</span>}</div><span className="mt-1 block pl-5 text-xs text-muted-foreground md:pl-0">{market.day}</span></div><div className="hidden text-sm text-muted-foreground md:block">{market.venue}</div><div className="grid grid-cols-3 gap-3 border-t border-foreground/10 pt-3 md:contents"><div><span className="block font-mono text-[9px] uppercase text-muted-foreground md:hidden">Spend</span><span className="font-mono text-sm">{money(market.spend)}</span></div><div><span className="block font-mono text-[9px] uppercase text-muted-foreground md:hidden">Revenue</span><span className="font-mono text-sm">{money(market.revenue)}</span></div><div><span className="block font-mono text-[9px] uppercase text-muted-foreground md:hidden">Margin</span><span className="font-mono text-sm text-[#64804e]">{market.margin}%</span></div></div></div>)}</div></div>;
+  const filtered = markets.filter((market) => activeTab === 'All markets' || (activeTab === 'Upcoming' ? market.status !== 'Closed' : market.status === 'Closed'));
+  return <div><PageIntro eyebrow="The studio / market history" title="Every Sunday, accounted for." description="A clear view of what the stall costs, what it earns, and what to carry forward." action={<Button onClick={() => window.alert('New markets are ready to add when your market calendar is connected.')} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-add-market"><Plus size={15} /> Add market</Button>} /><div className="mb-6 flex items-center gap-1 border-b border-foreground/10"><button onClick={() => setActiveTab('All markets')} data-testid="tab-all-markets" className={`border-b-2 px-3 py-3 text-xs font-semibold ${activeTab === 'All markets' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}>All markets <span className="ml-1 font-mono text-[10px] opacity-60">{markets.length}</span></button><button onClick={() => setActiveTab('Upcoming')} data-testid="tab-upcoming-markets" className={`border-b-2 px-3 py-3 text-xs font-semibold ${activeTab === 'Upcoming' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}>Upcoming <span className="ml-1 font-mono text-[10px] opacity-60">{markets.filter((market) => market.status !== 'Closed').length}</span></button><button onClick={() => setActiveTab('Closed')} data-testid="tab-closed-markets" className={`border-b-2 px-3 py-3 text-xs font-semibold ${activeTab === 'Closed' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}>Closed <span className="ml-1 font-mono text-[10px] opacity-60">{markets.filter((market) => market.status === 'Closed').length}</span></button></div><div className="grid gap-3 md:grid-cols-3"><MetricCard label="Total revenue" value="$7,083" detail="Across 4 Redcliffe Sundays" icon={DollarSign} accent="sage" /><MetricCard label="Average spend" value="$606" detail="Flowers + stall costs" icon={ShoppingBasket} accent="peach" /><MetricCard label="Average margin" value="65.7%" detail="A healthy bunch of trade" icon={BarChart3} accent="lilac" /></div><div className="mt-7 overflow-hidden rounded-lg border border-card-border bg-card"><div className="hidden grid-cols-[1.3fr_1.4fr_.8fr_.8fr_.8fr] border-b border-foreground/10 bg-muted/55 px-5 py-3 font-mono text-[9px] uppercase tracking-[.14em] text-muted-foreground md:grid"><span>Market</span><span>Venue</span><span>Spend</span><span>Revenue</span><span>Margin</span></div>{filtered.map((market) => <div key={market.id} data-testid={`row-market-${market.id}`} className="grid gap-3 border-b border-foreground/10 px-4 py-5 last:border-0 md:grid-cols-[1.3fr_1.4fr_.8fr_.8fr_.8fr] md:items-center md:px-5"><div className="flex items-center justify-between md:block"><div className="flex items-center gap-2"><CalendarDays size={15} className="text-muted-foreground" /><span className="text-sm font-semibold">{market.date}</span><span className={`rounded-full px-2 py-1 font-mono text-[9px] uppercase ${market.status === 'Next up' ? 'bg-[#dce3c2] text-primary' : 'bg-muted text-muted-foreground'}`}>{market.status}</span></div><span className="mt-1 block pl-5 text-xs text-muted-foreground md:pl-0">{market.day}</span></div><div className="hidden text-sm text-muted-foreground md:block">{market.venue}</div><div className="grid grid-cols-3 gap-3 border-t border-foreground/10 pt-3 md:contents"><div><span className="block font-mono text-[9px] uppercase text-muted-foreground md:hidden">Spend</span><span className="font-mono text-sm">{money(market.spend)}</span></div><div><span className="block font-mono text-[9px] uppercase text-muted-foreground md:hidden">Revenue</span><span className="font-mono text-sm">{money(market.revenue)}</span></div><div><span className="block font-mono text-[9px] uppercase text-muted-foreground md:hidden">Margin</span><span className="font-mono text-sm text-[#64804e]">{market.margin}%</span></div></div></div>)}</div></div>;
 }
 
 function MarketSubnav({ active }: { active: 'buy' | 'bouquets' | 'close' }) {
-  return <div className="mb-8 flex gap-1 overflow-x-auto border-b border-foreground/10">{[{ id: 'buy', label: 'Buy list', href: '/markets/next/buy', icon: ShoppingBasket }, { id: 'bouquets', label: 'Bouquets', href: '/markets/next/bouquets', icon: Sparkles }, { id: 'close', label: 'Close market', href: '/markets/next/close', icon: ClipboardCheck }].map(({ id, label, href, icon: Icon }) => <Link key={id} href={href} data-testid={`tab-market-${id}`} className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-xs font-semibold ${active === id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}><Icon size={14} />{label}</Link>)}</div>;
+  return <div className="mb-8 flex items-center justify-between gap-3 overflow-x-auto border-b border-foreground/10"><div className="flex gap-1">{[{ id: 'buy', label: 'Buy list', href: '/markets/next/buy', icon: ShoppingBasket }, { id: 'bouquets', label: 'Bouquets', href: '/markets/next/bouquets', icon: Sparkles }, { id: 'close', label: 'Close market', href: '/markets/next/close', icon: ClipboardCheck }].map(({ id, label, href, icon: Icon }) => <Link key={id} href={href} data-testid={`tab-market-${id}`} className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-xs font-semibold ${active === id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}><Icon size={14} />{label}</Link>)}</div><span className="shrink-0 pb-3 pt-3 font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">{nextMarket.shortDate}</span></div>;
 }
 
 function BuyPage({ buyItems, toggleBuyItem }: { buyItems: BuyItem[]; toggleBuyItem: (id: number) => void }) {
@@ -341,7 +311,7 @@ function BouquetsPage() {
   const [selectedBand, setSelectedBand] = useState('Market');
   const [count, setCount] = useState(18);
   const band = priceBands.find((item) => item.name === selectedBand) ?? priceBands[1];
-  return <div><PageIntro eyebrow="Next market / making plan" title="A table full of colour." description="Decide the shape of Sunday before the first customer arrives. Your build-your-own bar, made legible." action={<Button onClick={() => setCount(count + 1)} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-add-bouquet"><Plus size={15} /> Add bouquet</Button>} /><MarketSubnav active="bouquets" /><div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]"><div><div className="mb-4 flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Price architecture</p><h2 className="mt-1 font-serif text-2xl">Three sizes, one good day.</h2></div><span className="font-mono text-xs text-muted-foreground">{count} planned</span></div><div className="space-y-3">{priceBands.map((item, index) => <button key={item.name} type="button" onClick={() => setSelectedBand(item.name)} data-testid={`button-price-band-${item.name.toLowerCase()}`} className={`flex w-full items-center gap-4 rounded-lg border p-4 text-left transition-all ${selectedBand === item.name ? 'border-primary bg-[#e8e4cd] shadow-sm' : 'border-card-border bg-card hover:border-primary/30'}`}><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-serif text-lg ${index === 0 ? 'bg-[#e4d7e9]' : index === 1 ? 'bg-[#dce3c2]' : 'bg-[#f1d0c3]'}`}>{index + 1}</span><span className="flex-1"><span className="block font-serif text-xl">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.note} · {item.stems}</span></span><span className="font-mono text-lg">{money(item.price)}</span>{selectedBand === item.name && <CheckCircle2 size={18} className="text-primary" />}</button>)}</div><div className="mt-7 rounded-lg border border-card-border bg-card p-5"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Stem recipe</p><h3 className="mt-1 font-serif text-xl">{band.name} bouquet</h3></div><Pencil size={15} className="text-muted-foreground" /></div><div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">{[{ name: 'Focal', qty: 2, colour: '#e3a38e' }, { name: 'Feature', qty: 5, colour: '#b6a1c8' }, { name: 'Filler', qty: 4, colour: '#e6c26c' }, { name: 'Foliage', qty: 3, colour: '#9aa58b' }].map((item) => <div key={item.name} className="rounded-md bg-muted p-3"><span className="block h-3 w-3 rounded-full" style={{ background: item.colour }} /><span className="mt-3 block text-xs font-semibold">{item.name}</span><span className="mt-1 block font-mono text-[10px] text-muted-foreground">{item.qty} stems</span></div>)}</div></div></div><div className="relative overflow-hidden rounded-xl border border-foreground/10 bg-[#e8e4cd] p-6 md:p-8"><img src={posterImage} alt="Umbrella bouquet poster inspiration" className="absolute -right-16 -top-20 w-[210px] rotate-12 opacity-[.15] mix-blend-multiply" /><div className="relative"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Tag size={13} /> Sunday target</div><div className="mt-8 flex items-end gap-3"><span className="font-serif text-7xl leading-none text-primary">{count}</span><span className="mb-2 font-serif text-xl text-primary/70">bouquets</span></div><p className="mt-4 max-w-xs text-sm leading-relaxed text-primary/70">A gentle target for the umbrella bouquet table. You can always make more when the morning gets busy.</p><div className="mt-8 border-t border-primary/15 pt-5"><div className="flex justify-between text-xs text-primary/70"><span>Target bouquet revenue</span><span className="font-mono font-semibold text-primary">{money(count * 55)}</span></div><div className="mt-3 flex justify-between text-xs text-primary/70"><span>Selected size</span><span className="font-semibold text-primary">{band.name} · {money(band.price)}</span></div></div><Button onClick={() => window.alert(`${count} ${band.name.toLowerCase()} bouquets planned for Sunday.`)} className="mt-8 w-full bg-primary text-primary-foreground hover:bg-primary/90" testId="button-save-bouquet-plan"><Check size={15} /> Save Sunday plan</Button></div></div></div></div>;
+  return <div><PageIntro eyebrow="Next market / making plan" title="A table full of colour." description="Decide the shape of Sunday before the first customer arrives. Your build-your-own bar, made legible." action={<div className="flex items-center gap-3"><div className="rounded-md bg-[#dce3c2] px-3 py-2 text-center"><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">{nextMarket.shortDate}</div><div className="text-sm font-semibold text-primary">Next market</div></div><Button onClick={() => setCount(count + 1)} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-add-bouquet"><Plus size={15} /> Add bouquet</Button></div>} /><MarketSubnav active="bouquets" /><div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]"><div><div className="mb-4 flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Price architecture</p><h2 className="mt-1 font-serif text-2xl">Three sizes, one good day.</h2></div><span className="font-mono text-xs text-muted-foreground">{count} planned</span></div><div className="space-y-3">{priceBands.map((item, index) => <button key={item.name} type="button" onClick={() => setSelectedBand(item.name)} data-testid={`button-price-band-${item.name.toLowerCase()}`} className={`flex w-full items-center gap-4 rounded-lg border p-4 text-left transition-all ${selectedBand === item.name ? 'border-primary bg-[#e8e4cd] shadow-sm' : 'border-card-border bg-card hover:border-primary/30'}`}><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-serif text-lg ${index === 0 ? 'bg-[#e4d7e9]' : index === 1 ? 'bg-[#dce3c2]' : 'bg-[#f1d0c3]'}`}>{index + 1}</span><span className="flex-1"><span className="block font-serif text-xl">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.note} · {item.stems}</span></span><span className="font-mono text-lg">{money(item.price)}</span>{selectedBand === item.name && <CheckCircle2 size={18} className="text-primary" />}</button>)}</div><div className="mt-7 rounded-lg border border-card-border bg-card p-5"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Stem recipe</p><h3 className="mt-1 font-serif text-xl">{band.name} bouquet</h3></div><Pencil size={15} className="text-muted-foreground" /></div><div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">{[{ name: 'Focal', qty: 2, colour: '#e3a38e' }, { name: 'Feature', qty: 5, colour: '#b6a1c8' }, { name: 'Filler', qty: 4, colour: '#e6c26c' }, { name: 'Foliage', qty: 3, colour: '#9aa58b' }].map((item) => <div key={item.name} className="rounded-md bg-muted p-3"><span className="block h-3 w-3 rounded-full" style={{ background: item.colour }} /><span className="mt-3 block text-xs font-semibold">{item.name}</span><span className="mt-1 block font-mono text-[10px] text-muted-foreground">{item.qty} stems</span></div>)}</div></div></div><div className="relative overflow-hidden rounded-xl border border-foreground/10 bg-[#e8e4cd] p-6 md:p-8"><img src={posterImage} alt="Umbrella bouquet poster inspiration" className="absolute -right-16 -top-20 w-[210px] rotate-12 opacity-[.15] mix-blend-multiply" /><div className="relative"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Tag size={13} /> Sunday target</div><div className="mt-8 flex items-end gap-3"><span className="font-serif text-7xl leading-none text-primary">{count}</span><span className="mb-2 font-serif text-xl text-primary/70">bouquets</span></div><p className="mt-4 max-w-xs text-sm leading-relaxed text-primary/70">A gentle target for the umbrella bouquet table. You can always make more when the morning gets busy.</p><div className="mt-8 border-t border-primary/15 pt-5"><div className="flex justify-between text-xs text-primary/70"><span>Target bouquet revenue</span><span className="font-mono font-semibold text-primary">{money(count * 55)}</span></div><div className="mt-3 flex justify-between text-xs text-primary/70"><span>Selected size</span><span className="font-semibold text-primary">{band.name} · {money(band.price)}</span></div></div><Button onClick={() => window.alert(`${count} ${band.name.toLowerCase()} bouquets planned for Sunday.`)} className="mt-8 w-full bg-primary text-primary-foreground hover:bg-primary/90" testId="button-save-bouquet-plan"><Check size={15} /> Save Sunday plan</Button></div></div></div></div>;
 }
 
 function ClosePage() {
