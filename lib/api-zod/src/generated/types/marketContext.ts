@@ -10,6 +10,7 @@ import type { BouquetPlan } from './bouquetPlan';
 import type { BuyItem } from './buyItem';
 import type { CloseMarket } from './closeMarket';
 import type { MarketBuyListState } from './marketBuyListState';
+import type { MarketCost } from './marketCost';
 
 export interface MarketContext {
   cycle: number;
@@ -21,6 +22,7 @@ export interface MarketContext {
   buyItems: BuyItem[];
   buyList: MarketBuyListState;
   actualPurchases: ActualPurchase[];
+  costs: MarketCost[];
   bouquetPlan: BouquetPlan;
   closeMarket: CloseMarket;
 }

@@ -33,7 +33,9 @@ import type {
   HealthStatus,
   Market,
   MarketBuyListState,
-  MarketContext
+  MarketContext,
+  MarketCostsResponse,
+  MarketCostsUpdate
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -589,6 +591,78 @@ export const useReplaceMarketActualPurchases = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getReplaceMarketActualPurchasesMutationOptions(options));
+    }
+
+export const getReplaceMarketCostsUrl = (cycle: number,) => {
+
+
+
+
+  return `/api/markets/context/${cycle}/costs`
+}
+
+/**
+ * @summary Save non-flower costs for a market cycle
+ */
+export const replaceMarketCosts = async (cycle: number,
+    marketCostsUpdate: MarketCostsUpdate, options?: Parameters<typeof customFetch>[1]): Promise<MarketCostsResponse> => {
+
+  return customFetch<MarketCostsResponse>(getReplaceMarketCostsUrl(cycle),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(marketCostsUpdate)
+  }
+);}
+
+
+
+
+
+export const getReplaceMarketCostsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceMarketCosts>>, TError,{cycle: number;data: BodyType<MarketCostsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof replaceMarketCosts>>, TError,{cycle: number;data: BodyType<MarketCostsUpdate>}, TContext> => {
+
+const mutationKey = ['replaceMarketCosts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof replaceMarketCosts>>, {cycle: number;data: BodyType<MarketCostsUpdate>}> = (props) => {
+          const {cycle,data} = props ?? {};
+
+          return  replaceMarketCosts(cycle,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReplaceMarketCostsMutationResult = NonNullable<Awaited<ReturnType<typeof replaceMarketCosts>>>
+    export type ReplaceMarketCostsMutationBody = BodyType<MarketCostsUpdate>
+    export type ReplaceMarketCostsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Save non-flower costs for a market cycle
+ */
+export const useReplaceMarketCosts = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceMarketCosts>>, TError,{cycle: number;data: BodyType<MarketCostsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof replaceMarketCosts>>,
+        TError,
+        {cycle: number;data: BodyType<MarketCostsUpdate>},
+        TContext
+      > => {
+      return useMutation(getReplaceMarketCostsMutationOptions(options));
     }
 
 export const getReportMarketPurchasesUrl = (cycle: number,) => {

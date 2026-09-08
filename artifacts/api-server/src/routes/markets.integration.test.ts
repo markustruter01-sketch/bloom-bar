@@ -10,6 +10,7 @@ import {
   db,
   marketActualPurchasesTable,
   marketBuyListStatesTable,
+  marketCostsTable,
   marketsTable,
   pool,
 } from "@workspace/db";
@@ -42,6 +43,7 @@ async function request(path: string, init?: RequestInit): Promise<ApiResult> {
 async function resetTestCycles() {
   await db.transaction(async (tx) => {
     await tx.delete(marketActualPurchasesTable).where(inArray(marketActualPurchasesTable.marketCycle, testCycles));
+    await tx.delete(marketCostsTable).where(inArray(marketCostsTable.marketCycle, testCycles));
     await tx.delete(marketBuyListStatesTable).where(inArray(marketBuyListStatesTable.marketCycle, testCycles));
     await tx.delete(buyItemsTable).where(inArray(buyItemsTable.marketCycle, testCycles));
     await tx.delete(bouquetPlansTable).where(inArray(bouquetPlansTable.marketCycle, testCycles));
@@ -231,6 +233,64 @@ describe("market context persistence", () => {
       futureContext.buyItems.find((item: any) => item.flower === "Lisianthus")?.lastPrice,
       25,
     );
+  });
+
+  it("saves editable non-flower costs and includes them in market totals", async () => {
+    await getContext(testCycles[0]);
+    await db.update(marketsTable).set({ revenue: 200 }).where(eq(marketsTable.cycle, testCycles[0]));
+
+    const lock = await patch(`/markets/context/${testCycles[0]}/buy-list`, { locked: true });
+    assert.equal(lock.status, 200);
+
+    const added = await request(`/markets/context/${testCycles[0]}/costs`, {
+      method: "PUT",
+      body: JSON.stringify({
+        costs: [
+          { description: "Stall fee", amount: 30 },
+          { description: "Packaging", amount: 12.5 },
+        ],
+      }),
+    });
+    assert.equal(added.status, 200);
+    assert.deepEqual(added.body.costs.map((cost: any) => [cost.description, cost.amount]), [
+      ["Stall fee", 30],
+      ["Packaging", 12.5],
+    ]);
+    assert.equal(added.body.spend, 42.5);
+    assert.equal(added.body.margin, 78.8);
+
+    const editedAndRemoved = await request(`/markets/context/${testCycles[0]}/costs`, {
+      method: "PUT",
+      body: JSON.stringify({ costs: [{ description: "Stall fee", amount: 35 }] }),
+    });
+    assert.equal(editedAndRemoved.status, 200);
+    assert.deepEqual(editedAndRemoved.body.costs.map((cost: any) => [cost.description, cost.amount]), [["Stall fee", 35]]);
+    assert.equal(editedAndRemoved.body.spend, 35);
+
+    const savedPurchases = await request(`/markets/context/${testCycles[0]}/actual-purchases`, {
+      method: "PUT",
+      body: JSON.stringify({
+        purchases: [{
+          flower: "Lisianthus",
+          detail: "White · classic blooms",
+          category: "Classic Blooms",
+          stems: 4,
+          unitCost: 24,
+          source: "manual",
+        }],
+      }),
+    });
+    assert.equal(savedPurchases.status, 200);
+
+    const totals = await request("/markets");
+    const market = totals.body.find((entry: any) => entry.cycle === testCycles[0]);
+    assert.equal(market.spend, 131);
+    assert.equal(market.margin, 34.5);
+
+    const reloaded = await getContext(testCycles[0]);
+    assert.deepEqual(reloaded.costs.map((cost: any) => [cost.description, cost.amount]), [["Stall fee", 35]]);
+    assert.equal(reloaded.spend, 131);
+    assert.equal(reloaded.margin, 34.5);
   });
 
   it("rejects invalid cycles and item updates without changing saved data", async () => {

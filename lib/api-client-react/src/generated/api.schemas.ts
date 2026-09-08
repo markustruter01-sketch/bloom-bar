@@ -119,6 +119,30 @@ export interface ActualPurchasesResponse {
   purchases: ActualPurchase[];
 }
 
+export interface MarketCost {
+  id: number;
+  marketCycle: number;
+  description: string;
+  /** @minimum 0 */
+  amount: number;
+}
+
+export interface MarketCostInput {
+  description: string;
+  /** @minimum 0 */
+  amount: number;
+}
+
+export interface MarketCostsUpdate {
+  costs: MarketCostInput[];
+}
+
+export interface MarketCostsResponse {
+  costs: MarketCost[];
+  spend: number;
+  margin: number;
+}
+
 export interface FlowerPricePoint {
   marketCycle: number;
   date: string;
@@ -189,6 +213,7 @@ export interface MarketContext {
   buyItems: BuyItem[];
   buyList: MarketBuyListState;
   actualPurchases: ActualPurchase[];
+  costs: MarketCost[];
   bouquetPlan: BouquetPlan;
   closeMarket: CloseMarket;
 }

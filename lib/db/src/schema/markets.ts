@@ -82,6 +82,15 @@ export const marketActualPurchasesTable = pgTable(
   (table) => ({ marketFlowerUnique: unique("market_actual_purchases_cycle_flower_unique").on(table.marketCycle, table.flower) }),
 );
 
+export const marketCostsTable = pgTable("market_costs", {
+  id: serial("id").primaryKey(),
+  marketCycle: integer("market_cycle")
+    .notNull()
+    .references(() => marketsTable.cycle, { onDelete: "cascade" }),
+  description: text("description").notNull(),
+  amount: doublePrecision("amount").notNull(),
+});
+
 export const bouquetPlansTable = pgTable("market_bouquet_plans", {
   marketCycle: integer("market_cycle")
     .primaryKey()
@@ -103,6 +112,7 @@ export const insertMarketSchema = createInsertSchema(marketsTable).omit({ id: tr
 export const insertBuyItemSchema = createInsertSchema(buyItemsTable).omit({ id: true });
 export const insertMarketBuyListStateSchema = createInsertSchema(marketBuyListStatesTable);
 export const insertMarketActualPurchaseSchema = createInsertSchema(marketActualPurchasesTable).omit({ id: true });
+export const insertMarketCostSchema = createInsertSchema(marketCostsTable).omit({ id: true });
 export const insertBouquetPlanSchema = createInsertSchema(bouquetPlansTable);
 export const insertCloseMarketSchema = createInsertSchema(closeMarketsTable);
 
@@ -110,11 +120,13 @@ export type InsertMarket = z.infer<typeof insertMarketSchema>;
 export type InsertBuyItem = z.infer<typeof insertBuyItemSchema>;
 export type InsertMarketBuyListState = z.infer<typeof insertMarketBuyListStateSchema>;
 export type InsertMarketActualPurchase = z.infer<typeof insertMarketActualPurchaseSchema>;
+export type InsertMarketCost = z.infer<typeof insertMarketCostSchema>;
 export type InsertBouquetPlan = z.infer<typeof insertBouquetPlanSchema>;
 export type InsertCloseMarket = z.infer<typeof insertCloseMarketSchema>;
 export type Market = typeof marketsTable.$inferSelect;
 export type BuyItem = typeof buyItemsTable.$inferSelect;
 export type MarketBuyListState = typeof marketBuyListStatesTable.$inferSelect;
 export type MarketActualPurchase = typeof marketActualPurchasesTable.$inferSelect;
+export type MarketCost = typeof marketCostsTable.$inferSelect;
 export type BouquetPlan = typeof bouquetPlansTable.$inferSelect;
 export type CloseMarket = typeof closeMarketsTable.$inferSelect;

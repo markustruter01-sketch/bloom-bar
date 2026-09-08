@@ -136,6 +136,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ActualPurchasesResponse"
+  /markets/context/{cycle}/costs:
+    put:
+      operationId: replaceMarketCosts
+      tags: [markets]
+      summary: Save non-flower costs for a market cycle
+      parameters:
+        - $ref: "#/components/parameters/MarketCycle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarketCostsUpdate"
+      responses:
+        "200":
+          description: Saved non-flower costs and recalculated market totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketCostsResponse"
   /markets/context/{cycle}/report-purchases:
     post:
       operationId: reportMarketPurchases
@@ -367,6 +387,48 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ActualPurchase"
+    MarketCost:
+      type: object
+      required: [id, marketCycle, description, amount]
+      properties:
+        id:
+          type: number
+        marketCycle:
+          type: number
+        description:
+          type: string
+        amount:
+          type: number
+          minimum: 0
+    MarketCostInput:
+      type: object
+      required: [description, amount]
+      properties:
+        description:
+          type: string
+        amount:
+          type: number
+          minimum: 0
+    MarketCostsUpdate:
+      type: object
+      required: [costs]
+      properties:
+        costs:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarketCostInput"
+    MarketCostsResponse:
+      type: object
+      required: [costs, spend, margin]
+      properties:
+        costs:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarketCost"
+        spend:
+          type: number
+        margin:
+          type: number
     FlowerPricePoint:
       type: object
       required: [marketCycle, date, unitCost]
@@ -470,7 +532,7 @@ components:
           type: boolean
     MarketContext:
       type: object
-      required: [cycle, date, venue, spend, revenue, margin, buyItems, buyList, actualPurchases, bouquetPlan, closeMarket]
+      required: [cycle, date, venue, spend, revenue, margin, buyItems, buyList, actualPurchases, costs, bouquetPlan, closeMarket]
       properties:
         cycle:
           type: number
@@ -494,6 +556,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ActualPurchase"
+        costs:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarketCost"
         bouquetPlan:
           $ref: "#/components/schemas/BouquetPlan"
         closeMarket:

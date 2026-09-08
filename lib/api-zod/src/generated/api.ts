@@ -83,6 +83,8 @@ export const getMarketContextResponseActualPurchasesItemStemsMin = 0;
 
 export const getMarketContextResponseActualPurchasesItemUnitCostMin = 0;
 
+export const getMarketContextResponseCostsItemAmountMin = 0;
+
 export const getMarketContextResponseCloseMarketCountsMinOne = 0;
 
 export const getMarketContextResponseCloseMarketSellThroughItemPurchasedStemsMin = 0;
@@ -137,6 +139,12 @@ export const GetMarketContextResponse = zod.object({
   "stems": zod.number().min(getMarketContextResponseActualPurchasesItemStemsMin),
   "unitCost": zod.number().min(getMarketContextResponseActualPurchasesItemUnitCostMin),
   "source": zod.enum(['manual', 'receipt'])
+})),
+  "costs": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "description": zod.string(),
+  "amount": zod.number().min(getMarketContextResponseCostsItemAmountMin)
 })),
   "bouquetPlan": zod.object({
   "marketCycle": zod.number(),
@@ -288,6 +296,40 @@ export const ReplaceMarketActualPurchasesResponse = zod.object({
   "unitCost": zod.number().min(replaceMarketActualPurchasesResponsePurchasesItemUnitCostMin),
   "source": zod.enum(['manual', 'receipt'])
 }))
+})
+
+
+/**
+ * @summary Save non-flower costs for a market cycle
+ */
+export const ReplaceMarketCostsParams = zod.object({
+  "cycle": zod.coerce.number()
+})
+
+export const replaceMarketCostsBodyCostsItemAmountMin = 0;
+
+
+
+export const ReplaceMarketCostsBody = zod.object({
+  "costs": zod.array(zod.object({
+  "description": zod.string(),
+  "amount": zod.number().min(replaceMarketCostsBodyCostsItemAmountMin)
+}))
+})
+
+export const replaceMarketCostsResponseCostsItemAmountMin = 0;
+
+
+
+export const ReplaceMarketCostsResponse = zod.object({
+  "costs": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "description": zod.string(),
+  "amount": zod.number().min(replaceMarketCostsResponseCostsItemAmountMin)
+})),
+  "spend": zod.number(),
+  "margin": zod.number()
 })
 
 

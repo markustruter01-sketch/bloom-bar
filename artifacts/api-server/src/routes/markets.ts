@@ -7,6 +7,7 @@ import {
   closeMarketsTable,
   marketActualPurchasesTable,
   marketBuyListStatesTable,
+  marketCostsTable,
   marketsTable,
 } from "@workspace/db";
 import {
@@ -14,6 +15,9 @@ import {
   GetMarketContextResponse,
   ListFlowerPricesResponse,
   ListMarketsResponse,
+  ReplaceMarketCostsBody,
+  ReplaceMarketCostsParams,
+  ReplaceMarketCostsResponse,
   ReportMarketPurchasesResponse,
   ReportMarketPurchasesParams,
   ReplaceMarketActualPurchasesBody,
@@ -133,12 +137,41 @@ async function ensureMarketContext(cycle: number) {
   });
 }
 
+async function recalculateMarketTotals(cycle: number, tx: any, previousCostTotal?: number) {
+  const [market] = await tx.select().from(marketsTable).where(eq(marketsTable.cycle, cycle));
+  if (!market) return null;
+  const purchases = await tx
+    .select({ stems: marketActualPurchasesTable.stems, unitCost: marketActualPurchasesTable.unitCost })
+    .from(marketActualPurchasesTable)
+    .where(eq(marketActualPurchasesTable.marketCycle, cycle));
+  const costs = await tx
+    .select({ amount: marketCostsTable.amount })
+    .from(marketCostsTable)
+    .where(eq(marketCostsTable.marketCycle, cycle));
+  const nonFlowerSpend = costs.reduce((sum: number, cost: { amount: number }) => sum + cost.amount, 0);
+  const flowerSpend = purchases.reduce((sum: number, purchase: { stems: number; unitCost: number }) => sum + purchase.stems * purchase.unitCost, 0);
+  const baseSpend = purchases.length > 0
+    ? flowerSpend
+    : market.spend - (previousCostTotal ?? nonFlowerSpend);
+  const spend = Math.max(0, baseSpend) + nonFlowerSpend;
+  const margin = market.revenue > 0
+    ? Math.round(((market.revenue - spend) / market.revenue) * 1000) / 10
+    : 0;
+  const [updated] = await tx
+    .update(marketsTable)
+    .set({ spend, margin })
+    .where(eq(marketsTable.cycle, cycle))
+    .returning();
+  return updated;
+}
+
 async function readMarketContext(cycle: number) {
   await ensureMarketContext(cycle);
   const [market] = await db.select().from(marketsTable).where(eq(marketsTable.cycle, cycle));
   const buyItems = await db.select().from(buyItemsTable).where(eq(buyItemsTable.marketCycle, cycle)).orderBy(buyItemsTable.id);
   const [buyList] = await db.select().from(marketBuyListStatesTable).where(eq(marketBuyListStatesTable.marketCycle, cycle));
   const actualPurchases = await db.select().from(marketActualPurchasesTable).where(eq(marketActualPurchasesTable.marketCycle, cycle)).orderBy(marketActualPurchasesTable.id);
+  const costs = await db.select().from(marketCostsTable).where(eq(marketCostsTable.marketCycle, cycle)).orderBy(marketCostsTable.id);
   const [bouquetPlan] = await db.select().from(bouquetPlansTable).where(eq(bouquetPlansTable.marketCycle, cycle));
   const [closeMarket] = await db.select().from(closeMarketsTable).where(eq(closeMarketsTable.marketCycle, cycle));
   const sellThrough = calculateSellThrough(actualPurchases, closeMarket.counts);
@@ -181,6 +214,7 @@ async function readMarketContext(cycle: number) {
     buyItems: estimatedBuyItems,
     buyList,
     actualPurchases,
+    costs,
     bouquetPlan,
     closeMarket: { ...closeMarket, sellThrough },
   };
@@ -319,9 +353,47 @@ router.put("/markets/context/:cycle/actual-purchases", async (req, res): Promise
       .from(marketActualPurchasesTable)
       .where(eq(marketActualPurchasesTable.marketCycle, params.data.cycle))
       .orderBy(marketActualPurchasesTable.id);
+    await recalculateMarketTotals(params.data.cycle, tx);
     return { buyList: updatedBuyList, purchases };
   });
   res.json(ReplaceMarketActualPurchasesResponse.parse(saved));
+});
+
+router.put("/markets/context/:cycle/costs", async (req, res): Promise<void> => {
+  const params = ReplaceMarketCostsParams.safeParse(req.params);
+  const body = ReplaceMarketCostsBody.safeParse(req.body);
+  if (!params.success || !body.success || !Number.isInteger(params.data.cycle)) {
+    res.status(400).json({ error: "Invalid market cycle or cost data." });
+    return;
+  }
+  if (body.data.costs.some((cost) => !cost.description.trim() || cost.amount < 0)) {
+    res.status(400).json({ error: "Each market cost needs a description and a non-negative amount." });
+    return;
+  }
+  await ensureMarketContext(params.data.cycle);
+  const saved = await db.transaction(async (tx) => {
+    const previousCosts = await tx
+      .select({ amount: marketCostsTable.amount })
+      .from(marketCostsTable)
+      .where(eq(marketCostsTable.marketCycle, params.data.cycle));
+    const previousCostTotal = previousCosts.reduce((sum: number, cost: { amount: number }) => sum + cost.amount, 0);
+    await tx.delete(marketCostsTable).where(eq(marketCostsTable.marketCycle, params.data.cycle));
+    if (body.data.costs.length > 0) {
+      await tx.insert(marketCostsTable).values(body.data.costs.map((cost) => ({
+        marketCycle: params.data.cycle,
+        description: cost.description.trim(),
+        amount: cost.amount,
+      })));
+    }
+    const market = await recalculateMarketTotals(params.data.cycle, tx, previousCostTotal);
+    const costs = await tx
+      .select()
+      .from(marketCostsTable)
+      .where(eq(marketCostsTable.marketCycle, params.data.cycle))
+      .orderBy(marketCostsTable.id);
+    return { costs, spend: market?.spend ?? 0, margin: market?.margin ?? 0 };
+  });
+  res.json(ReplaceMarketCostsResponse.parse(saved));
 });
 
 router.post("/markets/context/:cycle/report-purchases", async (req, res): Promise<void> => {
