@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import React, { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   getGetMarketContextQueryKey,
@@ -86,7 +86,7 @@ import { MarketCycleBanner } from '@/lib/market-cycle-banner';
 import { formatMarketDate, formatMarketDay, getMarketDate, getMarketStatus, getUtcDayKey, marketSchedule, millisecondsUntilNextUtcDay, type MarketCycleSummary } from '@/lib/market-schedule';
 
 const queryClient = new QueryClient();
-const assetBase = `${import.meta.env.BASE_URL}assets`;
+const assetBase = `${import.meta.env?.BASE_URL ?? '/'}assets`;
 const logoImage = `${assetBase}/bloom-bar-logo.png`;
 const posterImage = `${assetBase}/umbrella-bouquet-poster.png`;
 
@@ -426,7 +426,7 @@ function purchaseDraftFromActual(purchase: ActualPurchase): ActualPurchaseInput 
   };
 }
 
-function BuyPage({
+export function BuyPage({
   buyItems,
   actualPurchases,
   costs,
@@ -614,7 +614,7 @@ function BuyPage({
   </div>;
 }
 
-function BouquetsPage({ bouquetPlan, nextMarket, saveBouquetPlan }: { bouquetPlan: BouquetPlan; nextMarket: MarketCycleSummary; saveBouquetPlan: (selectedBand: string, count: number) => Promise<boolean> }) {
+export function BouquetsPage({ bouquetPlan, nextMarket, saveBouquetPlan }: { bouquetPlan: BouquetPlan; nextMarket: MarketCycleSummary; saveBouquetPlan: (selectedBand: string, count: number) => Promise<boolean> }) {
   const [selectedBand, setSelectedBand] = useState(bouquetPlan.selectedBand);
   const [count, setCount] = useState(bouquetPlan.count);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -632,7 +632,7 @@ function BouquetsPage({ bouquetPlan, nextMarket, saveBouquetPlan }: { bouquetPla
   return <div><PageIntro eyebrow="Next market / making plan" title="A table full of colour." description="Decide the shape of Sunday before the first customer arrives. Your build-your-own bar, made legible." action={<div className="flex items-center gap-3"><div className="rounded-md bg-[#dce3c2] px-3 py-2 text-center"><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">{nextMarket.shortDate}</div><div className="text-sm font-semibold text-primary">Next market</div></div><Button onClick={() => { setCount(count + 1); setSaveState('idle'); }} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-add-bouquet"><Plus size={15} /> Add bouquet</Button></div>} /><MarketSubnav active="bouquets" nextMarket={nextMarket} /><div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]"><div><div className="mb-4 flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Price architecture</p><h2 className="mt-1 font-serif text-2xl">Three sizes, one good day.</h2></div><span className="font-mono text-xs text-muted-foreground">{count} planned</span></div><div className="space-y-3">{priceBands.map((item, index) => <button key={item.name} type="button" onClick={() => { setSelectedBand(item.name); setSaveState('idle'); }} data-testid={`button-price-band-${item.name.toLowerCase()}`} className={`flex w-full items-center gap-4 rounded-lg border p-4 text-left transition-all ${selectedBand === item.name ? 'border-primary bg-[#e8e4cd] shadow-sm' : 'border-card-border bg-card hover:border-primary/30'}`}><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-serif text-lg ${index === 0 ? 'bg-[#e4d7e9]' : index === 1 ? 'bg-[#dce3c2]' : 'bg-[#f1d0c3]'}`}>{index + 1}</span><span className="flex-1"><span className="block font-serif text-xl">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.note} · {item.stems}</span></span><span className="font-mono text-lg">{money(item.price)}</span>{selectedBand === item.name && <CheckCircle2 size={18} className="text-primary" />}</button>)}</div><div className="mt-7 rounded-lg border border-card-border bg-card p-5"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Stem recipe</p><h3 className="mt-1 font-serif text-xl">{band.name} bouquet</h3></div><Pencil size={15} className="text-muted-foreground" /></div><div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">{[{ name: 'Focal', qty: 2, colour: '#e3a38e' }, { name: 'Feature', qty: 5, colour: '#b6a1c8' }, { name: 'Filler', qty: 4, colour: '#e6c26c' }, { name: 'Foliage', qty: 3, colour: '#9aa58b' }].map((item) => <div key={item.name} className="rounded-md bg-muted p-3"><span className="block h-3 w-3 rounded-full" style={{ background: item.colour }} /><span className="mt-3 block text-xs font-semibold">{item.name}</span><span className="mt-1 block font-mono text-[10px] text-muted-foreground">{item.qty} stems</span></div>)}</div></div></div><div className="relative overflow-hidden rounded-xl border border-foreground/10 bg-[#e8e4cd] p-6 md:p-8"><img src={posterImage} alt="Umbrella bouquet poster inspiration" className="absolute -right-16 -top-20 w-[210px] rotate-12 opacity-[.15] mix-blend-multiply" /><div className="relative"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Tag size={13} /> Sunday target</div><div className="mt-8 flex items-end gap-3"><span className="font-serif text-7xl leading-none text-primary">{count}</span><span className="mb-2 font-serif text-xl text-primary/70">bouquets</span></div><p className="mt-4 max-w-xs text-sm leading-relaxed text-primary/70">A gentle target for the umbrella bouquet table. You can always make more when the morning gets busy.</p><div className="mt-8 border-t border-primary/15 pt-5"><div className="flex justify-between text-xs text-primary/70"><span>Target bouquet revenue</span><span className="font-mono font-semibold text-primary">{money(count * band.price)}</span></div><div className="mt-3 flex justify-between text-xs text-primary/70"><span>Selected size</span><span className="font-semibold text-primary">{band.name} · {money(band.price)}</span></div></div><Button onClick={() => void performSave()} disabled={saveState === 'saving'} className="mt-8 w-full bg-primary text-primary-foreground hover:bg-primary/90" testId="button-save-bouquet-plan">{saveState === 'saving' ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {saveState === 'saving' ? 'Saving…' : 'Save Sunday plan'}</Button><div className="mt-3"><SaveFeedback state={saveState} onRetry={() => void performSave()} savedMessage="Sunday bouquet plan saved." /></div></div></div></div></div>;
 }
 
-function ClosePage({ closeMarket, actualPurchases, nextMarket, saveCloseMarket }: { closeMarket: CloseMarket; actualPurchases: ActualPurchase[]; nextMarket: MarketCycleSummary; saveCloseMarket: (counts: Record<string, number>, closed: boolean) => Promise<boolean> }) {
+export function ClosePage({ closeMarket, actualPurchases, nextMarket, saveCloseMarket }: { closeMarket: CloseMarket; actualPurchases: ActualPurchase[]; nextMarket: MarketCycleSummary; saveCloseMarket: (counts: Record<string, number>, closed: boolean) => Promise<boolean> }) {
   const [counts, setCounts] = useState<Record<string, number>>(closeMarket.counts);
   const [closed, setClosed] = useState(closeMarket.closed);
   const [saveState, setSaveState] = useState<SaveState>('idle');
