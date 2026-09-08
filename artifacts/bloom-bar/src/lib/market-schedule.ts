@@ -62,6 +62,15 @@ export function daysUntilMarket(date: Date, today = new Date()): number {
   return Math.max(0, Math.ceil((targetDay - currentDay) / MILLISECONDS_IN_DAY));
 }
 
+export function getUtcDayKey(date = new Date()): string {
+  return date.toISOString().slice(0, 10);
+}
+
+export function millisecondsUntilNextUtcDay(now = new Date()): number {
+  const nextDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  return nextDay - now.getTime();
+}
+
 export function getNextMarketCycle(today = new Date()): number {
   const currentDay = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
   const anchorDay = Date.UTC(MARKET_ANCHOR.getUTCFullYear(), MARKET_ANCHOR.getUTCMonth(), MARKET_ANCHOR.getUTCDate());

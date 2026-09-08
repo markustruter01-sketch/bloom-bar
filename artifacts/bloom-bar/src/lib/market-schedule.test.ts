@@ -7,6 +7,8 @@ import {
   getMarketDate,
   getMarketStatus,
   getNextMarketCycle,
+  getUtcDayKey,
+  millisecondsUntilNextUtcDay,
 } from './market-schedule';
 
 const MILLISECONDS_IN_DAY = 24 * 60 * 60 * 1000;
@@ -121,6 +123,16 @@ describe('market countdown boundaries', () => {
     assert.equal(daysUntilMarket(nextMarketDate, followingDay), 13);
     assert.equal(summary.daysUntil, '13 days');
     assert.equal(summary.cycle, 1);
+  });
+
+  it('changes the UTC day key and countdown at the market-day boundary', () => {
+    const marketDayEnd = new Date('2026-09-13T23:59:59.999Z');
+    const followingDay = new Date('2026-09-14T00:00:00.000Z');
+
+    assert.equal(getUtcDayKey(marketDayEnd), '2026-09-13');
+    assert.equal(millisecondsUntilNextUtcDay(marketDayEnd), 1);
+    assert.equal(getUtcDayKey(followingDay), '2026-09-14');
+    assert.equal(getMarketCycleSummary(followingDay).daysUntil, '13 days');
   });
 
   it('counts down to the anchor from a date before the first market', () => {
