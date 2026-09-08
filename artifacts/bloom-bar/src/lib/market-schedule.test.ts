@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  daysUntilMarket,
   getMarketCycleSummary,
   getMarketDate,
   getMarketStatus,
@@ -97,5 +98,37 @@ describe('market cycle selection and status labeling', () => {
     assert.equal(summary.cycle, 0);
     assert.equal(summary.shortDate, 'Sunday 13 Sep');
     assert.equal(summary.status, 'Next up');
+  });
+});
+
+describe('market countdown boundaries', () => {
+  it('stays at zero on the market date instead of becoming negative', () => {
+    const marketDate = getMarketDate(0);
+    const marketDay = new Date('2026-09-13T23:59:59Z');
+    const summary = getMarketCycleSummary(marketDay);
+
+    assert.equal(daysUntilMarket(marketDate, marketDay), 0);
+    assert.equal(summary.daysUntil, 'Today');
+    assert.equal(summary.cycle, 0);
+  });
+
+  it('starts the next fortnight countdown on the following day', () => {
+    const followingDay = new Date('2026-09-14T12:00:00Z');
+    const nextMarketDate = getMarketDate(1);
+    const summary = getMarketCycleSummary(followingDay);
+
+    assert.equal(getNextMarketCycle(followingDay), 1);
+    assert.equal(daysUntilMarket(nextMarketDate, followingDay), 13);
+    assert.equal(summary.daysUntil, '13 days');
+    assert.equal(summary.cycle, 1);
+  });
+
+  it('counts down to the anchor from a date before the first market', () => {
+    const beforeAnchor = new Date('2026-09-06T12:00:00Z');
+    const summary = getMarketCycleSummary(beforeAnchor);
+
+    assert.equal(daysUntilMarket(getMarketDate(0), beforeAnchor), 7);
+    assert.equal(summary.daysUntil, '7 days');
+    assert.equal(summary.cycle, 0);
   });
 });
