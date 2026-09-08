@@ -45,6 +45,7 @@ describe('market schedule anchor and cycle offsets', () => {
   });
 });
 
+
 describe('market schedule Sunday invariant', () => {
   it('keeps historical and future cycles on Sundays across year boundaries', () => {
     const cycles = Array.from({ length: 241 }, (_, index) => index - 120);
@@ -142,5 +143,25 @@ describe('market countdown boundaries', () => {
     assert.equal(daysUntilMarket(getMarketDate(0), beforeAnchor), 7);
     assert.equal(summary.daysUntil, '7 days');
     assert.equal(summary.cycle, 0);
+  });
+
+  it('counts UTC calendar days across daylight-saving transitions', () => {
+    const transitions = [
+      {
+        marketDate: getMarketDate(-13),
+        beforeTransition: new Date('2026-03-08T01:30:00-05:00'),
+        afterTransition: new Date('2026-03-09T01:30:00-04:00'),
+      },
+      {
+        marketDate: getMarketDate(4),
+        beforeTransition: new Date('2026-11-01T01:30:00-04:00'),
+        afterTransition: new Date('2026-11-02T01:30:00-05:00'),
+      },
+    ];
+
+    for (const { marketDate, beforeTransition, afterTransition } of transitions) {
+      assert.equal(daysUntilMarket(marketDate, beforeTransition), 7);
+      assert.equal(daysUntilMarket(marketDate, afterTransition), 6);
+    }
   });
 });
