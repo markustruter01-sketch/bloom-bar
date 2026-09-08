@@ -24,7 +24,9 @@ import type {
 } from '@workspace/api-client-react';
 import { createWorker } from 'tesseract.js';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { ToastAction } from '@/components/ui/toast';
 import { Toaster } from '@/components/ui/toaster';
+import { toast } from '@/hooks/use-toast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   ArrowLeft,
@@ -143,6 +145,38 @@ function money(value: number) {
 
 function Button({ children, className = '', onClick, type = 'button', testId, disabled = false }: { children: ReactNode; className?: string; onClick?: () => void; type?: 'button' | 'submit'; testId: string; disabled?: boolean }) {
   return <button type={type} onClick={onClick} disabled={disabled} data-testid={testId} className={`inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-45 ${className}`}>{children}</button>;
+}
+
+type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+
+type BuySaveAction =
+  | { kind: 'toggle'; id: number }
+  | { kind: 'lock' }
+  | { kind: 'actual-purchases' }
+  | { kind: 'report' };
+
+function SaveFeedback({ state, onRetry, savedMessage = 'Saved to the market plan.' }: { state: SaveState; onRetry: () => void; savedMessage?: string }) {
+  if (state === 'idle') return null;
+  if (state === 'saving') {
+    return <p className="flex items-center gap-2 rounded-md bg-muted px-4 py-3 text-xs text-muted-foreground" role="status" data-testid="save-status-saving"><LoaderCircle size={14} className="animate-spin" /> Saving your changes…</p>;
+  }
+  if (state === 'saved') {
+    return <p className="flex items-center gap-2 rounded-md bg-[#edf0df] px-4 py-3 text-xs text-primary" role="status" data-testid="save-status-saved"><CheckCircle2 size={14} /> {savedMessage}</p>;
+  }
+  return <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-destructive/20 bg-destructive/5 px-4 py-3 text-xs text-destructive" role="alert" data-testid="save-status-error"><span>Your changes are still here, but we couldn’t save them.</span><Button onClick={onRetry} className="h-8 border border-destructive/25 bg-background px-3 text-destructive hover:bg-destructive/5" testId="button-retry-save"><ArrowRight size={13} /> Try again</Button></div>;
+}
+
+function announceSave(success: boolean, savedMessage: string, retry: () => void) {
+  if (success) {
+    toast({ title: 'Saved', description: savedMessage });
+    return;
+  }
+  toast({
+    variant: 'destructive',
+    title: 'Save failed',
+    description: 'Your changes are still here. Try again when you’re ready.',
+    action: <ToastAction altText="Retry save" onClick={retry}>Retry</ToastAction>,
+  });
 }
 
 function AppShell({ children, remainingBuyItems }: { children: ReactNode; remainingBuyItems: number }) {
@@ -371,7 +405,7 @@ function BuyPage({
   buyItems: BuyItem[];
   actualPurchases: ActualPurchase[];
   buyList: MarketContext['buyList'];
-  toggleBuyItem: (id: number) => void;
+  toggleBuyItem: (id: number) => Promise<boolean>;
   lockBuyList: () => Promise<boolean>;
   saveActualPurchases: (purchases: ActualPurchaseInput[], receipt: ReceiptPayload) => Promise<boolean>;
   reportPurchases: () => Promise<boolean>;
@@ -382,6 +416,8 @@ function BuyPage({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [saveAction, setSaveAction] = useState<BuySaveAction | null>(null);
   const categories = ['All categories', ...flowerCategories];
   const items = buyItems.filter((item) => filter === 'All categories' || item.category === filter);
   const done = buyItems.filter((item) => item.checked).length;
@@ -399,15 +435,18 @@ function BuyPage({
   }, [buyList.marketCycle, buyList.locked, buyList.receiptFileName, buyList.receiptText, buyList.receiptCandidates, actualPurchases, buyItems]);
 
   const updateDraft = (index: number, patch: Partial<ActualPurchaseInput>) => {
+    setSaveState('idle');
     setDrafts((current) => current.map((purchase, purchaseIndex) => purchaseIndex === index ? { ...purchase, ...patch } : purchase));
   };
 
   const addDraft = () => {
+    setSaveState('idle');
     setDrafts((current) => [...current, { flower: '', detail: 'Added after purchase', category: 'Classic Blooms', stems: 1, unitCost: 0, source: 'manual' }]);
   };
 
   const analyzeReceipt = async (file: File) => {
     setIsAnalyzing(true);
+    setSaveState('idle');
     setFeedback('Reading the receipt image…');
     try {
       const worker = await createWorker('eng');
@@ -435,29 +474,37 @@ function BuyPage({
     }
   };
 
-  const saveDrafts = async () => {
-    if (drafts.some((purchase) => !purchase.flower.trim() || purchase.stems <= 0 || purchase.unitCost < 0)) {
+  const performSave = async (action: BuySaveAction) => {
+    if (action.kind === 'actual-purchases' && drafts.some((purchase) => !purchase.flower.trim() || purchase.stems <= 0 || purchase.unitCost < 0)) {
       setFeedback('Each purchase needs a flower name, positive stems, and a non-negative cost.');
+      setSaveState('idle');
       return;
     }
+    setSaveAction(action);
+    setSaveState('saving');
     setIsSaving(true);
-    const saved = await saveActualPurchases(drafts, receipt);
+    let saved = false;
+    let savedMessage = 'Saved to the market plan.';
+    if (action.kind === 'toggle') {
+      saved = await toggleBuyItem(action.id);
+      savedMessage = 'Buy-list progress saved.';
+    } else if (action.kind === 'lock') {
+      saved = await lockBuyList();
+      savedMessage = 'Buy list locked for shopping.';
+    } else if (action.kind === 'actual-purchases') {
+      saved = await saveActualPurchases(drafts, receipt);
+      savedMessage = 'Actual purchases saved against this market date.';
+    } else {
+      saved = await reportPurchases();
+      savedMessage = 'Buy List Report saved for this market date.';
+    }
     setIsSaving(false);
-    setFeedback(saved ? 'Actual purchases saved against this market date.' : 'Actual purchases could not be saved. Try again.');
+    setSaveState(saved ? 'saved' : 'error');
+    announceSave(saved, savedMessage, () => void performSave(action));
   };
 
-  const handleLock = async () => {
-    setIsSaving(true);
-    const locked = await lockBuyList();
-    setIsSaving(false);
-    if (locked) setFeedback('Buy list locked. You can now record what you actually purchased.');
-  };
-
-  const handleReport = async () => {
-    setIsSaving(true);
-    const reported = await reportPurchases();
-    setIsSaving(false);
-    setFeedback(reported ? 'Buy List Report saved for this market date.' : 'Save at least one actual purchase before reporting.');
+  const handleRetry = () => {
+    if (saveAction) void performSave(saveAction);
   };
 
   return <div>
@@ -474,10 +521,11 @@ function BuyPage({
           <div className="flex gap-1 overflow-x-auto rounded-md bg-muted p-1">{categories.map((category) => <button key={category} onClick={() => setFilter(category)} data-testid={`filter-buy-${category.toLowerCase().replaceAll(' ', '-')}`} className={`shrink-0 rounded px-2.5 py-1.5 text-[11px] font-semibold ${filter === category ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground'}`}>{category}</button>)}</div>
           <span className="hidden font-mono text-[10px] text-muted-foreground sm:block">{done}/{buyItems.length} checked</span>
         </div>
-        <div className="space-y-2">{items.map((item) => <button type="button" key={item.id} onClick={() => toggleBuyItem(item.id)} data-testid={`button-check-buy-${item.id}`} className={`group flex w-full items-center gap-3 rounded-lg border p-4 text-left transition-all ${item.checked ? 'border-[#ccd6b0] bg-[#edf0df]/75' : 'border-card-border bg-card hover:border-primary/30'}`}><span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all ${item.checked ? 'check-pop border-primary bg-primary text-primary-foreground' : 'border-foreground/20 group-hover:border-primary'}`}>{item.checked && <Check size={14} strokeWidth={3} />}</span><span className="min-w-0 flex-1"><span className={`block text-sm font-semibold ${item.checked ? 'text-muted-foreground line-through' : ''}`}>{item.flower}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.detail}</span></span><span className="text-right"><span className="block font-mono text-sm">{item.qty}</span><span className="block text-[10px] text-muted-foreground">{item.unit}</span></span><span className="hidden w-20 text-right sm:block"><span className="block font-mono text-xs">{money(item.lastPrice)}</span><span className="block text-[10px] text-muted-foreground">last price</span></span><MoreHorizontal size={16} className="text-muted-foreground/50" /></button>)}</div>
+        <div className="space-y-2">{items.map((item) => <button type="button" key={item.id} onClick={() => void performSave({ kind: 'toggle', id: item.id })} disabled={isSaving} data-testid={`button-check-buy-${item.id}`} className={`group flex w-full items-center gap-3 rounded-lg border p-4 text-left transition-all ${item.checked ? 'border-[#ccd6b0] bg-[#edf0df]/75' : 'border-card-border bg-card hover:border-primary/30'}`}><span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all ${item.checked ? 'check-pop border-primary bg-primary text-primary-foreground' : 'border-foreground/20 group-hover:border-primary'}`}>{item.checked && <Check size={14} strokeWidth={3} />}</span><span className="min-w-0 flex-1"><span className={`block text-sm font-semibold ${item.checked ? 'text-muted-foreground line-through' : ''}`}>{item.flower}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.detail}</span></span><span className="text-right"><span className="block font-mono text-sm">{item.qty}</span><span className="block text-[10px] text-muted-foreground">{item.unit}</span></span><span className="hidden w-20 text-right sm:block"><span className="block font-mono text-xs">{money(item.lastPrice)}</span><span className="block text-[10px] text-muted-foreground">last price</span></span><MoreHorizontal size={16} className="text-muted-foreground/50" /></button>)}</div>
         <div className="mt-4 rounded-lg border border-primary/15 bg-[#e8e4cd] p-5">
           <div className="flex items-start gap-3"><LockKeyhole size={18} className="mt-0.5 text-primary" /><div><h3 className="font-serif text-xl text-primary">Ready to freeze this run?</h3><p className="mt-1 text-xs leading-relaxed text-primary/70">Locking keeps the proposed list stable while you shop. You can still record different quantities, prices, or extra flowers in the actual purchase record.</p></div></div>
-          <Button onClick={handleLock} disabled={isSaving} className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90" testId="button-lock-buy-list">{isSaving ? <LoaderCircle size={15} className="animate-spin" /> : <LockKeyhole size={15} />} Lock proposed buy list</Button>
+          <Button onClick={() => void performSave({ kind: 'lock' })} disabled={isSaving} className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90" testId="button-lock-buy-list">{isSaving && saveAction?.kind === 'lock' ? <LoaderCircle size={15} className="animate-spin" /> : <LockKeyhole size={15} />} {isSaving && saveAction?.kind === 'lock' ? 'Saving…' : 'Lock proposed buy list'}</Button>
+          <div className="mt-3"><SaveFeedback state={saveState} onRetry={handleRetry} /></div>
         </div>
       </div>
       <aside className="h-fit space-y-3 lg:sticky lg:top-24"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><DollarSign size={13} /> Sourcing estimate</div><div className="mt-4 font-serif text-4xl tracking-[-.04em] text-primary" data-testid="text-buy-estimate">{money(proposedTotal)}</div><p className="mt-1 text-xs leading-relaxed text-primary/65">Based on your last recorded prices. Leave a little room for market morning surprises.</p><div className="mt-5 border-t border-primary/15 pt-4"><div className="flex justify-between text-xs"><span className="text-primary/65">Expected flower spend</span><span className="font-mono font-semibold text-primary">{money(proposedTotal)}</span></div><div className="mt-2 flex justify-between text-xs"><span className="text-primary/65">Target revenue</span><span className="font-mono font-semibold text-primary">$1,846</span></div></div></div><div className="paper-card rounded-lg border border-card-border p-5"><div className="flex items-center gap-2 font-serif text-lg"><Truck size={17} className="text-muted-foreground" /> Sourcing notes</div><ul className="mt-4 space-y-3 text-xs leading-relaxed text-muted-foreground"><li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />Confirm grower availability by Thursday afternoon.</li><li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />Ask for the softest apricot disbuds on the cart.</li><li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />Pick up buckets and extra paper on the way in.</li></ul></div></aside>
@@ -485,8 +533,8 @@ function BuyPage({
       <div className="space-y-5">
         <section className="rounded-lg border border-card-border bg-card p-5">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Actual purchases</p><h2 className="mt-1 font-serif text-2xl">What did you buy?</h2><p className="mt-1 text-xs text-muted-foreground">Edit the receipt results or replace the planned quantities with what actually came home.</p></div><span className={`rounded-full px-2.5 py-1 font-mono text-[9px] uppercase ${buyList.reported ? 'bg-[#dce3c2] text-primary' : 'bg-muted text-muted-foreground'}`}>{buyList.reported ? 'Reported' : 'Not reported'}</span></div>
-          <div className="mt-5 space-y-2">{drafts.map((purchase, index) => <div key={`${purchase.flower}-${index}`} className="grid gap-2 rounded-md border border-foreground/10 bg-background p-3 sm:grid-cols-[1.3fr_.7fr_.7fr_auto] sm:items-end"><label className="text-[10px] font-mono uppercase text-muted-foreground">Flower<input value={purchase.flower} onChange={(event) => updateDraft(index, { flower: event.target.value })} className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 text-sm font-sans normal-case text-foreground outline-none focus:border-primary" /></label><label className="text-[10px] font-mono uppercase text-muted-foreground">Stems<input type="number" min="1" value={purchase.stems} onChange={(event) => updateDraft(index, { stems: Number(event.target.value) })} className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 font-mono text-sm text-foreground outline-none focus:border-primary" /></label><label className="text-[10px] font-mono uppercase text-muted-foreground">Unit cost<input type="number" min="0" step="0.01" value={purchase.unitCost} onChange={(event) => updateDraft(index, { unitCost: Number(event.target.value) })} className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 font-mono text-sm text-foreground outline-none focus:border-primary" /></label><Button onClick={() => setDrafts((current) => current.filter((_, purchaseIndex) => purchaseIndex !== index))} className="h-9 border border-foreground/15 bg-transparent px-2 text-muted-foreground hover:border-destructive hover:text-destructive" testId={`button-remove-purchase-${index}`}><Trash2 size={15} /></Button><div className="text-[10px] text-muted-foreground sm:col-span-4">{purchase.detail} · {purchase.category} · {purchase.source === 'receipt' ? 'receipt result' : 'manual'}</div></div>)}</div>
-          <div className="mt-4 flex flex-wrap gap-2"><Button onClick={addDraft} className="border border-dashed border-foreground/20 bg-transparent text-muted-foreground hover:border-primary hover:text-primary" testId="button-add-actual-purchase"><Plus size={15} /> Add purchase</Button><Button onClick={saveDrafts} disabled={isSaving} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-save-actual-purchases">{isSaving ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} Save actual purchases</Button></div>
+          <div className="mt-5 space-y-2">{drafts.map((purchase, index) => <div key={`${purchase.flower}-${index}`} className="grid gap-2 rounded-md border border-foreground/10 bg-background p-3 sm:grid-cols-[1.3fr_.7fr_.7fr_auto] sm:items-end"><label className="text-[10px] font-mono uppercase text-muted-foreground">Flower<input value={purchase.flower} onChange={(event) => updateDraft(index, { flower: event.target.value })} className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 text-sm font-sans normal-case text-foreground outline-none focus:border-primary" /></label><label className="text-[10px] font-mono uppercase text-muted-foreground">Stems<input type="number" min="1" value={purchase.stems} onChange={(event) => updateDraft(index, { stems: Number(event.target.value) })} className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 font-mono text-sm text-foreground outline-none focus:border-primary" /></label><label className="text-[10px] font-mono uppercase text-muted-foreground">Unit cost<input type="number" min="0" step="0.01" value={purchase.unitCost} onChange={(event) => updateDraft(index, { unitCost: Number(event.target.value) })} className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 font-mono text-sm text-foreground outline-none focus:border-primary" /></label><Button onClick={() => { setSaveState('idle'); setDrafts((current) => current.filter((_, purchaseIndex) => purchaseIndex !== index)); }} className="h-9 border border-foreground/15 bg-transparent px-2 text-muted-foreground hover:border-destructive hover:text-destructive" testId={`button-remove-purchase-${index}`}><Trash2 size={15} /></Button><div className="text-[10px] text-muted-foreground sm:col-span-4">{purchase.detail} · {purchase.category} · {purchase.source === 'receipt' ? 'receipt result' : 'manual'}</div></div>)}</div>
+          <div className="mt-4 flex flex-wrap gap-2"><Button onClick={addDraft} className="border border-dashed border-foreground/20 bg-transparent text-muted-foreground hover:border-primary hover:text-primary" testId="button-add-actual-purchase"><Plus size={15} /> Add purchase</Button><Button onClick={() => void performSave({ kind: 'actual-purchases' })} disabled={isSaving} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-save-actual-purchases">{isSaving && saveAction?.kind === 'actual-purchases' ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {isSaving && saveAction?.kind === 'actual-purchases' ? 'Saving…' : 'Save actual purchases'}</Button></div>
         </section>
         <section className="rounded-lg border border-card-border bg-card p-5">
           <div className="flex items-start gap-3"><ReceiptText size={18} className="mt-0.5 text-muted-foreground" /><div><h3 className="font-serif text-xl">Upload the receipt</h3><p className="mt-1 text-xs leading-relaxed text-muted-foreground">OCR reads the photo in your browser and pre-fills priced flower lines. Check every result before saving.</p></div></div>
@@ -494,36 +542,53 @@ function BuyPage({
           {receipt.receiptText && <details className="mt-3 rounded-md bg-muted p-3 text-xs"><summary className="cursor-pointer font-semibold">View extracted text</summary><pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[10px] text-muted-foreground">{receipt.receiptText}</pre></details>}
         </section>
         {feedback && <p className="rounded-md bg-[#edf0df] px-4 py-3 text-xs text-primary" role="status">{feedback}</p>}
+        <SaveFeedback state={saveState} onRetry={handleRetry} />
       </div>
-      <aside className="h-fit space-y-3 lg:sticky lg:top-24"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><DollarSign size={13} /> Actual flower spend</div><div className="mt-4 font-serif text-4xl tracking-[-.04em] text-primary" data-testid="text-actual-spend">{money(actualTotal)}</div><p className="mt-1 text-xs leading-relaxed text-primary/65">Saved against Sunday {nextMarket.shortDate}. This replaces the proposal when the report is created.</p><div className="mt-5 border-t border-primary/15 pt-4"><div className="flex justify-between text-xs"><span className="text-primary/65">Purchase lines</span><span className="font-mono font-semibold text-primary">{drafts.length}</span></div><div className="mt-2 flex justify-between text-xs"><span className="text-primary/65">Receipt status</span><span className="font-semibold text-primary">{receipt.receiptFileName ? 'Analysed' : 'Not uploaded'}</span></div></div></div><div className="paper-card rounded-lg border border-card-border p-5"><div className="flex items-center gap-2 font-serif text-lg"><UnlockKeyhole size={17} className="text-muted-foreground" /> List locked</div><p className="mt-3 text-xs leading-relaxed text-muted-foreground">The proposed list is frozen for this market cycle. Actual purchases can differ without changing the original plan.</p><Button onClick={handleReport} disabled={isSaving || drafts.length === 0 || buyList.reported} className="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90" testId="button-report-buy-list">{buyList.reported ? <CheckCircle2 size={15} /> : <ClipboardList size={15} />} {buyList.reported ? 'Buy List Report saved' : 'Create Buy List Report'}</Button></div></aside>
+      <aside className="h-fit space-y-3 lg:sticky lg:top-24"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><DollarSign size={13} /> Actual flower spend</div><div className="mt-4 font-serif text-4xl tracking-[-.04em] text-primary" data-testid="text-actual-spend">{money(actualTotal)}</div><p className="mt-1 text-xs leading-relaxed text-primary/65">Saved against Sunday {nextMarket.shortDate}. This replaces the proposal when the report is created.</p><div className="mt-5 border-t border-primary/15 pt-4"><div className="flex justify-between text-xs"><span className="text-primary/65">Purchase lines</span><span className="font-mono font-semibold text-primary">{drafts.length}</span></div><div className="mt-2 flex justify-between text-xs"><span className="text-primary/65">Receipt status</span><span className="font-semibold text-primary">{receipt.receiptFileName ? 'Analysed' : 'Not uploaded'}</span></div></div></div><div className="paper-card rounded-lg border border-card-border p-5"><div className="flex items-center gap-2 font-serif text-lg"><UnlockKeyhole size={17} className="text-muted-foreground" /> List locked</div><p className="mt-3 text-xs leading-relaxed text-muted-foreground">The proposed list is frozen for this market cycle. Actual purchases can differ without changing the original plan.</p><Button onClick={() => void performSave({ kind: 'report' })} disabled={isSaving || drafts.length === 0 || buyList.reported} className="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90" testId="button-report-buy-list">{isSaving && saveAction?.kind === 'report' ? <LoaderCircle size={15} className="animate-spin" /> : buyList.reported ? <CheckCircle2 size={15} /> : <ClipboardList size={15} />} {isSaving && saveAction?.kind === 'report' ? 'Saving…' : buyList.reported ? 'Buy List Report saved' : 'Create Buy List Report'}</Button></div></aside>
     </div>}
   </div>;
 }
 
-function BouquetsPage({ bouquetPlan, saveBouquetPlan }: { bouquetPlan: BouquetPlan; saveBouquetPlan: (selectedBand: string, count: number) => void }) {
+function BouquetsPage({ bouquetPlan, saveBouquetPlan }: { bouquetPlan: BouquetPlan; saveBouquetPlan: (selectedBand: string, count: number) => Promise<boolean> }) {
   const [selectedBand, setSelectedBand] = useState(bouquetPlan.selectedBand);
   const [count, setCount] = useState(bouquetPlan.count);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
   useEffect(() => {
     setSelectedBand(bouquetPlan.selectedBand);
     setCount(bouquetPlan.count);
   }, [bouquetPlan.marketCycle, bouquetPlan.selectedBand, bouquetPlan.count]);
   const band = priceBands.find((item) => item.name === selectedBand) ?? priceBands[1];
-  return <div><PageIntro eyebrow="Next market / making plan" title="A table full of colour." description="Decide the shape of Sunday before the first customer arrives. Your build-your-own bar, made legible." action={<div className="flex items-center gap-3"><div className="rounded-md bg-[#dce3c2] px-3 py-2 text-center"><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">{nextMarket.shortDate}</div><div className="text-sm font-semibold text-primary">Next market</div></div><Button onClick={() => setCount(count + 1)} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-add-bouquet"><Plus size={15} /> Add bouquet</Button></div>} /><MarketSubnav active="bouquets" /><div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]"><div><div className="mb-4 flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Price architecture</p><h2 className="mt-1 font-serif text-2xl">Three sizes, one good day.</h2></div><span className="font-mono text-xs text-muted-foreground">{count} planned</span></div><div className="space-y-3">{priceBands.map((item, index) => <button key={item.name} type="button" onClick={() => setSelectedBand(item.name)} data-testid={`button-price-band-${item.name.toLowerCase()}`} className={`flex w-full items-center gap-4 rounded-lg border p-4 text-left transition-all ${selectedBand === item.name ? 'border-primary bg-[#e8e4cd] shadow-sm' : 'border-card-border bg-card hover:border-primary/30'}`}><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-serif text-lg ${index === 0 ? 'bg-[#e4d7e9]' : index === 1 ? 'bg-[#dce3c2]' : 'bg-[#f1d0c3]'}`}>{index + 1}</span><span className="flex-1"><span className="block font-serif text-xl">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.note} · {item.stems}</span></span><span className="font-mono text-lg">{money(item.price)}</span>{selectedBand === item.name && <CheckCircle2 size={18} className="text-primary" />}</button>)}</div><div className="mt-7 rounded-lg border border-card-border bg-card p-5"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Stem recipe</p><h3 className="mt-1 font-serif text-xl">{band.name} bouquet</h3></div><Pencil size={15} className="text-muted-foreground" /></div><div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">{[{ name: 'Focal', qty: 2, colour: '#e3a38e' }, { name: 'Feature', qty: 5, colour: '#b6a1c8' }, { name: 'Filler', qty: 4, colour: '#e6c26c' }, { name: 'Foliage', qty: 3, colour: '#9aa58b' }].map((item) => <div key={item.name} className="rounded-md bg-muted p-3"><span className="block h-3 w-3 rounded-full" style={{ background: item.colour }} /><span className="mt-3 block text-xs font-semibold">{item.name}</span><span className="mt-1 block font-mono text-[10px] text-muted-foreground">{item.qty} stems</span></div>)}</div></div></div><div className="relative overflow-hidden rounded-xl border border-foreground/10 bg-[#e8e4cd] p-6 md:p-8"><img src={posterImage} alt="Umbrella bouquet poster inspiration" className="absolute -right-16 -top-20 w-[210px] rotate-12 opacity-[.15] mix-blend-multiply" /><div className="relative"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Tag size={13} /> Sunday target</div><div className="mt-8 flex items-end gap-3"><span className="font-serif text-7xl leading-none text-primary">{count}</span><span className="mb-2 font-serif text-xl text-primary/70">bouquets</span></div><p className="mt-4 max-w-xs text-sm leading-relaxed text-primary/70">A gentle target for the umbrella bouquet table. You can always make more when the morning gets busy.</p><div className="mt-8 border-t border-primary/15 pt-5"><div className="flex justify-between text-xs text-primary/70"><span>Target bouquet revenue</span><span className="font-mono font-semibold text-primary">{money(count * band.price)}</span></div><div className="mt-3 flex justify-between text-xs text-primary/70"><span>Selected size</span><span className="font-semibold text-primary">{band.name} · {money(band.price)}</span></div></div><Button onClick={() => saveBouquetPlan(band.name, count)} className="mt-8 w-full bg-primary text-primary-foreground hover:bg-primary/90" testId="button-save-bouquet-plan"><Check size={15} /> Save Sunday plan</Button></div></div></div></div>;
+  const performSave = async () => {
+    setSaveState('saving');
+    const saved = await saveBouquetPlan(band.name, count);
+    setSaveState(saved ? 'saved' : 'error');
+    announceSave(saved, 'Sunday bouquet plan saved.', () => void performSave());
+  };
+  return <div><PageIntro eyebrow="Next market / making plan" title="A table full of colour." description="Decide the shape of Sunday before the first customer arrives. Your build-your-own bar, made legible." action={<div className="flex items-center gap-3"><div className="rounded-md bg-[#dce3c2] px-3 py-2 text-center"><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">{nextMarket.shortDate}</div><div className="text-sm font-semibold text-primary">Next market</div></div><Button onClick={() => { setCount(count + 1); setSaveState('idle'); }} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-add-bouquet"><Plus size={15} /> Add bouquet</Button></div>} /><MarketSubnav active="bouquets" /><div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]"><div><div className="mb-4 flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Price architecture</p><h2 className="mt-1 font-serif text-2xl">Three sizes, one good day.</h2></div><span className="font-mono text-xs text-muted-foreground">{count} planned</span></div><div className="space-y-3">{priceBands.map((item, index) => <button key={item.name} type="button" onClick={() => { setSelectedBand(item.name); setSaveState('idle'); }} data-testid={`button-price-band-${item.name.toLowerCase()}`} className={`flex w-full items-center gap-4 rounded-lg border p-4 text-left transition-all ${selectedBand === item.name ? 'border-primary bg-[#e8e4cd] shadow-sm' : 'border-card-border bg-card hover:border-primary/30'}`}><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-serif text-lg ${index === 0 ? 'bg-[#e4d7e9]' : index === 1 ? 'bg-[#dce3c2]' : 'bg-[#f1d0c3]'}`}>{index + 1}</span><span className="flex-1"><span className="block font-serif text-xl">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.note} · {item.stems}</span></span><span className="font-mono text-lg">{money(item.price)}</span>{selectedBand === item.name && <CheckCircle2 size={18} className="text-primary" />}</button>)}</div><div className="mt-7 rounded-lg border border-card-border bg-card p-5"><div className="flex items-center justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Stem recipe</p><h3 className="mt-1 font-serif text-xl">{band.name} bouquet</h3></div><Pencil size={15} className="text-muted-foreground" /></div><div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">{[{ name: 'Focal', qty: 2, colour: '#e3a38e' }, { name: 'Feature', qty: 5, colour: '#b6a1c8' }, { name: 'Filler', qty: 4, colour: '#e6c26c' }, { name: 'Foliage', qty: 3, colour: '#9aa58b' }].map((item) => <div key={item.name} className="rounded-md bg-muted p-3"><span className="block h-3 w-3 rounded-full" style={{ background: item.colour }} /><span className="mt-3 block text-xs font-semibold">{item.name}</span><span className="mt-1 block font-mono text-[10px] text-muted-foreground">{item.qty} stems</span></div>)}</div></div></div><div className="relative overflow-hidden rounded-xl border border-foreground/10 bg-[#e8e4cd] p-6 md:p-8"><img src={posterImage} alt="Umbrella bouquet poster inspiration" className="absolute -right-16 -top-20 w-[210px] rotate-12 opacity-[.15] mix-blend-multiply" /><div className="relative"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Tag size={13} /> Sunday target</div><div className="mt-8 flex items-end gap-3"><span className="font-serif text-7xl leading-none text-primary">{count}</span><span className="mb-2 font-serif text-xl text-primary/70">bouquets</span></div><p className="mt-4 max-w-xs text-sm leading-relaxed text-primary/70">A gentle target for the umbrella bouquet table. You can always make more when the morning gets busy.</p><div className="mt-8 border-t border-primary/15 pt-5"><div className="flex justify-between text-xs text-primary/70"><span>Target bouquet revenue</span><span className="font-mono font-semibold text-primary">{money(count * band.price)}</span></div><div className="mt-3 flex justify-between text-xs text-primary/70"><span>Selected size</span><span className="font-semibold text-primary">{band.name} · {money(band.price)}</span></div></div><Button onClick={() => void performSave()} disabled={saveState === 'saving'} className="mt-8 w-full bg-primary text-primary-foreground hover:bg-primary/90" testId="button-save-bouquet-plan">{saveState === 'saving' ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {saveState === 'saving' ? 'Saving…' : 'Save Sunday plan'}</Button><div className="mt-3"><SaveFeedback state={saveState} onRetry={() => void performSave()} savedMessage="Sunday bouquet plan saved." /></div></div></div></div></div>;
 }
 
-function ClosePage({ closeMarket, saveCloseMarket }: { closeMarket: CloseMarket; saveCloseMarket: (counts: Record<string, number>, closed: boolean) => void }) {
+function ClosePage({ closeMarket, saveCloseMarket }: { closeMarket: CloseMarket; saveCloseMarket: (counts: Record<string, number>, closed: boolean) => Promise<boolean> }) {
   const [counts, setCounts] = useState<Record<string, number>>(closeMarket.counts);
   const [closed, setClosed] = useState(closeMarket.closed);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
   useEffect(() => {
     setCounts(closeMarket.counts);
     setClosed(closeMarket.closed);
   }, [closeMarket.marketCycle, closeMarket.counts, closeMarket.closed]);
   const stock = [{ name: 'Lisianthus', note: 'Classic bloom stems', opening: 18 }, { name: 'Daisy', note: 'Classic bloom stems', opening: 30 }, { name: 'Snapdragon', note: 'Classic bloom stems', opening: 20 }, { name: 'Eucalyptus foliage', note: 'Gum stems', opening: 26 }];
   const totalLeft = Object.values(counts).reduce((sum, value) => sum + value, 0);
-  return <div><PageIntro eyebrow="Next market / pack-down" title="Leave the shed lighter." description="A quick count of what came home, what found a vase, and what to carry into the next Sunday." action={<div className={`rounded-md px-3 py-2 text-center ${closed ? 'bg-[#dce3c2]' : 'bg-muted'}`}><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">Market status</div><div className="text-sm font-semibold">{closed ? 'Closed out' : 'Not closed'}</div></div>} /><MarketSubnav active="close" /><div className="grid gap-6 lg:grid-cols-[1fr_340px]"><div><div className="mb-4 flex items-end justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Leftover stock</p><h2 className="mt-1 font-serif text-2xl">What came home?</h2></div><span className="font-mono text-xs text-muted-foreground">{totalLeft} stems counted</span></div><div className="overflow-hidden rounded-lg border border-card-border bg-card">{stock.map((item) => <div key={item.name} className="flex items-center gap-4 border-b border-foreground/10 p-4 last:border-0"><span className="h-9 w-9 rounded-full border border-foreground/10" style={{ background: `radial-gradient(circle at 40% 30%, ${flowers.find((flower) => flower.common === item.name)?.colour ?? '#b6a1c8'}, #eee5dc)` }} /><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.note} · {item.opening} opened</span></span><div className="flex items-center gap-2"><Button onClick={() => setCounts((current) => ({ ...current, [item.name]: Math.max(0, (current[item.name] ?? 0) - 1) }))} className="h-8 w-8 rounded-full border border-foreground/15 bg-background p-0 text-lg font-normal" testId={`button-decrease-${item.name.toLowerCase().replaceAll(' ', '-')}`}>−</Button><span className="w-6 text-center font-mono text-sm" data-testid={`text-leftover-${item.name.toLowerCase().replaceAll(' ', '-')}`}>{counts[item.name] ?? 0}</span><Button onClick={() => setCounts((current) => ({ ...current, [item.name]: (current[item.name] ?? 0) + 1 }))} className="h-8 w-8 rounded-full border border-foreground/15 bg-background p-0 text-lg font-normal" testId={`button-increase-${item.name.toLowerCase().replaceAll(' ', '-')}`}><Plus size={14} /></Button></div></div>)}</div><Button onClick={() => { const nextClosed = !closed; setClosed(nextClosed); saveCloseMarket(counts, nextClosed); }} className={`mt-4 w-full ${closed ? 'border border-primary bg-transparent text-primary' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`} testId="button-save-close">{closed ? <><CheckCircle2 size={15} /> Reopen count</> : <><ClipboardCheck size={15} /> Save pack-down count</>}</Button></div><aside className="h-fit space-y-3"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Package size={13} /> Pack-down notes</div><p className="mt-4 font-serif text-xl leading-snug text-primary">Good flowers deserve<br />a second Sunday.</p><p className="mt-3 text-xs leading-relaxed text-primary/65">Record what is still fresh so it can guide your next buy list. Compost anything that has lost its lift.</p></div><div className="paper-card rounded-lg border border-card-border p-5"><div className="flex items-center gap-2 font-serif text-lg"><ClipboardList size={17} className="text-muted-foreground" /> Close checklist</div><div className="mt-4 space-y-3 text-xs text-muted-foreground"><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-buckets" className="accent-primary" /> Rinse buckets</label><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-tent" className="accent-primary" /> Pack umbrella sign</label><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-till" className="accent-primary" /> Reconcile the till</label></div></div></aside></div></div>;
+  const performSave = async () => {
+    const nextClosed = !closed;
+    setSaveState('saving');
+    const saved = await saveCloseMarket(counts, nextClosed);
+    if (saved) setClosed(nextClosed);
+    setSaveState(saved ? 'saved' : 'error');
+    announceSave(saved, nextClosed ? 'Pack-down count saved and market closed.' : 'Pack-down count saved and market reopened.', () => void performSave());
+  };
+  return <div><PageIntro eyebrow="Next market / pack-down" title="Leave the shed lighter." description="A quick count of what came home, what found a vase, and what to carry into the next Sunday." action={<div className={`rounded-md px-3 py-2 text-center ${closed ? 'bg-[#dce3c2]' : 'bg-muted'}`}><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">Market status</div><div className="text-sm font-semibold">{closed ? 'Closed out' : 'Not closed'}</div></div>} /><MarketSubnav active="close" /><div className="grid gap-6 lg:grid-cols-[1fr_340px]"><div><div className="mb-4 flex items-end justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Leftover stock</p><h2 className="mt-1 font-serif text-2xl">What came home?</h2></div><span className="font-mono text-xs text-muted-foreground">{totalLeft} stems counted</span></div><div className="overflow-hidden rounded-lg border border-card-border bg-card">{stock.map((item) => <div key={item.name} className="flex items-center gap-4 border-b border-foreground/10 p-4 last:border-0"><span className="h-9 w-9 rounded-full border border-foreground/10" style={{ background: `radial-gradient(circle at 40% 30%, ${flowers.find((flower) => flower.common === item.name)?.colour ?? '#b6a1c8'}, #eee5dc)` }} /><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.note} · {item.opening} opened</span></span><div className="flex items-center gap-2"><Button onClick={() => { setCounts((current) => ({ ...current, [item.name]: Math.max(0, (current[item.name] ?? 0) - 1) })); setSaveState('idle'); }} className="h-8 w-8 rounded-full border border-foreground/15 bg-background p-0 text-lg font-normal" testId={`button-decrease-${item.name.toLowerCase().replaceAll(' ', '-')}`}>−</Button><span className="w-6 text-center font-mono text-sm" data-testid={`text-leftover-${item.name.toLowerCase().replaceAll(' ', '-')}`}>{counts[item.name] ?? 0}</span><Button onClick={() => { setCounts((current) => ({ ...current, [item.name]: (current[item.name] ?? 0) + 1 })); setSaveState('idle'); }} className="h-8 w-8 rounded-full border border-foreground/15 bg-background p-0 text-lg font-normal" testId={`button-increase-${item.name.toLowerCase().replaceAll(' ', '-')}`}><Plus size={14} /></Button></div></div>)}</div><Button onClick={() => void performSave()} disabled={saveState === 'saving'} className={`mt-4 w-full ${closed ? 'border border-primary bg-transparent text-primary' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`} testId="button-save-close">{saveState === 'saving' ? <LoaderCircle size={15} className="animate-spin" /> : closed ? <CheckCircle2 size={15} /> : <ClipboardCheck size={15} />} {saveState === 'saving' ? 'Saving…' : closed ? 'Reopen count' : 'Save pack-down count'}</Button><div className="mt-3"><SaveFeedback state={saveState} onRetry={() => void performSave()} savedMessage={closed ? 'Pack-down count saved and market closed.' : 'Pack-down count saved and market reopened.'} /></div></div><aside className="h-fit space-y-3"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Package size={13} /> Pack-down notes</div><p className="mt-4 font-serif text-xl leading-snug text-primary">Good flowers deserve<br />a second Sunday.</p><p className="mt-3 text-xs leading-relaxed text-primary/65">Record what is still fresh so it can guide your next buy list. Compost anything that has lost its lift.</p></div><div className="paper-card rounded-lg border border-card-border bg-card p-5"><div className="flex items-center gap-2 font-serif text-lg"><ClipboardList size={17} className="text-muted-foreground" /> Close checklist</div><div className="mt-4 space-y-3 text-xs text-muted-foreground"><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-buckets" className="accent-primary" /> Rinse buckets</label><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-tent" className="accent-primary" /> Pack umbrella sign</label><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-till" className="accent-primary" /> Reconcile the till</label></div></div></aside></div></div>;
 }
 
-function Router({ buyItems, actualPurchases, buyList, markets, bouquetPlan, closeMarket, toggleBuyItem, lockBuyList, saveActualPurchases, reportPurchases, saveBouquetPlan, saveCloseMarket }: { buyItems: BuyItem[]; actualPurchases: ActualPurchase[]; buyList: MarketContext['buyList']; markets: Market[]; bouquetPlan: BouquetPlan; closeMarket: CloseMarket; toggleBuyItem: (id: number) => void; lockBuyList: () => Promise<boolean>; saveActualPurchases: (purchases: ActualPurchaseInput[], receipt: ReceiptPayload) => Promise<boolean>; reportPurchases: () => Promise<boolean>; saveBouquetPlan: (selectedBand: string, count: number) => void; saveCloseMarket: (counts: Record<string, number>, closed: boolean) => void }) {
+function Router({ buyItems, actualPurchases, buyList, markets, bouquetPlan, closeMarket, toggleBuyItem, lockBuyList, saveActualPurchases, reportPurchases, saveBouquetPlan, saveCloseMarket }: { buyItems: BuyItem[]; actualPurchases: ActualPurchase[]; buyList: MarketContext['buyList']; markets: Market[]; bouquetPlan: BouquetPlan; closeMarket: CloseMarket; toggleBuyItem: (id: number) => Promise<boolean>; lockBuyList: () => Promise<boolean>; saveActualPurchases: (purchases: ActualPurchaseInput[], receipt: ReceiptPayload) => Promise<boolean>; reportPurchases: () => Promise<boolean>; saveBouquetPlan: (selectedBand: string, count: number) => Promise<boolean>; saveCloseMarket: (counts: Record<string, number>, closed: boolean) => Promise<boolean> }) {
   return <AppShell remainingBuyItems={buyItems.filter((item) => !item.checked).length}><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} markets={markets} />} /><Route path="/flowers" component={FlowersPage} /><Route path="/markets" component={() => <MarketsPage markets={markets} />} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} actualPurchases={actualPurchases} buyList={buyList} toggleBuyItem={toggleBuyItem} lockBuyList={lockBuyList} saveActualPurchases={saveActualPurchases} reportPurchases={reportPurchases} />} /><Route path="/markets/next/close" component={() => <ClosePage closeMarket={closeMarket} saveCloseMarket={saveCloseMarket} />} /><Route path="/markets/next/bouquets" component={() => <BouquetsPage bouquetPlan={bouquetPlan} saveBouquetPlan={saveBouquetPlan} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
 }
 
@@ -551,13 +616,16 @@ function AppContent() {
   const updateContext = (patch: Partial<MarketContext>) => {
     queryClient.setQueryData<MarketContext>(getGetMarketContextQueryKey(nextMarketCycle), (current) => current ? { ...current, ...patch } : current);
   };
-  const toggleBuyItem = (id: number) => {
+  const toggleBuyItem = async (id: number) => {
     const item = buyItems.find((candidate) => candidate.id === id);
-    if (!item) return;
-    buyItemMutation.mutate({ cycle: nextMarketCycle, id, data: { checked: !item.checked } }, {
-      onSuccess: (updated) => updateContext({ buyItems: buyItems.map((candidate) => candidate.id === updated.id ? updated : candidate) }),
-      onError: () => window.alert('The buy-list change could not be saved. Please try again.'),
-    });
+    if (!item) return false;
+    try {
+      const updated = await buyItemMutation.mutateAsync({ cycle: nextMarketCycle, id, data: { checked: !item.checked } });
+      updateContext({ buyItems: buyItems.map((candidate) => candidate.id === updated.id ? updated : candidate) });
+      return true;
+    } catch {
+      return false;
+    }
   };
   const lockBuyList = async () => {
     try {
@@ -565,7 +633,6 @@ function AppContent() {
       updateContext({ buyList });
       return true;
     } catch {
-      window.alert('The buy list could not be locked. Please try again.');
       return false;
     }
   };
@@ -575,7 +642,6 @@ function AppContent() {
       updateContext({ buyList: saved.buyList, actualPurchases: saved.purchases });
       return true;
     } catch {
-      window.alert('The actual purchases could not be saved. Please try again.');
       return false;
     }
   };
@@ -585,21 +651,26 @@ function AppContent() {
       updateContext({ buyList });
       return true;
     } catch {
-      window.alert('Save at least one actual purchase before reporting.');
       return false;
     }
   };
-  const saveBouquetPlan = (selectedBand: string, count: number) => {
-    bouquetPlanMutation.mutate({ cycle: nextMarketCycle, data: { selectedBand, count } }, {
-      onSuccess: (bouquetPlan) => updateContext({ bouquetPlan }),
-      onError: () => window.alert('The bouquet plan could not be saved. Please try again.'),
-    });
+  const saveBouquetPlan = async (selectedBand: string, count: number) => {
+    try {
+      const bouquetPlan = await bouquetPlanMutation.mutateAsync({ cycle: nextMarketCycle, data: { selectedBand, count } });
+      updateContext({ bouquetPlan });
+      return true;
+    } catch {
+      return false;
+    }
   };
-  const saveCloseMarket = (counts: Record<string, number>, closed: boolean) => {
-    closeMarketMutation.mutate({ cycle: nextMarketCycle, data: { counts, closed } }, {
-      onSuccess: (closeMarket) => updateContext({ closeMarket }),
-      onError: () => window.alert('The pack-down count could not be saved. Please try again.'),
-    });
+  const saveCloseMarket = async (counts: Record<string, number>, closed: boolean) => {
+    try {
+      const closeMarket = await closeMarketMutation.mutateAsync({ cycle: nextMarketCycle, data: { counts, closed } });
+      updateContext({ closeMarket });
+      return true;
+    } catch {
+      return false;
+    }
   };
   if (marketContextQuery.isError || marketsQuery.isError) {
     return <TooltipProvider><div className="flex min-h-[100dvh] items-center justify-center bg-background px-6 text-center font-serif text-lg text-muted-foreground">Your market notes could not be loaded. Refresh to try again.</div></TooltipProvider>;
