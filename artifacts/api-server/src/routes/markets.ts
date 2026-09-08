@@ -1,10 +1,26 @@
 import { Router, type IRouter } from "express";
 import { and, eq } from "drizzle-orm";
-import { db, buyItemsTable, bouquetPlansTable, closeMarketsTable, marketsTable } from "@workspace/db";
+import {
+  db,
+  buyItemsTable,
+  bouquetPlansTable,
+  closeMarketsTable,
+  marketActualPurchasesTable,
+  marketBuyListStatesTable,
+  marketsTable,
+} from "@workspace/db";
 import {
   GetMarketContextParams,
   GetMarketContextResponse,
   ListMarketsResponse,
+  ReportMarketPurchasesResponse,
+  ReportMarketPurchasesParams,
+  ReplaceMarketActualPurchasesBody,
+  ReplaceMarketActualPurchasesParams,
+  ReplaceMarketActualPurchasesResponse,
+  UpdateMarketBuyListBody,
+  UpdateMarketBuyListParams,
+  UpdateMarketBuyListResponse,
   UpdateMarketBouquetPlanBody,
   UpdateMarketBouquetPlanParams,
   UpdateMarketBouquetPlanResponse,
@@ -63,6 +79,14 @@ async function ensureMarketContext(cycle: number) {
       await tx.insert(buyItemsTable).values(defaultBuyItems.map((item) => ({ ...item, marketCycle: cycle })));
     }
 
+    const existingBuyListState = await tx
+      .select({ marketCycle: marketBuyListStatesTable.marketCycle })
+      .from(marketBuyListStatesTable)
+      .where(eq(marketBuyListStatesTable.marketCycle, cycle));
+    if (existingBuyListState.length === 0) {
+      await tx.insert(marketBuyListStatesTable).values({ marketCycle: cycle, receiptCandidates: [] });
+    }
+
     const existingPlan = await tx
       .select({ marketCycle: bouquetPlansTable.marketCycle })
       .from(bouquetPlansTable)
@@ -85,6 +109,8 @@ async function readMarketContext(cycle: number) {
   await ensureMarketContext(cycle);
   const [market] = await db.select().from(marketsTable).where(eq(marketsTable.cycle, cycle));
   const buyItems = await db.select().from(buyItemsTable).where(eq(buyItemsTable.marketCycle, cycle)).orderBy(buyItemsTable.id);
+  const [buyList] = await db.select().from(marketBuyListStatesTable).where(eq(marketBuyListStatesTable.marketCycle, cycle));
+  const actualPurchases = await db.select().from(marketActualPurchasesTable).where(eq(marketActualPurchasesTable.marketCycle, cycle)).orderBy(marketActualPurchasesTable.id);
   const [bouquetPlan] = await db.select().from(bouquetPlansTable).where(eq(bouquetPlansTable.marketCycle, cycle));
   const [closeMarket] = await db.select().from(closeMarketsTable).where(eq(closeMarketsTable.marketCycle, cycle));
 
@@ -96,6 +122,8 @@ async function readMarketContext(cycle: number) {
     revenue: market.revenue,
     margin: market.margin,
     buyItems,
+    buyList,
+    actualPurchases,
     bouquetPlan,
     closeMarket,
   };
@@ -119,6 +147,102 @@ router.get("/markets/context/:cycle", async (req, res): Promise<void> => {
     return;
   }
   res.json(GetMarketContextResponse.parse(await readMarketContext(params.data.cycle)));
+});
+
+router.patch("/markets/context/:cycle/buy-list", async (req, res): Promise<void> => {
+  const params = UpdateMarketBuyListParams.safeParse(req.params);
+  const body = UpdateMarketBuyListBody.safeParse(req.body);
+  if (!params.success || !body.success || !Number.isInteger(params.data.cycle)) {
+    res.status(400).json({ error: "Invalid market cycle or lock state." });
+    return;
+  }
+  await ensureMarketContext(params.data.cycle);
+  const [buyList] = await db
+    .update(marketBuyListStatesTable)
+    .set({ locked: body.data.locked, reported: body.data.locked ? false : undefined })
+    .where(eq(marketBuyListStatesTable.marketCycle, params.data.cycle))
+    .returning();
+  res.json(UpdateMarketBuyListResponse.parse(buyList));
+});
+
+router.put("/markets/context/:cycle/actual-purchases", async (req, res): Promise<void> => {
+  const params = ReplaceMarketActualPurchasesParams.safeParse(req.params);
+  const body = ReplaceMarketActualPurchasesBody.safeParse(req.body);
+  if (!params.success || !body.success || !Number.isInteger(params.data.cycle)) {
+    res.status(400).json({ error: "Invalid market cycle or actual-purchase data." });
+    return;
+  }
+  await ensureMarketContext(params.data.cycle);
+  const [buyList] = await db
+    .select()
+    .from(marketBuyListStatesTable)
+    .where(eq(marketBuyListStatesTable.marketCycle, params.data.cycle));
+  if (!buyList.locked) {
+    res.status(409).json({ error: "Lock the proposed buy list before entering actual purchases." });
+    return;
+  }
+  if (body.data.purchases.some((purchase) => !purchase.flower.trim() || purchase.stems <= 0 || purchase.unitCost < 0)) {
+    res.status(400).json({ error: "Each actual purchase needs a flower name, positive stem quantity, and non-negative cost." });
+    return;
+  }
+
+  const saved = await db.transaction(async (tx) => {
+    await tx.delete(marketActualPurchasesTable).where(eq(marketActualPurchasesTable.marketCycle, params.data.cycle));
+    if (body.data.purchases.length > 0) {
+      await tx.insert(marketActualPurchasesTable).values(body.data.purchases.map((purchase) => ({
+        marketCycle: params.data.cycle,
+        ...purchase,
+      })));
+    }
+    const [updatedBuyList] = await tx
+      .update(marketBuyListStatesTable)
+      .set({
+        reported: false,
+        ...(Object.prototype.hasOwnProperty.call(body.data, "receiptFileName") ? { receiptFileName: body.data.receiptFileName } : {}),
+        ...(Object.prototype.hasOwnProperty.call(body.data, "receiptText") ? { receiptText: body.data.receiptText } : {}),
+        ...(Object.prototype.hasOwnProperty.call(body.data, "receiptCandidates") ? { receiptCandidates: body.data.receiptCandidates } : {}),
+      })
+      .where(eq(marketBuyListStatesTable.marketCycle, params.data.cycle))
+      .returning();
+    const purchases = await tx
+      .select()
+      .from(marketActualPurchasesTable)
+      .where(eq(marketActualPurchasesTable.marketCycle, params.data.cycle))
+      .orderBy(marketActualPurchasesTable.id);
+    return { buyList: updatedBuyList, purchases };
+  });
+  res.json(ReplaceMarketActualPurchasesResponse.parse(saved));
+});
+
+router.post("/markets/context/:cycle/report-purchases", async (req, res): Promise<void> => {
+  const params = ReportMarketPurchasesParams.safeParse(req.params);
+  if (!params.success || !Number.isInteger(params.data.cycle)) {
+    res.status(400).json({ error: "Invalid market cycle." });
+    return;
+  }
+  await ensureMarketContext(params.data.cycle);
+  const [buyList] = await db
+    .select()
+    .from(marketBuyListStatesTable)
+    .where(eq(marketBuyListStatesTable.marketCycle, params.data.cycle));
+  const purchases = await db
+    .select({ id: marketActualPurchasesTable.id })
+    .from(marketActualPurchasesTable)
+    .where(eq(marketActualPurchasesTable.marketCycle, params.data.cycle));
+  if (!buyList.locked) {
+    res.status(409).json({ error: "Lock the proposed buy list before reporting actual purchases." });
+    return;
+  }
+  if (purchases.length === 0) {
+    res.status(400).json({ error: "Save at least one actual purchase before reporting." });
+    return;
+  }
+  const [updatedBuyList] = await db
+    .update(marketBuyListStatesTable)
+    .set({ reported: true })
+    .where(eq(marketBuyListStatesTable.marketCycle, params.data.cycle))
+    .returning();
+  res.json(ReportMarketPurchasesResponse.parse(updatedBuyList));
 });
 
 router.patch("/markets/context/:cycle/buy-items/:id", async (req, res): Promise<void> => {

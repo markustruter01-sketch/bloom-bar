@@ -5,9 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ActualPurchase } from './actualPurchase';
 import type { BouquetPlan } from './bouquetPlan';
 import type { BuyItem } from './buyItem';
 import type { CloseMarket } from './closeMarket';
+import type { MarketBuyListState } from './marketBuyListState';
 
 export interface MarketContext {
   cycle: number;
@@ -17,6 +19,8 @@ export interface MarketContext {
   revenue: number;
   margin: number;
   buyItems: BuyItem[];
+  buyList: MarketBuyListState;
+  actualPurchases: ActualPurchase[];
   bouquetPlan: BouquetPlan;
   closeMarket: CloseMarket;
 }

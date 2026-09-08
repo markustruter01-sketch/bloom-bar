@@ -20,14 +20,18 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ActualPurchasesResponse,
+  ActualPurchasesUpdate,
   BouquetPlan,
   BouquetPlanUpdate,
   BuyItem,
   BuyItemUpdate,
+  BuyListLockUpdate,
   CloseMarket,
   CloseMarketUpdate,
   HealthStatus,
   Market,
+  MarketBuyListState,
   MarketContext
 } from './api.schemas';
 
@@ -362,6 +366,221 @@ export const useUpdateMarketBuyItem = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getUpdateMarketBuyItemMutationOptions(options));
+    }
+
+export const getUpdateMarketBuyListUrl = (cycle: number,) => {
+
+
+
+
+  return `/api/markets/context/${cycle}/buy-list`
+}
+
+/**
+ * @summary Lock or unlock the proposed buy list
+ */
+export const updateMarketBuyList = async (cycle: number,
+    buyListLockUpdate: BuyListLockUpdate, options?: Parameters<typeof customFetch>[1]): Promise<MarketBuyListState> => {
+
+  return customFetch<MarketBuyListState>(getUpdateMarketBuyListUrl(cycle),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(buyListLockUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateMarketBuyListMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMarketBuyList>>, TError,{cycle: number;data: BodyType<BuyListLockUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMarketBuyList>>, TError,{cycle: number;data: BodyType<BuyListLockUpdate>}, TContext> => {
+
+const mutationKey = ['updateMarketBuyList'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMarketBuyList>>, {cycle: number;data: BodyType<BuyListLockUpdate>}> = (props) => {
+          const {cycle,data} = props ?? {};
+
+          return  updateMarketBuyList(cycle,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMarketBuyListMutationResult = NonNullable<Awaited<ReturnType<typeof updateMarketBuyList>>>
+    export type UpdateMarketBuyListMutationBody = BodyType<BuyListLockUpdate>
+    export type UpdateMarketBuyListMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Lock or unlock the proposed buy list
+ */
+export const useUpdateMarketBuyList = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMarketBuyList>>, TError,{cycle: number;data: BodyType<BuyListLockUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateMarketBuyList>>,
+        TError,
+        {cycle: number;data: BodyType<BuyListLockUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateMarketBuyListMutationOptions(options));
+    }
+
+export const getReplaceMarketActualPurchasesUrl = (cycle: number,) => {
+
+
+
+
+  return `/api/markets/context/${cycle}/actual-purchases`
+}
+
+/**
+ * @summary Save actual purchases and receipt analysis for a market cycle
+ */
+export const replaceMarketActualPurchases = async (cycle: number,
+    actualPurchasesUpdate: ActualPurchasesUpdate, options?: Parameters<typeof customFetch>[1]): Promise<ActualPurchasesResponse> => {
+
+  return customFetch<ActualPurchasesResponse>(getReplaceMarketActualPurchasesUrl(cycle),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(actualPurchasesUpdate)
+  }
+);}
+
+
+
+
+
+export const getReplaceMarketActualPurchasesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceMarketActualPurchases>>, TError,{cycle: number;data: BodyType<ActualPurchasesUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof replaceMarketActualPurchases>>, TError,{cycle: number;data: BodyType<ActualPurchasesUpdate>}, TContext> => {
+
+const mutationKey = ['replaceMarketActualPurchases'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof replaceMarketActualPurchases>>, {cycle: number;data: BodyType<ActualPurchasesUpdate>}> = (props) => {
+          const {cycle,data} = props ?? {};
+
+          return  replaceMarketActualPurchases(cycle,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReplaceMarketActualPurchasesMutationResult = NonNullable<Awaited<ReturnType<typeof replaceMarketActualPurchases>>>
+    export type ReplaceMarketActualPurchasesMutationBody = BodyType<ActualPurchasesUpdate>
+    export type ReplaceMarketActualPurchasesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Save actual purchases and receipt analysis for a market cycle
+ */
+export const useReplaceMarketActualPurchases = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceMarketActualPurchases>>, TError,{cycle: number;data: BodyType<ActualPurchasesUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof replaceMarketActualPurchases>>,
+        TError,
+        {cycle: number;data: BodyType<ActualPurchasesUpdate>},
+        TContext
+      > => {
+      return useMutation(getReplaceMarketActualPurchasesMutationOptions(options));
+    }
+
+export const getReportMarketPurchasesUrl = (cycle: number,) => {
+
+
+
+
+  return `/api/markets/context/${cycle}/report-purchases`
+}
+
+/**
+ * @summary Report completed actual purchases for a market cycle
+ */
+export const reportMarketPurchases = async (cycle: number, options?: Parameters<typeof customFetch>[1]): Promise<MarketBuyListState> => {
+
+  return customFetch<MarketBuyListState>(getReportMarketPurchasesUrl(cycle),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getReportMarketPurchasesMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportMarketPurchases>>, TError,{cycle: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reportMarketPurchases>>, TError,{cycle: number}, TContext> => {
+
+const mutationKey = ['reportMarketPurchases'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reportMarketPurchases>>, {cycle: number}> = (props) => {
+          const {cycle} = props ?? {};
+
+          return  reportMarketPurchases(cycle,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReportMarketPurchasesMutationResult = NonNullable<Awaited<ReturnType<typeof reportMarketPurchases>>>
+
+    export type ReportMarketPurchasesMutationError = ErrorType<void>
+
+    /**
+ * @summary Report completed actual purchases for a market cycle
+ */
+export const useReportMarketPurchases = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportMarketPurchases>>, TError,{cycle: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reportMarketPurchases>>,
+        TError,
+        {cycle: number},
+        TContext
+      > => {
+      return useMutation(getReportMarketPurchasesMutationOptions(options));
     }
 
 export const getUpdateMarketBouquetPlanUrl = (cycle: number,) => {

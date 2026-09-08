@@ -39,6 +39,14 @@ export const GetMarketContextParams = zod.object({
   "cycle": zod.coerce.number()
 })
 
+export const getMarketContextResponseBuyListReceiptCandidatesItemStemsMin = 0;
+
+export const getMarketContextResponseBuyListReceiptCandidatesItemUnitCostMin = 0;
+
+export const getMarketContextResponseActualPurchasesItemStemsMin = 0;
+
+export const getMarketContextResponseActualPurchasesItemUnitCostMin = 0;
+
 export const getMarketContextResponseCloseMarketCountsMinOne = 0;
 
 
@@ -60,6 +68,30 @@ export const GetMarketContextResponse = zod.object({
   "lastPrice": zod.number(),
   "checked": zod.boolean(),
   "category": zod.string()
+})),
+  "buyList": zod.object({
+  "marketCycle": zod.number(),
+  "locked": zod.boolean(),
+  "reported": zod.boolean(),
+  "receiptFileName": zod.string().nullable(),
+  "receiptText": zod.string().nullable(),
+  "receiptCandidates": zod.array(zod.object({
+  "flower": zod.string(),
+  "stems": zod.number().min(getMarketContextResponseBuyListReceiptCandidatesItemStemsMin),
+  "unitCost": zod.number().min(getMarketContextResponseBuyListReceiptCandidatesItemUnitCostMin),
+  "confidence": zod.enum(['high', 'medium', 'low']),
+  "rawLine": zod.string()
+}))
+}),
+  "actualPurchases": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "flower": zod.string(),
+  "detail": zod.string(),
+  "category": zod.string(),
+  "stems": zod.number().min(getMarketContextResponseActualPurchasesItemStemsMin),
+  "unitCost": zod.number().min(getMarketContextResponseActualPurchasesItemUnitCostMin),
+  "source": zod.enum(['manual', 'receipt'])
 })),
   "bouquetPlan": zod.object({
   "marketCycle": zod.number(),
@@ -96,6 +128,143 @@ export const UpdateMarketBuyItemResponse = zod.object({
   "lastPrice": zod.number(),
   "checked": zod.boolean(),
   "category": zod.string()
+})
+
+
+/**
+ * @summary Lock or unlock the proposed buy list
+ */
+export const UpdateMarketBuyListParams = zod.object({
+  "cycle": zod.coerce.number()
+})
+
+export const UpdateMarketBuyListBody = zod.object({
+  "locked": zod.boolean()
+})
+
+export const updateMarketBuyListResponseReceiptCandidatesItemStemsMin = 0;
+
+export const updateMarketBuyListResponseReceiptCandidatesItemUnitCostMin = 0;
+
+
+
+export const UpdateMarketBuyListResponse = zod.object({
+  "marketCycle": zod.number(),
+  "locked": zod.boolean(),
+  "reported": zod.boolean(),
+  "receiptFileName": zod.string().nullable(),
+  "receiptText": zod.string().nullable(),
+  "receiptCandidates": zod.array(zod.object({
+  "flower": zod.string(),
+  "stems": zod.number().min(updateMarketBuyListResponseReceiptCandidatesItemStemsMin),
+  "unitCost": zod.number().min(updateMarketBuyListResponseReceiptCandidatesItemUnitCostMin),
+  "confidence": zod.enum(['high', 'medium', 'low']),
+  "rawLine": zod.string()
+}))
+})
+
+
+/**
+ * @summary Save actual purchases and receipt analysis for a market cycle
+ */
+export const ReplaceMarketActualPurchasesParams = zod.object({
+  "cycle": zod.coerce.number()
+})
+
+export const replaceMarketActualPurchasesBodyPurchasesItemStemsMin = 0;
+
+export const replaceMarketActualPurchasesBodyPurchasesItemUnitCostMin = 0;
+
+export const replaceMarketActualPurchasesBodyReceiptCandidatesItemStemsMin = 0;
+
+export const replaceMarketActualPurchasesBodyReceiptCandidatesItemUnitCostMin = 0;
+
+
+
+export const ReplaceMarketActualPurchasesBody = zod.object({
+  "purchases": zod.array(zod.object({
+  "flower": zod.string(),
+  "detail": zod.string(),
+  "category": zod.string(),
+  "stems": zod.number().min(replaceMarketActualPurchasesBodyPurchasesItemStemsMin),
+  "unitCost": zod.number().min(replaceMarketActualPurchasesBodyPurchasesItemUnitCostMin),
+  "source": zod.enum(['manual', 'receipt'])
+})),
+  "receiptFileName": zod.string().nullish(),
+  "receiptText": zod.string().nullish(),
+  "receiptCandidates": zod.array(zod.object({
+  "flower": zod.string(),
+  "stems": zod.number().min(replaceMarketActualPurchasesBodyReceiptCandidatesItemStemsMin),
+  "unitCost": zod.number().min(replaceMarketActualPurchasesBodyReceiptCandidatesItemUnitCostMin),
+  "confidence": zod.enum(['high', 'medium', 'low']),
+  "rawLine": zod.string()
+})).optional()
+})
+
+export const replaceMarketActualPurchasesResponseBuyListReceiptCandidatesItemStemsMin = 0;
+
+export const replaceMarketActualPurchasesResponseBuyListReceiptCandidatesItemUnitCostMin = 0;
+
+export const replaceMarketActualPurchasesResponsePurchasesItemStemsMin = 0;
+
+export const replaceMarketActualPurchasesResponsePurchasesItemUnitCostMin = 0;
+
+
+
+export const ReplaceMarketActualPurchasesResponse = zod.object({
+  "buyList": zod.object({
+  "marketCycle": zod.number(),
+  "locked": zod.boolean(),
+  "reported": zod.boolean(),
+  "receiptFileName": zod.string().nullable(),
+  "receiptText": zod.string().nullable(),
+  "receiptCandidates": zod.array(zod.object({
+  "flower": zod.string(),
+  "stems": zod.number().min(replaceMarketActualPurchasesResponseBuyListReceiptCandidatesItemStemsMin),
+  "unitCost": zod.number().min(replaceMarketActualPurchasesResponseBuyListReceiptCandidatesItemUnitCostMin),
+  "confidence": zod.enum(['high', 'medium', 'low']),
+  "rawLine": zod.string()
+}))
+}),
+  "purchases": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "flower": zod.string(),
+  "detail": zod.string(),
+  "category": zod.string(),
+  "stems": zod.number().min(replaceMarketActualPurchasesResponsePurchasesItemStemsMin),
+  "unitCost": zod.number().min(replaceMarketActualPurchasesResponsePurchasesItemUnitCostMin),
+  "source": zod.enum(['manual', 'receipt'])
+}))
+})
+
+
+/**
+ * @summary Report completed actual purchases for a market cycle
+ */
+export const ReportMarketPurchasesParams = zod.object({
+  "cycle": zod.coerce.number()
+})
+
+export const reportMarketPurchasesResponseReceiptCandidatesItemStemsMin = 0;
+
+export const reportMarketPurchasesResponseReceiptCandidatesItemUnitCostMin = 0;
+
+
+
+export const ReportMarketPurchasesResponse = zod.object({
+  "marketCycle": zod.number(),
+  "locked": zod.boolean(),
+  "reported": zod.boolean(),
+  "receiptFileName": zod.string().nullable(),
+  "receiptText": zod.string().nullable(),
+  "receiptCandidates": zod.array(zod.object({
+  "flower": zod.string(),
+  "stems": zod.number().min(reportMarketPurchasesResponseReceiptCandidatesItemStemsMin),
+  "unitCost": zod.number().min(reportMarketPurchasesResponseReceiptCandidatesItemUnitCostMin),
+  "confidence": zod.enum(['high', 'medium', 'low']),
+  "rawLine": zod.string()
+}))
 })
 
 

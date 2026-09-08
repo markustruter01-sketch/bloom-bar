@@ -35,6 +35,90 @@ export interface BuyItemUpdate {
   checked: boolean;
 }
 
+export interface BuyListLockUpdate {
+  locked: boolean;
+}
+
+export type ReceiptCandidateConfidence = typeof ReceiptCandidateConfidence[keyof typeof ReceiptCandidateConfidence];
+
+
+export const ReceiptCandidateConfidence = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+} as const;
+
+export interface ReceiptCandidate {
+  flower: string;
+  /** @minimum 0 */
+  stems: number;
+  /** @minimum 0 */
+  unitCost: number;
+  confidence: ReceiptCandidateConfidence;
+  rawLine: string;
+}
+
+export interface MarketBuyListState {
+  marketCycle: number;
+  locked: boolean;
+  reported: boolean;
+  receiptFileName: string | null;
+  receiptText: string | null;
+  receiptCandidates: ReceiptCandidate[];
+}
+
+export type ActualPurchaseSource = typeof ActualPurchaseSource[keyof typeof ActualPurchaseSource];
+
+
+export const ActualPurchaseSource = {
+  manual: 'manual',
+  receipt: 'receipt',
+} as const;
+
+export interface ActualPurchase {
+  id: number;
+  marketCycle: number;
+  flower: string;
+  detail: string;
+  category: string;
+  /** @minimum 0 */
+  stems: number;
+  /** @minimum 0 */
+  unitCost: number;
+  source: ActualPurchaseSource;
+}
+
+export type ActualPurchaseInputSource = typeof ActualPurchaseInputSource[keyof typeof ActualPurchaseInputSource];
+
+
+export const ActualPurchaseInputSource = {
+  manual: 'manual',
+  receipt: 'receipt',
+} as const;
+
+export interface ActualPurchaseInput {
+  flower: string;
+  detail: string;
+  category: string;
+  /** @minimum 0 */
+  stems: number;
+  /** @minimum 0 */
+  unitCost: number;
+  source: ActualPurchaseInputSource;
+}
+
+export interface ActualPurchasesUpdate {
+  purchases: ActualPurchaseInput[];
+  receiptFileName?: string | null;
+  receiptText?: string | null;
+  receiptCandidates?: ReceiptCandidate[];
+}
+
+export interface ActualPurchasesResponse {
+  buyList: MarketBuyListState;
+  purchases: ActualPurchase[];
+}
+
 export interface BouquetPlan {
   marketCycle: number;
   selectedBand: string;
@@ -70,6 +154,8 @@ export interface MarketContext {
   revenue: number;
   margin: number;
   buyItems: BuyItem[];
+  buyList: MarketBuyListState;
+  actualPurchases: ActualPurchase[];
   bouquetPlan: BouquetPlan;
   closeMarket: CloseMarket;
 }

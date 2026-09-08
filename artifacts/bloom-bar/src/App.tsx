@@ -4,17 +4,25 @@ import {
   getGetMarketContextQueryKey,
   useGetMarketContext,
   useListMarkets,
+  useReportMarketPurchases,
+  useReplaceMarketActualPurchases,
   useUpdateMarketBouquetPlan,
   useUpdateMarketBuyItem,
+  useUpdateMarketBuyList,
   useUpdateMarketClose,
 } from '@workspace/api-client-react';
 import type {
+  ActualPurchase,
+  ActualPurchaseInput,
+  ActualPurchasesUpdate,
   BouquetPlan,
   BuyItem as ApiBuyItem,
   CloseMarket,
   Market,
   MarketContext,
+  ReceiptCandidate,
 } from '@workspace/api-client-react';
+import { createWorker } from 'tesseract.js';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -35,19 +43,25 @@ import {
   Flower2,
   Leaf,
   LayoutDashboard,
+  LockKeyhole,
+  LoaderCircle,
   ListFilter,
   Menu,
   MoreHorizontal,
   Package,
   Pencil,
   Plus,
+  ReceiptText,
   Search,
   ShoppingBasket,
   Sparkles,
   Store,
   Tag,
+  Trash2,
   TrendingUp,
   Truck,
+  UnlockKeyhole,
+  Upload,
   X,
 } from 'lucide-react';
 import {
@@ -292,13 +306,198 @@ function MarketSubnav({ active }: { active: 'buy' | 'bouquets' | 'close' }) {
   return <div className="mb-8 flex items-center justify-between gap-3 overflow-x-auto border-b border-foreground/10"><div className="flex gap-1">{[{ id: 'buy', label: 'Buy list', href: '/markets/next/buy', icon: ShoppingBasket }, { id: 'bouquets', label: 'Bouquets', href: '/markets/next/bouquets', icon: Sparkles }, { id: 'close', label: 'Close market', href: '/markets/next/close', icon: ClipboardCheck }].map(({ id, label, href, icon: Icon }) => <Link key={id} href={href} data-testid={`tab-market-${id}`} className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-xs font-semibold ${active === id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}><Icon size={14} />{label}</Link>)}</div><MarketCycleBanner summary={nextMarket} testId="planning-cycle" /></div>;
 }
 
-function BuyPage({ buyItems, toggleBuyItem }: { buyItems: BuyItem[]; toggleBuyItem: (id: number) => void }) {
+type ReceiptPayload = Pick<ActualPurchasesUpdate, 'receiptFileName' | 'receiptText' | 'receiptCandidates'>;
+
+function parseReceiptCandidates(text: string, buyItems: BuyItem[]): ReceiptCandidate[] {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  return lines.flatMap((rawLine) => {
+    const currencyMatches = [...rawLine.matchAll(/\$\s*(\d+(?:\.\d{1,2})?)/g)];
+    const numberMatches = [...rawLine.matchAll(/\b\d+(?:\.\d{1,2})?\b/g)];
+    const priceText = currencyMatches.at(-1)?.[1] ?? numberMatches.at(-1)?.[0];
+    const unitCost = priceText ? Number(priceText) : NaN;
+    if (!Number.isFinite(unitCost) || unitCost <= 0) return [];
+    const matchedItem = buyItems.find((item) => rawLine.toLowerCase().includes(item.flower.toLowerCase()));
+    const quantityMatch = rawLine.match(/\b(\d+)\s*(?:stems?|bunch(?:es)?|x)\b/i);
+    const stems = quantityMatch ? Number(quantityMatch[1]) : 1;
+    const flower = matchedItem?.flower ?? rawLine
+      .replace(/\$\s*\d+(?:\.\d{1,2})?/g, '')
+      .replace(/\b\d+(?:\.\d{1,2})?\b/g, '')
+      .replace(/[^a-zA-Z\s-]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!flower) return [];
+    const confidence: ReceiptCandidate['confidence'] = matchedItem ? 'high' : currencyMatches.length ? 'medium' : 'low';
+    return [{
+      flower,
+      stems: Number.isFinite(stems) && stems > 0 ? stems : 1,
+      unitCost,
+      confidence,
+      rawLine,
+    }];
+  }).slice(0, 30);
+}
+
+function purchaseDraftFromItem(item: BuyItem): ActualPurchaseInput {
+  return {
+    flower: item.flower,
+    detail: item.detail,
+    category: item.category,
+    stems: item.qty,
+    unitCost: item.lastPrice,
+    source: 'manual',
+  };
+}
+
+function purchaseDraftFromActual(purchase: ActualPurchase): ActualPurchaseInput {
+  return {
+    flower: purchase.flower,
+    detail: purchase.detail,
+    category: purchase.category,
+    stems: purchase.stems,
+    unitCost: purchase.unitCost,
+    source: purchase.source,
+  };
+}
+
+function BuyPage({
+  buyItems,
+  actualPurchases,
+  buyList,
+  toggleBuyItem,
+  lockBuyList,
+  saveActualPurchases,
+  reportPurchases,
+}: {
+  buyItems: BuyItem[];
+  actualPurchases: ActualPurchase[];
+  buyList: MarketContext['buyList'];
+  toggleBuyItem: (id: number) => void;
+  lockBuyList: () => Promise<boolean>;
+  saveActualPurchases: (purchases: ActualPurchaseInput[], receipt: ReceiptPayload) => Promise<boolean>;
+  reportPurchases: () => Promise<boolean>;
+}) {
   const [filter, setFilter] = useState('All categories');
+  const [drafts, setDrafts] = useState<ActualPurchaseInput[]>([]);
+  const [receipt, setReceipt] = useState<ReceiptPayload>({});
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const categories = ['All categories', ...flowerCategories];
   const items = buyItems.filter((item) => filter === 'All categories' || item.category === filter);
   const done = buyItems.filter((item) => item.checked).length;
-  const total = buyItems.reduce((sum, item) => sum + item.qty * item.lastPrice, 0);
-  return <div><PageIntro eyebrow="Next market / preparation" title="Buy with a clear head." description="A practical list for the flower run. Tick things off as they land in your trolley." action={<div className="rounded-md bg-[#dce3c2] px-3 py-2 text-center"><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">{nextMarket.shortDate}</div><div className="text-sm font-semibold text-primary">{nextMarket.daysUntil} to go</div></div>} /><MarketSubnav active="buy" /><div className="grid gap-5 lg:grid-cols-[1fr_330px]"><div><div className="mb-4 flex items-center justify-between"><div className="flex gap-1 overflow-x-auto rounded-md bg-muted p-1">{categories.map((category) => <button key={category} onClick={() => setFilter(category)} data-testid={`filter-buy-${category.toLowerCase().replaceAll(' ', '-')}`} className={`shrink-0 rounded px-2.5 py-1.5 text-[11px] font-semibold ${filter === category ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground'}`}>{category}</button>)}</div><span className="hidden font-mono text-[10px] text-muted-foreground sm:block">{done}/{buyItems.length} checked</span></div><div className="space-y-2">{items.map((item) => <button type="button" key={item.id} onClick={() => toggleBuyItem(item.id)} data-testid={`button-check-buy-${item.id}`} className={`group flex w-full items-center gap-3 rounded-lg border p-4 text-left transition-all ${item.checked ? 'border-[#ccd6b0] bg-[#edf0df]/75' : 'border-card-border bg-card hover:border-primary/30'}`}><span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all ${item.checked ? 'check-pop border-primary bg-primary text-primary-foreground' : 'border-foreground/20 group-hover:border-primary'}`}>{item.checked && <Check size={14} strokeWidth={3} />}</span><span className="min-w-0 flex-1"><span className={`block text-sm font-semibold ${item.checked ? 'text-muted-foreground line-through' : ''}`}>{item.flower}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.detail}</span></span><span className="text-right"><span className="block font-mono text-sm">{item.qty}</span><span className="block text-[10px] text-muted-foreground">{item.unit}</span></span><span className="hidden w-20 text-right sm:block"><span className="block font-mono text-xs">{money(item.lastPrice)}</span><span className="block text-[10px] text-muted-foreground">last price</span></span><MoreHorizontal size={16} className="text-muted-foreground/50" /></button>)}</div><Button onClick={() => window.alert('A new blank stem row is ready to add in the connected version.')} className="mt-4 w-full border border-dashed border-foreground/20 bg-transparent text-muted-foreground hover:border-primary hover:text-primary" testId="button-add-buy-item"><Plus size={15} /> Add another stem</Button></div><aside className="h-fit space-y-3 lg:sticky lg:top-24"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><DollarSign size={13} /> Sourcing estimate</div><div className="mt-4 font-serif text-4xl tracking-[-.04em] text-primary" data-testid="text-buy-estimate">{money(total)}</div><p className="mt-1 text-xs leading-relaxed text-primary/65">Based on your last recorded prices. Leave a little room for market morning surprises.</p><div className="mt-5 border-t border-primary/15 pt-4"><div className="flex justify-between text-xs"><span className="text-primary/65">Expected flower spend</span><span className="font-mono font-semibold text-primary">{money(total)}</span></div><div className="mt-2 flex justify-between text-xs"><span className="text-primary/65">Target revenue</span><span className="font-mono font-semibold text-primary">$1,846</span></div></div></div><div className="paper-card rounded-lg border border-card-border p-5"><div className="flex items-center gap-2 font-serif text-lg"><Truck size={17} className="text-muted-foreground" /> Sourcing notes</div><ul className="mt-4 space-y-3 text-xs leading-relaxed text-muted-foreground"><li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />Confirm grower availability by Thursday afternoon.</li><li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />Ask for the softest apricot disbuds on the cart.</li><li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />Pick up buckets and extra paper on the way in.</li></ul></div></aside></div></div>;
+  const proposedTotal = buyItems.reduce((sum, item) => sum + item.qty * item.lastPrice, 0);
+  const actualTotal = drafts.reduce((sum, purchase) => sum + purchase.stems * purchase.unitCost, 0);
+
+  useEffect(() => {
+    if (!buyList.locked) return;
+    setDrafts(actualPurchases.length ? actualPurchases.map(purchaseDraftFromActual) : buyItems.map(purchaseDraftFromItem));
+    setReceipt({
+      receiptFileName: buyList.receiptFileName ?? undefined,
+      receiptText: buyList.receiptText ?? undefined,
+      receiptCandidates: buyList.receiptCandidates,
+    });
+  }, [buyList.marketCycle, buyList.locked, buyList.receiptFileName, buyList.receiptText, buyList.receiptCandidates, actualPurchases, buyItems]);
+
+  const updateDraft = (index: number, patch: Partial<ActualPurchaseInput>) => {
+    setDrafts((current) => current.map((purchase, purchaseIndex) => purchaseIndex === index ? { ...purchase, ...patch } : purchase));
+  };
+
+  const addDraft = () => {
+    setDrafts((current) => [...current, { flower: '', detail: 'Added after purchase', category: 'Classic Blooms', stems: 1, unitCost: 0, source: 'manual' }]);
+  };
+
+  const analyzeReceipt = async (file: File) => {
+    setIsAnalyzing(true);
+    setFeedback('Reading the receipt image…');
+    try {
+      const worker = await createWorker('eng');
+      const result = await worker.recognize(file);
+      await worker.terminate();
+      const candidates = parseReceiptCandidates(result.data.text, buyItems);
+      const nextDrafts = candidates.map((candidate) => {
+        const matchedItem = buyItems.find((item) => item.flower.toLowerCase() === candidate.flower.toLowerCase());
+        return {
+          flower: candidate.flower,
+          detail: matchedItem?.detail ?? 'Receipt line — please confirm',
+          category: matchedItem?.category ?? 'Classic Blooms',
+          stems: candidate.stems,
+          unitCost: candidate.unitCost,
+          source: 'receipt' as const,
+        };
+      });
+      setReceipt({ receiptFileName: file.name, receiptText: result.data.text, receiptCandidates: candidates });
+      if (nextDrafts.length) setDrafts(nextDrafts);
+      setFeedback(candidates.length ? `${candidates.length} receipt line${candidates.length === 1 ? '' : 's'} found. Check the values before saving.` : 'No priced flower lines were found. Add the actual purchases manually.');
+    } catch {
+      setFeedback('Receipt analysis could not finish. You can still enter actual purchases manually.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const saveDrafts = async () => {
+    if (drafts.some((purchase) => !purchase.flower.trim() || purchase.stems <= 0 || purchase.unitCost < 0)) {
+      setFeedback('Each purchase needs a flower name, positive stems, and a non-negative cost.');
+      return;
+    }
+    setIsSaving(true);
+    const saved = await saveActualPurchases(drafts, receipt);
+    setIsSaving(false);
+    setFeedback(saved ? 'Actual purchases saved against this market date.' : 'Actual purchases could not be saved. Try again.');
+  };
+
+  const handleLock = async () => {
+    setIsSaving(true);
+    const locked = await lockBuyList();
+    setIsSaving(false);
+    if (locked) setFeedback('Buy list locked. You can now record what you actually purchased.');
+  };
+
+  const handleReport = async () => {
+    setIsSaving(true);
+    const reported = await reportPurchases();
+    setIsSaving(false);
+    setFeedback(reported ? 'Buy List Report saved for this market date.' : 'Save at least one actual purchase before reporting.');
+  };
+
+  return <div>
+    <PageIntro
+      eyebrow="Next market / preparation"
+      title={buyList.locked ? 'Record what really came home.' : 'Buy with a clear head.'}
+      description={buyList.locked ? 'The proposed list is frozen. Confirm quantities and costs from the receipt, then report the completed purchase record.' : 'Build the proposed flower run, tick items off as they land in your trolley, then lock the list before shopping.'}
+      action={<div className="rounded-md bg-[#dce3c2] px-3 py-2 text-center"><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">{nextMarket.shortDate}</div><div className="text-sm font-semibold text-primary">{nextMarket.daysUntil} to go</div></div>}
+    />
+    <MarketSubnav active="buy" />
+    {!buyList.locked ? <div className="grid gap-5 lg:grid-cols-[1fr_330px]">
+      <div>
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex gap-1 overflow-x-auto rounded-md bg-muted p-1">{categories.map((category) => <button key={category} onClick={() => setFilter(category)} data-testid={`filter-buy-${category.toLowerCase().replaceAll(' ', '-')}`} className={`shrink-0 rounded px-2.5 py-1.5 text-[11px] font-semibold ${filter === category ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground'}`}>{category}</button>)}</div>
+          <span className="hidden font-mono text-[10px] text-muted-foreground sm:block">{done}/{buyItems.length} checked</span>
+        </div>
+        <div className="space-y-2">{items.map((item) => <button type="button" key={item.id} onClick={() => toggleBuyItem(item.id)} data-testid={`button-check-buy-${item.id}`} className={`group flex w-full items-center gap-3 rounded-lg border p-4 text-left transition-all ${item.checked ? 'border-[#ccd6b0] bg-[#edf0df]/75' : 'border-card-border bg-card hover:border-primary/30'}`}><span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all ${item.checked ? 'check-pop border-primary bg-primary text-primary-foreground' : 'border-foreground/20 group-hover:border-primary'}`}>{item.checked && <Check size={14} strokeWidth={3} />}</span><span className="min-w-0 flex-1"><span className={`block text-sm font-semibold ${item.checked ? 'text-muted-foreground line-through' : ''}`}>{item.flower}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.detail}</span></span><span className="text-right"><span className="block font-mono text-sm">{item.qty}</span><span className="block text-[10px] text-muted-foreground">{item.unit}</span></span><span className="hidden w-20 text-right sm:block"><span className="block font-mono text-xs">{money(item.lastPrice)}</span><span className="block text-[10px] text-muted-foreground">last price</span></span><MoreHorizontal size={16} className="text-muted-foreground/50" /></button>)}</div>
+        <div className="mt-4 rounded-lg border border-primary/15 bg-[#e8e4cd] p-5">
+          <div className="flex items-start gap-3"><LockKeyhole size={18} className="mt-0.5 text-primary" /><div><h3 className="font-serif text-xl text-primary">Ready to freeze this run?</h3><p className="mt-1 text-xs leading-relaxed text-primary/70">Locking keeps the proposed list stable while you shop. You can still record different quantities, prices, or extra flowers in the actual purchase record.</p></div></div>
+          <Button onClick={handleLock} disabled={isSaving} className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90" testId="button-lock-buy-list">{isSaving ? <LoaderCircle size={15} className="animate-spin" /> : <LockKeyhole size={15} />} Lock proposed buy list</Button>
+        </div>
+      </div>
+      <aside className="h-fit space-y-3 lg:sticky lg:top-24"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><DollarSign size={13} /> Sourcing estimate</div><div className="mt-4 font-serif text-4xl tracking-[-.04em] text-primary" data-testid="text-buy-estimate">{money(proposedTotal)}</div><p className="mt-1 text-xs leading-relaxed text-primary/65">Based on your last recorded prices. Leave a little room for market morning surprises.</p><div className="mt-5 border-t border-primary/15 pt-4"><div className="flex justify-between text-xs"><span className="text-primary/65">Expected flower spend</span><span className="font-mono font-semibold text-primary">{money(proposedTotal)}</span></div><div className="mt-2 flex justify-between text-xs"><span className="text-primary/65">Target revenue</span><span className="font-mono font-semibold text-primary">$1,846</span></div></div></div><div className="paper-card rounded-lg border border-card-border p-5"><div className="flex items-center gap-2 font-serif text-lg"><Truck size={17} className="text-muted-foreground" /> Sourcing notes</div><ul className="mt-4 space-y-3 text-xs leading-relaxed text-muted-foreground"><li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />Confirm grower availability by Thursday afternoon.</li><li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />Ask for the softest apricot disbuds on the cart.</li><li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />Pick up buckets and extra paper on the way in.</li></ul></div></aside>
+    </div> : <div className="grid gap-5 lg:grid-cols-[1fr_330px]">
+      <div className="space-y-5">
+        <section className="rounded-lg border border-card-border bg-card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Actual purchases</p><h2 className="mt-1 font-serif text-2xl">What did you buy?</h2><p className="mt-1 text-xs text-muted-foreground">Edit the receipt results or replace the planned quantities with what actually came home.</p></div><span className={`rounded-full px-2.5 py-1 font-mono text-[9px] uppercase ${buyList.reported ? 'bg-[#dce3c2] text-primary' : 'bg-muted text-muted-foreground'}`}>{buyList.reported ? 'Reported' : 'Not reported'}</span></div>
+          <div className="mt-5 space-y-2">{drafts.map((purchase, index) => <div key={`${purchase.flower}-${index}`} className="grid gap-2 rounded-md border border-foreground/10 bg-background p-3 sm:grid-cols-[1.3fr_.7fr_.7fr_auto] sm:items-end"><label className="text-[10px] font-mono uppercase text-muted-foreground">Flower<input value={purchase.flower} onChange={(event) => updateDraft(index, { flower: event.target.value })} className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 text-sm font-sans normal-case text-foreground outline-none focus:border-primary" /></label><label className="text-[10px] font-mono uppercase text-muted-foreground">Stems<input type="number" min="1" value={purchase.stems} onChange={(event) => updateDraft(index, { stems: Number(event.target.value) })} className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 font-mono text-sm text-foreground outline-none focus:border-primary" /></label><label className="text-[10px] font-mono uppercase text-muted-foreground">Unit cost<input type="number" min="0" step="0.01" value={purchase.unitCost} onChange={(event) => updateDraft(index, { unitCost: Number(event.target.value) })} className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 font-mono text-sm text-foreground outline-none focus:border-primary" /></label><Button onClick={() => setDrafts((current) => current.filter((_, purchaseIndex) => purchaseIndex !== index))} className="h-9 border border-foreground/15 bg-transparent px-2 text-muted-foreground hover:border-destructive hover:text-destructive" testId={`button-remove-purchase-${index}`}><Trash2 size={15} /></Button><div className="text-[10px] text-muted-foreground sm:col-span-4">{purchase.detail} · {purchase.category} · {purchase.source === 'receipt' ? 'receipt result' : 'manual'}</div></div>)}</div>
+          <div className="mt-4 flex flex-wrap gap-2"><Button onClick={addDraft} className="border border-dashed border-foreground/20 bg-transparent text-muted-foreground hover:border-primary hover:text-primary" testId="button-add-actual-purchase"><Plus size={15} /> Add purchase</Button><Button onClick={saveDrafts} disabled={isSaving} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-save-actual-purchases">{isSaving ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} Save actual purchases</Button></div>
+        </section>
+        <section className="rounded-lg border border-card-border bg-card p-5">
+          <div className="flex items-start gap-3"><ReceiptText size={18} className="mt-0.5 text-muted-foreground" /><div><h3 className="font-serif text-xl">Upload the receipt</h3><p className="mt-1 text-xs leading-relaxed text-muted-foreground">OCR reads the photo in your browser and pre-fills priced flower lines. Check every result before saving.</p></div></div>
+          <label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-foreground/20 px-4 py-4 text-sm text-muted-foreground hover:border-primary hover:text-primary"><Upload size={16} />{isAnalyzing ? 'Reading receipt…' : receipt.receiptFileName ?? 'Choose a receipt photo'}<input type="file" accept="image/*" className="sr-only" disabled={isAnalyzing} onChange={(event) => { const file = event.target.files?.[0]; if (file) void analyzeReceipt(file); }} /></label>
+          {receipt.receiptText && <details className="mt-3 rounded-md bg-muted p-3 text-xs"><summary className="cursor-pointer font-semibold">View extracted text</summary><pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[10px] text-muted-foreground">{receipt.receiptText}</pre></details>}
+        </section>
+        {feedback && <p className="rounded-md bg-[#edf0df] px-4 py-3 text-xs text-primary" role="status">{feedback}</p>}
+      </div>
+      <aside className="h-fit space-y-3 lg:sticky lg:top-24"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><DollarSign size={13} /> Actual flower spend</div><div className="mt-4 font-serif text-4xl tracking-[-.04em] text-primary" data-testid="text-actual-spend">{money(actualTotal)}</div><p className="mt-1 text-xs leading-relaxed text-primary/65">Saved against Sunday {nextMarket.shortDate}. This replaces the proposal when the report is created.</p><div className="mt-5 border-t border-primary/15 pt-4"><div className="flex justify-between text-xs"><span className="text-primary/65">Purchase lines</span><span className="font-mono font-semibold text-primary">{drafts.length}</span></div><div className="mt-2 flex justify-between text-xs"><span className="text-primary/65">Receipt status</span><span className="font-semibold text-primary">{receipt.receiptFileName ? 'Analysed' : 'Not uploaded'}</span></div></div></div><div className="paper-card rounded-lg border border-card-border p-5"><div className="flex items-center gap-2 font-serif text-lg"><UnlockKeyhole size={17} className="text-muted-foreground" /> List locked</div><p className="mt-3 text-xs leading-relaxed text-muted-foreground">The proposed list is frozen for this market cycle. Actual purchases can differ without changing the original plan.</p><Button onClick={handleReport} disabled={isSaving || drafts.length === 0 || buyList.reported} className="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90" testId="button-report-buy-list">{buyList.reported ? <CheckCircle2 size={15} /> : <ClipboardList size={15} />} {buyList.reported ? 'Buy List Report saved' : 'Create Buy List Report'}</Button></div></aside>
+    </div>}
+  </div>;
 }
 
 function BouquetsPage({ bouquetPlan, saveBouquetPlan }: { bouquetPlan: BouquetPlan; saveBouquetPlan: (selectedBand: string, count: number) => void }) {
@@ -324,19 +523,31 @@ function ClosePage({ closeMarket, saveCloseMarket }: { closeMarket: CloseMarket;
   return <div><PageIntro eyebrow="Next market / pack-down" title="Leave the shed lighter." description="A quick count of what came home, what found a vase, and what to carry into the next Sunday." action={<div className={`rounded-md px-3 py-2 text-center ${closed ? 'bg-[#dce3c2]' : 'bg-muted'}`}><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">Market status</div><div className="text-sm font-semibold">{closed ? 'Closed out' : 'Not closed'}</div></div>} /><MarketSubnav active="close" /><div className="grid gap-6 lg:grid-cols-[1fr_340px]"><div><div className="mb-4 flex items-end justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Leftover stock</p><h2 className="mt-1 font-serif text-2xl">What came home?</h2></div><span className="font-mono text-xs text-muted-foreground">{totalLeft} stems counted</span></div><div className="overflow-hidden rounded-lg border border-card-border bg-card">{stock.map((item) => <div key={item.name} className="flex items-center gap-4 border-b border-foreground/10 p-4 last:border-0"><span className="h-9 w-9 rounded-full border border-foreground/10" style={{ background: `radial-gradient(circle at 40% 30%, ${flowers.find((flower) => flower.common === item.name)?.colour ?? '#b6a1c8'}, #eee5dc)` }} /><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.note} · {item.opening} opened</span></span><div className="flex items-center gap-2"><Button onClick={() => setCounts((current) => ({ ...current, [item.name]: Math.max(0, (current[item.name] ?? 0) - 1) }))} className="h-8 w-8 rounded-full border border-foreground/15 bg-background p-0 text-lg font-normal" testId={`button-decrease-${item.name.toLowerCase().replaceAll(' ', '-')}`}>−</Button><span className="w-6 text-center font-mono text-sm" data-testid={`text-leftover-${item.name.toLowerCase().replaceAll(' ', '-')}`}>{counts[item.name] ?? 0}</span><Button onClick={() => setCounts((current) => ({ ...current, [item.name]: (current[item.name] ?? 0) + 1 }))} className="h-8 w-8 rounded-full border border-foreground/15 bg-background p-0 text-lg font-normal" testId={`button-increase-${item.name.toLowerCase().replaceAll(' ', '-')}`}><Plus size={14} /></Button></div></div>)}</div><Button onClick={() => { const nextClosed = !closed; setClosed(nextClosed); saveCloseMarket(counts, nextClosed); }} className={`mt-4 w-full ${closed ? 'border border-primary bg-transparent text-primary' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`} testId="button-save-close">{closed ? <><CheckCircle2 size={15} /> Reopen count</> : <><ClipboardCheck size={15} /> Save pack-down count</>}</Button></div><aside className="h-fit space-y-3"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Package size={13} /> Pack-down notes</div><p className="mt-4 font-serif text-xl leading-snug text-primary">Good flowers deserve<br />a second Sunday.</p><p className="mt-3 text-xs leading-relaxed text-primary/65">Record what is still fresh so it can guide your next buy list. Compost anything that has lost its lift.</p></div><div className="paper-card rounded-lg border border-card-border p-5"><div className="flex items-center gap-2 font-serif text-lg"><ClipboardList size={17} className="text-muted-foreground" /> Close checklist</div><div className="mt-4 space-y-3 text-xs text-muted-foreground"><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-buckets" className="accent-primary" /> Rinse buckets</label><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-tent" className="accent-primary" /> Pack umbrella sign</label><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-till" className="accent-primary" /> Reconcile the till</label></div></div></aside></div></div>;
 }
 
-function Router({ buyItems, markets, bouquetPlan, closeMarket, toggleBuyItem, saveBouquetPlan, saveCloseMarket }: { buyItems: BuyItem[]; markets: Market[]; bouquetPlan: BouquetPlan; closeMarket: CloseMarket; toggleBuyItem: (id: number) => void; saveBouquetPlan: (selectedBand: string, count: number) => void; saveCloseMarket: (counts: Record<string, number>, closed: boolean) => void }) {
-  return <AppShell remainingBuyItems={buyItems.filter((item) => !item.checked).length}><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} markets={markets} />} /><Route path="/flowers" component={FlowersPage} /><Route path="/markets" component={() => <MarketsPage markets={markets} />} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} toggleBuyItem={toggleBuyItem} />} /><Route path="/markets/next/close" component={() => <ClosePage closeMarket={closeMarket} saveCloseMarket={saveCloseMarket} />} /><Route path="/markets/next/bouquets" component={() => <BouquetsPage bouquetPlan={bouquetPlan} saveBouquetPlan={saveBouquetPlan} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
+function Router({ buyItems, actualPurchases, buyList, markets, bouquetPlan, closeMarket, toggleBuyItem, lockBuyList, saveActualPurchases, reportPurchases, saveBouquetPlan, saveCloseMarket }: { buyItems: BuyItem[]; actualPurchases: ActualPurchase[]; buyList: MarketContext['buyList']; markets: Market[]; bouquetPlan: BouquetPlan; closeMarket: CloseMarket; toggleBuyItem: (id: number) => void; lockBuyList: () => Promise<boolean>; saveActualPurchases: (purchases: ActualPurchaseInput[], receipt: ReceiptPayload) => Promise<boolean>; reportPurchases: () => Promise<boolean>; saveBouquetPlan: (selectedBand: string, count: number) => void; saveCloseMarket: (counts: Record<string, number>, closed: boolean) => void }) {
+  return <AppShell remainingBuyItems={buyItems.filter((item) => !item.checked).length}><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} markets={markets} />} /><Route path="/flowers" component={FlowersPage} /><Route path="/markets" component={() => <MarketsPage markets={markets} />} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} actualPurchases={actualPurchases} buyList={buyList} toggleBuyItem={toggleBuyItem} lockBuyList={lockBuyList} saveActualPurchases={saveActualPurchases} reportPurchases={reportPurchases} />} /><Route path="/markets/next/close" component={() => <ClosePage closeMarket={closeMarket} saveCloseMarket={saveCloseMarket} />} /><Route path="/markets/next/bouquets" component={() => <BouquetsPage bouquetPlan={bouquetPlan} saveBouquetPlan={saveBouquetPlan} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
 }
 
 function AppContent() {
   const marketContextQuery = useGetMarketContext(nextMarketCycle);
   const marketsQuery = useListMarkets();
   const buyItemMutation = useUpdateMarketBuyItem();
+  const buyListMutation = useUpdateMarketBuyList();
+  const actualPurchasesMutation = useReplaceMarketActualPurchases();
+  const reportPurchasesMutation = useReportMarketPurchases();
   const bouquetPlanMutation = useUpdateMarketBouquetPlan();
   const closeMarketMutation = useUpdateMarketClose();
   const context = marketContextQuery.data;
   const markets = marketsQuery.data ?? [];
   const buyItems = context?.buyItems ?? [];
+  const buyList = context?.buyList ?? {
+    marketCycle: context?.cycle ?? nextMarketCycle,
+    locked: false,
+    reported: false,
+    receiptFileName: null,
+    receiptText: null,
+    receiptCandidates: [],
+  };
+  const actualPurchases = context?.actualPurchases ?? [];
   const updateContext = (patch: Partial<MarketContext>) => {
     queryClient.setQueryData<MarketContext>(getGetMarketContextQueryKey(nextMarketCycle), (current) => current ? { ...current, ...patch } : current);
   };
@@ -347,6 +558,36 @@ function AppContent() {
       onSuccess: (updated) => updateContext({ buyItems: buyItems.map((candidate) => candidate.id === updated.id ? updated : candidate) }),
       onError: () => window.alert('The buy-list change could not be saved. Please try again.'),
     });
+  };
+  const lockBuyList = async () => {
+    try {
+      const buyList = await buyListMutation.mutateAsync({ cycle: nextMarketCycle, data: { locked: true } });
+      updateContext({ buyList });
+      return true;
+    } catch {
+      window.alert('The buy list could not be locked. Please try again.');
+      return false;
+    }
+  };
+  const saveActualPurchases = async (purchases: ActualPurchaseInput[], receipt: ReceiptPayload) => {
+    try {
+      const saved = await actualPurchasesMutation.mutateAsync({ cycle: nextMarketCycle, data: { purchases, ...receipt } });
+      updateContext({ buyList: saved.buyList, actualPurchases: saved.purchases });
+      return true;
+    } catch {
+      window.alert('The actual purchases could not be saved. Please try again.');
+      return false;
+    }
+  };
+  const reportPurchases = async () => {
+    try {
+      const buyList = await reportPurchasesMutation.mutateAsync({ cycle: nextMarketCycle });
+      updateContext({ buyList });
+      return true;
+    } catch {
+      window.alert('Save at least one actual purchase before reporting.');
+      return false;
+    }
   };
   const saveBouquetPlan = (selectedBand: string, count: number) => {
     bouquetPlanMutation.mutate({ cycle: nextMarketCycle, data: { selectedBand, count } }, {
@@ -366,7 +607,7 @@ function AppContent() {
   if (marketContextQuery.isLoading || marketsQuery.isLoading || !context) {
     return <TooltipProvider><div className="flex min-h-[100dvh] items-center justify-center bg-background font-serif text-lg text-muted-foreground">Loading your market notes…</div></TooltipProvider>;
   }
-  return <TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router buyItems={buyItems} markets={markets} bouquetPlan={context.bouquetPlan} closeMarket={context.closeMarket} toggleBuyItem={toggleBuyItem} saveBouquetPlan={saveBouquetPlan} saveCloseMarket={saveCloseMarket} /></WouterRouter><Toaster /></TooltipProvider>;
+  return <TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router buyItems={buyItems} actualPurchases={actualPurchases} buyList={buyList} markets={markets} bouquetPlan={context.bouquetPlan} closeMarket={context.closeMarket} toggleBuyItem={toggleBuyItem} lockBuyList={lockBuyList} saveActualPurchases={saveActualPurchases} reportPurchases={reportPurchases} saveBouquetPlan={saveBouquetPlan} saveCloseMarket={saveCloseMarket} /></WouterRouter><Toaster /></TooltipProvider>;
 }
 
 function App() {

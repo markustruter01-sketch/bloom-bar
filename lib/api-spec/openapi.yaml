@@ -81,6 +81,62 @@ paths:
                 $ref: "#/components/schemas/BuyItem"
         "404":
           description: Buy-list item not found
+  /markets/context/{cycle}/buy-list:
+    patch:
+      operationId: updateMarketBuyList
+      tags: [markets]
+      summary: Lock or unlock the proposed buy list
+      parameters:
+        - $ref: "#/components/parameters/MarketCycle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BuyListLockUpdate"
+      responses:
+        "200":
+          description: Updated buy-list state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketBuyListState"
+  /markets/context/{cycle}/actual-purchases:
+    put:
+      operationId: replaceMarketActualPurchases
+      tags: [markets]
+      summary: Save actual purchases and receipt analysis for a market cycle
+      parameters:
+        - $ref: "#/components/parameters/MarketCycle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActualPurchasesUpdate"
+      responses:
+        "200":
+          description: Saved actual purchases
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActualPurchasesResponse"
+  /markets/context/{cycle}/report-purchases:
+    post:
+      operationId: reportMarketPurchases
+      tags: [markets]
+      summary: Report completed actual purchases for a market cycle
+      parameters:
+        - $ref: "#/components/parameters/MarketCycle"
+      responses:
+        "200":
+          description: Reported purchase state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketBuyListState"
+        "400":
+          description: The list is not locked or has no actual purchases
   /markets/context/{cycle}/bouquet-plan:
     patch:
       operationId: updateMarketBouquetPlan
@@ -183,6 +239,119 @@ components:
       properties:
         checked:
           type: boolean
+    BuyListLockUpdate:
+      type: object
+      required: [locked]
+      properties:
+        locked:
+          type: boolean
+    ReceiptCandidate:
+      type: object
+      required: [flower, stems, unitCost, confidence, rawLine]
+      properties:
+        flower:
+          type: string
+        stems:
+          type: number
+          minimum: 0
+        unitCost:
+          type: number
+          minimum: 0
+        confidence:
+          type: string
+          enum: [high, medium, low]
+        rawLine:
+          type: string
+    MarketBuyListState:
+      type: object
+      required: [marketCycle, locked, reported, receiptFileName, receiptText, receiptCandidates]
+      properties:
+        marketCycle:
+          type: number
+        locked:
+          type: boolean
+        reported:
+          type: boolean
+        receiptFileName:
+          type: string
+          nullable: true
+        receiptText:
+          type: string
+          nullable: true
+        receiptCandidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReceiptCandidate"
+    ActualPurchase:
+      type: object
+      required: [id, marketCycle, flower, detail, category, stems, unitCost, source]
+      properties:
+        id:
+          type: number
+        marketCycle:
+          type: number
+        flower:
+          type: string
+        detail:
+          type: string
+        category:
+          type: string
+        stems:
+          type: number
+          minimum: 0
+        unitCost:
+          type: number
+          minimum: 0
+        source:
+          type: string
+          enum: [manual, receipt]
+    ActualPurchaseInput:
+      type: object
+      required: [flower, detail, category, stems, unitCost, source]
+      properties:
+        flower:
+          type: string
+        detail:
+          type: string
+        category:
+          type: string
+        stems:
+          type: number
+          minimum: 0
+        unitCost:
+          type: number
+          minimum: 0
+        source:
+          type: string
+          enum: [manual, receipt]
+    ActualPurchasesUpdate:
+      type: object
+      required: [purchases]
+      properties:
+        purchases:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActualPurchaseInput"
+        receiptFileName:
+          type: string
+          nullable: true
+        receiptText:
+          type: string
+          nullable: true
+        receiptCandidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReceiptCandidate"
+    ActualPurchasesResponse:
+      type: object
+      required: [buyList, purchases]
+      properties:
+        buyList:
+          $ref: "#/components/schemas/MarketBuyListState"
+        purchases:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActualPurchase"
     BouquetPlan:
       type: object
       required: [marketCycle, selectedBand, count]
@@ -228,7 +397,7 @@ components:
           type: boolean
     MarketContext:
       type: object
-      required: [cycle, date, venue, spend, revenue, margin, buyItems, bouquetPlan, closeMarket]
+      required: [cycle, date, venue, spend, revenue, margin, buyItems, buyList, actualPurchases, bouquetPlan, closeMarket]
       properties:
         cycle:
           type: number
@@ -246,6 +415,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BuyItem"
+        buyList:
+          $ref: "#/components/schemas/MarketBuyListState"
+        actualPurchases:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActualPurchase"
         bouquetPlan:
           $ref: "#/components/schemas/BouquetPlan"
         closeMarket:
