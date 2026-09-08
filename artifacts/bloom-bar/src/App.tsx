@@ -247,9 +247,22 @@ function PageIntro({ eyebrow, title, description, action }: { eyebrow: string; t
   return <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><div className="mb-2 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.18em] text-muted-foreground"><span className="h-px w-7 bg-accent" />{eyebrow}</div><h1 className="display-font text-4xl leading-[1.02] tracking-[-.035em] text-foreground md:text-5xl">{title}</h1><p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">{description}</p></div>{action}</div>;
 }
 
-function MetricCard({ label, value, detail, accent = 'sage', icon: Icon }: { label: string; value: string; detail: string; accent?: 'sage' | 'lilac' | 'peach'; icon: typeof TrendingUp }) {
+function MetricCard({ label, value, detail, accent = 'sage', icon: Icon }: { label: string; value: string; detail: ReactNode; accent?: 'sage' | 'lilac' | 'peach'; icon: typeof TrendingUp }) {
   const accents = { sage: 'bg-[#dce3c2]', lilac: 'bg-[#e5d8e9]', peach: 'bg-[#f1d0c3]' };
   return <div className="paper-card rounded-lg border border-card-border p-5" data-testid={`metric-${label.toLowerCase().replaceAll(' ', '-')}`}><div className="mb-5 flex items-start justify-between"><span className="font-mono text-[10px] uppercase tracking-[.14em] text-muted-foreground">{label}</span><span className={`flex h-8 w-8 items-center justify-center rounded-full ${accents[accent]} text-foreground`}><Icon size={15} strokeWidth={1.8} /></span></div><div className="font-serif text-3xl tracking-[-.04em]" data-testid={`value-${label.toLowerCase().replaceAll(' ', '-')}`}>{value}</div><div className="mt-1 text-xs text-muted-foreground">{detail}</div></div>;
+}
+
+export function NextMarketMetricCard({ nextMarket, checkedCount, totalBuyItems }: { nextMarket: MarketCycleSummary; checkedCount: number; totalBuyItems: number }) {
+  return <MetricCard
+    label="Next market"
+    value={nextMarket.daysUntil}
+    detail={<div className="space-y-1.5">
+      <MarketCycleBanner summary={nextMarket} testId="overview-next-market" />
+      <span className="block">buy list is {checkedCount} of {totalBuyItems} items ready</span>
+    </div>}
+    icon={Clock3}
+    accent="peach"
+  />;
 }
 
 function Dashboard({ buyItems, markets, nextMarket }: { buyItems: BuyItem[]; markets: Market[]; nextMarket: MarketCycleSummary }) {
@@ -285,7 +298,7 @@ function Dashboard({ buyItems, markets, nextMarket }: { buyItems: BuyItem[]; mar
     <section className="grid gap-3 md:grid-cols-3">
        <MetricCard label="Last market" value={money(lastMarket?.revenue ?? 0)} detail={lastMarket ? `${money(lastMarket.revenue - lastMarket.spend)} after flower spend` : 'No closed market yet'} icon={TrendingUp} accent="sage" />
        <MetricCard label="Gross margin" value={`${(lastMarket?.margin ?? 0).toFixed(1)}%`} detail={lastMarket ? `${money(lastMarket.spend)} flower spend` : 'No closed market yet'} icon={BarChart3} accent="lilac" />
-      <MetricCard label="Next market" value={nextMarket.daysUntil} detail={`${nextMarket.shortDate} · buy list is ${checkedCount} of ${buyItems.length} items ready`} icon={Clock3} accent="peach" />
+       <NextMarketMetricCard nextMarket={nextMarket} checkedCount={checkedCount} totalBuyItems={buyItems.length} />
     </section>
 
     <section className="grid gap-5 lg:grid-cols-[1.35fr_.65fr]">

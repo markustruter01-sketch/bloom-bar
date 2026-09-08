@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { NextMarketMetricCard } from '../App';
 import { MarketCycleBanner } from './market-cycle-banner';
 import { getMarketCycleSummary } from './market-schedule';
 
@@ -36,5 +37,17 @@ describe('market cycle banner', () => {
     assert.match(overviewMarkup, />Next up</);
     assert.match(overviewMarkup, /data-testid="overview-cycle-date"/);
     assert.match(overviewMarkup, /data-testid="overview-cycle-status"/);
+  });
+
+  it('renders the shared status in the overview next-market metric', () => {
+    const summary = getMarketCycleSummary(new Date('2026-09-06T12:00:00Z'));
+    const metricMarkup = renderToStaticMarkup(
+      <NextMarketMetricCard nextMarket={summary} checkedCount={2} totalBuyItems={5} />,
+    );
+
+    assert.match(metricMarkup, /data-testid="value-next-market">7 days/);
+    assert.match(metricMarkup, /data-testid="overview-next-market-date">Sunday 13 Sep/);
+    assert.match(metricMarkup, /data-testid="overview-next-market-status">Next up/);
+    assert.match(metricMarkup, /buy list is 2 of 5 items ready/);
   });
 });
