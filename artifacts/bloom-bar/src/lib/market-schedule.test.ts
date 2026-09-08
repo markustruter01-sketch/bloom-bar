@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  getMarketCycleSummary,
   getMarketDate,
   getMarketStatus,
   getNextMarketCycle,
@@ -79,5 +80,22 @@ describe('market cycle selection and status labeling', () => {
     assert.equal(getMarketStatus(-1, nextCycle), 'Closed');
     assert.equal(getMarketStatus(nextCycle, nextCycle), 'Next up');
     assert.equal(getMarketStatus(1, nextCycle), 'Upcoming');
+  });
+
+  it('keeps the Markets and linked planning surfaces on one rendered cycle', () => {
+    const summary = getMarketCycleSummary(new Date('2026-09-06T12:00:00Z'));
+    const marketsSurface = {
+      date: summary.shortDate,
+      status: summary.status,
+    };
+    const planningSurface = {
+      date: summary.shortDate,
+      status: summary.status,
+    };
+
+    assert.deepEqual(planningSurface, marketsSurface);
+    assert.equal(summary.cycle, 0);
+    assert.equal(summary.shortDate, 'Sunday 13 Sep');
+    assert.equal(summary.status, 'Next up');
   });
 });

@@ -8,6 +8,15 @@ const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
 
 export type MarketDateFormat = 'full' | 'short' | 'table';
 export type MarketStatus = 'Closed' | 'Next up' | 'Upcoming';
+export type MarketCycleSummary = {
+  cycle: number;
+  date: Date;
+  fullDate: string;
+  shortDate: string;
+  daysUntil: string;
+  recurrence: string;
+  status: MarketStatus;
+};
 
 /**
  * Returns the market date for a fortnightly cycle relative to the confirmed
@@ -68,6 +77,22 @@ export function getMarketStatus(cycle: number, nextCycle: number): MarketStatus 
   return cycle === nextCycle ? 'Next up' : 'Upcoming';
 }
 
+export function getMarketCycleSummary(today = new Date()): MarketCycleSummary {
+  const cycle = getNextMarketCycle(today);
+  const date = getMarketDate(cycle);
+  const days = daysUntilMarket(date, today);
+
+  return {
+    cycle,
+    date,
+    fullDate: formatMarketDate(date, 'full'),
+    shortDate: formatMarketDate(date, 'short'),
+    daysUntil: days === 0 ? 'Today' : `${days} days`,
+    recurrence: 'Every fortnight on Sunday',
+    status: getMarketStatus(cycle, cycle),
+  };
+}
+
 export const marketSchedule = {
   recurrence: 'Every fortnight on Sunday',
   dateForCycle: getMarketDate,
@@ -76,4 +101,5 @@ export const marketSchedule = {
   daysUntil: daysUntilMarket,
   nextCycle: getNextMarketCycle,
   statusForCycle: getMarketStatus,
+  nextSummary: getMarketCycleSummary,
 } as const;
