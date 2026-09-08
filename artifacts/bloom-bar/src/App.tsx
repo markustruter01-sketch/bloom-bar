@@ -679,10 +679,8 @@ function Router({ nextMarket, buyItems, actualPurchases, costs, buyList, markets
   return <AppShell nextMarket={nextMarket} remainingBuyItems={buyItems.filter((item) => !item.checked).length}><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} markets={markets} nextMarket={nextMarket} />} /><Route path="/flowers" component={() => <FlowersPage flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesLoading} />} /><Route path="/markets" component={() => <MarketsPage markets={markets} nextMarket={nextMarket} />} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} nextMarket={nextMarket} toggleBuyItem={toggleBuyItem} lockBuyList={lockBuyList} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} />} /><Route path="/markets/next/close" component={() => <ClosePage closeMarket={closeMarket} actualPurchases={actualPurchases} nextMarket={nextMarket} saveCloseMarket={saveCloseMarket} />} /><Route path="/markets/next/bouquets" component={() => <BouquetsPage bouquetPlan={bouquetPlan} nextMarket={nextMarket} saveBouquetPlan={saveBouquetPlan} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
 }
 
-function AppContent() {
+export function useUtcDayRollover() {
   const [utcDay, setUtcDay] = useState(() => getUtcDayKey(new Date()));
-  const nextMarket = useMemo(() => marketSchedule.nextSummary(new Date()), [utcDay]);
-  const nextMarketCycle = nextMarket.cycle;
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -700,6 +698,14 @@ function AppContent() {
     scheduleRollover();
     return () => clearTimeout(timer);
   }, [utcDay]);
+
+  return utcDay;
+}
+
+function AppContent() {
+  const utcDay = useUtcDayRollover();
+  const nextMarket = useMemo(() => marketSchedule.nextSummary(new Date()), [utcDay]);
+  const nextMarketCycle = nextMarket.cycle;
 
   const marketContextQuery = useGetMarketContext(nextMarketCycle);
   const marketsQuery = useListMarkets();
