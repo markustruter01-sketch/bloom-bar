@@ -29,3 +29,4 @@ export * from './marketBuyListState';
 export * from './marketContext';
 export * from './receiptCandidate';
 export * from './receiptCandidateConfidence';
+export * from './sellThroughRecord';

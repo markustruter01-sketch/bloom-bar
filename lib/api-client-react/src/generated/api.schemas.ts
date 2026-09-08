@@ -150,9 +150,25 @@ export interface BouquetPlanUpdate {
 
 export type CloseMarketCounts = {[key: string]: number};
 
+export interface SellThroughRecord {
+  flower: string;
+  /** @minimum 0 */
+  purchasedStems: number;
+  /** @minimum 0 */
+  leftoverStems: number;
+  /** @minimum 0 */
+  soldStems: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  sellThroughPercent: number;
+}
+
 export interface CloseMarket {
   marketCycle: number;
   counts: CloseMarketCounts;
+  sellThrough: SellThroughRecord[];
   closed: boolean;
 }
 

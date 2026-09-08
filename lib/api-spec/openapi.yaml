@@ -423,7 +423,7 @@ components:
           minimum: 0
     CloseMarket:
       type: object
-      required: [marketCycle, counts, closed]
+      required: [marketCycle, counts, sellThrough, closed]
       properties:
         marketCycle:
           type: number
@@ -432,8 +432,31 @@ components:
           additionalProperties:
             type: number
             minimum: 0
+        sellThrough:
+          type: array
+          items:
+            $ref: "#/components/schemas/SellThroughRecord"
         closed:
           type: boolean
+    SellThroughRecord:
+      type: object
+      required: [flower, purchasedStems, leftoverStems, soldStems, sellThroughPercent]
+      properties:
+        flower:
+          type: string
+        purchasedStems:
+          type: number
+          minimum: 0
+        leftoverStems:
+          type: number
+          minimum: 0
+        soldStems:
+          type: number
+          minimum: 0
+        sellThroughPercent:
+          type: number
+          minimum: 0
+          maximum: 100
     CloseMarketUpdate:
       type: object
       required: [counts, closed]

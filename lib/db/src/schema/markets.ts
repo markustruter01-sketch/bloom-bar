@@ -19,6 +19,14 @@ export type ReceiptCandidate = {
   rawLine: string;
 };
 
+export type SellThroughRecord = {
+  flower: string;
+  purchasedStems: number;
+  leftoverStems: number;
+  soldStems: number;
+  sellThroughPercent: number;
+};
+
 export const marketsTable = pgTable(
   "markets",
   {
@@ -87,6 +95,7 @@ export const closeMarketsTable = pgTable("market_close_records", {
     .primaryKey()
     .references(() => marketsTable.cycle, { onDelete: "cascade" }),
   counts: jsonb("counts").$type<Record<string, number>>().notNull().default({}),
+  sellThrough: jsonb("sell_through").$type<SellThroughRecord[]>().notNull().default([]),
   closed: boolean("closed").notNull().default(false),
 });
 

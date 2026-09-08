@@ -32,6 +32,7 @@ import {
   UpdateMarketCloseParams,
   UpdateMarketCloseResponse,
 } from "@workspace/api-zod";
+import type { SellThroughRecord } from "@workspace/db";
 import { formatScheduledMarketDate, getScheduledMarketDate } from "../lib/market-schedule";
 
 const router: IRouter = Router();
@@ -54,6 +55,32 @@ const defaultBuyItems = [
 ];
 
 const defaultCloseCounts = { Lisianthus: 2, Daisy: 7, Snapdragon: 3, "Eucalyptus foliage": 5 };
+
+function calculateSellThrough(
+  purchases: Array<{ flower: string; stems: number }>,
+  leftovers: Record<string, number>,
+): SellThroughRecord[] {
+  const purchasedByFlower = new Map<string, number>();
+  for (const purchase of purchases) {
+    purchasedByFlower.set(purchase.flower, (purchasedByFlower.get(purchase.flower) ?? 0) + purchase.stems);
+  }
+
+  const flowers = [...new Set([...purchasedByFlower.keys(), ...Object.keys(leftovers)])].sort((a, b) => a.localeCompare(b));
+  return flowers.map((flower) => {
+    const purchasedStems = purchasedByFlower.get(flower) ?? 0;
+    const leftoverStems = leftovers[flower] ?? 0;
+    const soldStems = Math.max(0, purchasedStems - leftoverStems);
+    return {
+      flower,
+      purchasedStems,
+      leftoverStems,
+      soldStems,
+      sellThroughPercent: purchasedStems > 0
+        ? Math.round((soldStems / purchasedStems) * 1000) / 10
+        : 0,
+    };
+  });
+}
 
 function parseCycle(raw: string | string[] | undefined): number | null {
   const value = Array.isArray(raw) ? raw[0] : raw;
@@ -101,7 +128,7 @@ async function ensureMarketContext(cycle: number) {
       .from(closeMarketsTable)
       .where(eq(closeMarketsTable.marketCycle, cycle));
     if (existingClose.length === 0) {
-      await tx.insert(closeMarketsTable).values({ marketCycle: cycle, counts: defaultCloseCounts, closed: false });
+      await tx.insert(closeMarketsTable).values({ marketCycle: cycle, counts: defaultCloseCounts, sellThrough: [], closed: false });
     }
   });
 }
@@ -114,6 +141,7 @@ async function readMarketContext(cycle: number) {
   const actualPurchases = await db.select().from(marketActualPurchasesTable).where(eq(marketActualPurchasesTable.marketCycle, cycle)).orderBy(marketActualPurchasesTable.id);
   const [bouquetPlan] = await db.select().from(bouquetPlansTable).where(eq(bouquetPlansTable.marketCycle, cycle));
   const [closeMarket] = await db.select().from(closeMarketsTable).where(eq(closeMarketsTable.marketCycle, cycle));
+  const sellThrough = calculateSellThrough(actualPurchases, closeMarket.counts);
   const reportedPurchases = await db
     .select({
       marketCycle: marketActualPurchasesTable.marketCycle,
@@ -154,7 +182,7 @@ async function readMarketContext(cycle: number) {
     buyList,
     actualPurchases,
     bouquetPlan,
-    closeMarket,
+    closeMarket: { ...closeMarket, sellThrough },
   };
 }
 
@@ -370,9 +398,14 @@ router.patch("/markets/context/:cycle/close", async (req, res): Promise<void> =>
     return;
   }
   await ensureMarketContext(params.data.cycle);
+  const purchases = await db
+    .select({ flower: marketActualPurchasesTable.flower, stems: marketActualPurchasesTable.stems })
+    .from(marketActualPurchasesTable)
+    .where(eq(marketActualPurchasesTable.marketCycle, params.data.cycle));
+  const sellThrough = calculateSellThrough(purchases, body.data.counts);
   const [closeMarket] = await db
     .update(closeMarketsTable)
-    .set({ counts: body.data.counts, closed: body.data.closed })
+    .set({ counts: body.data.counts, sellThrough, closed: body.data.closed })
     .where(eq(closeMarketsTable.marketCycle, params.data.cycle))
     .returning();
   res.json(UpdateMarketCloseResponse.parse(closeMarket));

@@ -126,6 +126,10 @@ describe("market context persistence", () => {
     assert.deepEqual(closeUpdate.body, {
       marketCycle: testCycles[0],
       counts: { Lisianthus: 4, Daisy: 2 },
+      sellThrough: [
+        { flower: "Daisy", purchasedStems: 0, leftoverStems: 2, soldStems: 0, sellThroughPercent: 0 },
+        { flower: "Lisianthus", purchasedStems: 0, leftoverStems: 4, soldStems: 0, sellThroughPercent: 0 },
+      ],
       closed: true,
     });
 
@@ -136,6 +140,7 @@ describe("market context persistence", () => {
     assert.equal(reloaded.bouquetPlan.count, 24);
     assert.equal(reloaded.closeMarket.marketCycle, testCycles[0]);
     assert.deepEqual(reloaded.closeMarket.counts, { Lisianthus: 4, Daisy: 2 });
+    assert.deepEqual(reloaded.closeMarket.sellThrough, closeUpdate.body.sellThrough);
     assert.equal(reloaded.closeMarket.closed, true);
     assert.equal(
       reloaded.buyItems.find((buyItem: any) => buyItem.id === item.id)?.checked,
@@ -145,6 +150,37 @@ describe("market context persistence", () => {
 
     const otherCycleReloaded = await getContext(testCycles[1]);
     assert.deepEqual(otherCycleReloaded, otherCycleInitial);
+  });
+
+  it("compares actual purchases with leftovers for the same market cycle", async () => {
+    const cycle = testCycles[2];
+    await getContext(cycle);
+    const lock = await patch(`/markets/context/${cycle}/buy-list`, { locked: true });
+    assert.equal(lock.status, 200);
+    const saved = await request(`/markets/context/${cycle}/actual-purchases`, {
+      method: "PUT",
+      body: JSON.stringify({
+        purchases: [
+          { flower: "Lisianthus", detail: "White", category: "Classic Blooms", stems: 10, unitCost: 18, source: "manual" },
+          { flower: "Daisy", detail: "White", category: "Classic Blooms", stems: 4, unitCost: 12, source: "manual" },
+        ],
+      }),
+    });
+    assert.equal(saved.status, 200);
+
+    const closeUpdate = await patch(`/markets/context/${cycle}/close`, {
+      counts: { Lisianthus: 2, Daisy: 0 },
+      closed: true,
+    });
+    assert.equal(closeUpdate.status, 200);
+    assert.deepEqual(closeUpdate.body.sellThrough, [
+      { flower: "Daisy", purchasedStems: 4, leftoverStems: 0, soldStems: 4, sellThroughPercent: 100 },
+      { flower: "Lisianthus", purchasedStems: 10, leftoverStems: 2, soldStems: 8, sellThroughPercent: 80 },
+    ]);
+
+    const otherCycle = await getContext(testCycles[1]);
+    assert.equal(otherCycle.closeMarket.marketCycle, testCycles[1]);
+    assert.notDeepEqual(otherCycle.closeMarket.sellThrough, closeUpdate.body.sellThrough);
   });
 
   it("tracks reported flower prices and uses the latest report for future estimates", async () => {

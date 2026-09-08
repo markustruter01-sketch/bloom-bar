@@ -85,6 +85,15 @@ export const getMarketContextResponseActualPurchasesItemUnitCostMin = 0;
 
 export const getMarketContextResponseCloseMarketCountsMinOne = 0;
 
+export const getMarketContextResponseCloseMarketSellThroughItemPurchasedStemsMin = 0;
+
+export const getMarketContextResponseCloseMarketSellThroughItemLeftoverStemsMin = 0;
+
+export const getMarketContextResponseCloseMarketSellThroughItemSoldStemsMin = 0;
+
+export const getMarketContextResponseCloseMarketSellThroughItemSellThroughPercentMin = 0;
+export const getMarketContextResponseCloseMarketSellThroughItemSellThroughPercentMax = 100;
+
 
 
 export const GetMarketContextResponse = zod.object({
@@ -137,6 +146,13 @@ export const GetMarketContextResponse = zod.object({
   "closeMarket": zod.object({
   "marketCycle": zod.number(),
   "counts": zod.record(zod.string(), zod.number().min(getMarketContextResponseCloseMarketCountsMinOne)),
+  "sellThrough": zod.array(zod.object({
+  "flower": zod.string(),
+  "purchasedStems": zod.number().min(getMarketContextResponseCloseMarketSellThroughItemPurchasedStemsMin),
+  "leftoverStems": zod.number().min(getMarketContextResponseCloseMarketSellThroughItemLeftoverStemsMin),
+  "soldStems": zod.number().min(getMarketContextResponseCloseMarketSellThroughItemSoldStemsMin),
+  "sellThroughPercent": zod.number().min(getMarketContextResponseCloseMarketSellThroughItemSellThroughPercentMin).max(getMarketContextResponseCloseMarketSellThroughItemSellThroughPercentMax)
+})),
   "closed": zod.boolean()
 })
 })
@@ -345,11 +361,27 @@ export const UpdateMarketCloseBody = zod.object({
 
 export const updateMarketCloseResponseCountsMinOne = 0;
 
+export const updateMarketCloseResponseSellThroughItemPurchasedStemsMin = 0;
+
+export const updateMarketCloseResponseSellThroughItemLeftoverStemsMin = 0;
+
+export const updateMarketCloseResponseSellThroughItemSoldStemsMin = 0;
+
+export const updateMarketCloseResponseSellThroughItemSellThroughPercentMin = 0;
+export const updateMarketCloseResponseSellThroughItemSellThroughPercentMax = 100;
+
 
 
 export const UpdateMarketCloseResponse = zod.object({
   "marketCycle": zod.number(),
   "counts": zod.record(zod.string(), zod.number().min(updateMarketCloseResponseCountsMinOne)),
+  "sellThrough": zod.array(zod.object({
+  "flower": zod.string(),
+  "purchasedStems": zod.number().min(updateMarketCloseResponseSellThroughItemPurchasedStemsMin),
+  "leftoverStems": zod.number().min(updateMarketCloseResponseSellThroughItemLeftoverStemsMin),
+  "soldStems": zod.number().min(updateMarketCloseResponseSellThroughItemSoldStemsMin),
+  "sellThroughPercent": zod.number().min(updateMarketCloseResponseSellThroughItemSellThroughPercentMin).max(updateMarketCloseResponseSellThroughItemSellThroughPercentMax)
+})),
   "closed": zod.boolean()
 })
 

@@ -6,9 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CloseMarketCounts } from './closeMarketCounts';
+import type { SellThroughRecord } from './sellThroughRecord';
 
 export interface CloseMarket {
   marketCycle: number;
   counts: CloseMarketCounts;
+  sellThrough: SellThroughRecord[];
   closed: boolean;
 }
