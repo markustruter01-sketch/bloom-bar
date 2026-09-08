@@ -25,4 +25,16 @@ describe('market cycle banner', () => {
       planningMarkup.replaceAll('planning-cycle', 'cycle'),
     );
   });
+
+  it('renders the canonical date and status for the overview hero', () => {
+    const summary = getMarketCycleSummary(new Date('2026-09-06T12:00:00Z'));
+    const overviewMarkup = renderToStaticMarkup(
+      <MarketCycleBanner summary={summary} testId="overview-cycle" />,
+    );
+
+    assert.match(overviewMarkup, /Sunday 13 Sep/);
+    assert.match(overviewMarkup, />Next up</);
+    assert.match(overviewMarkup, /data-testid="overview-cycle-date"/);
+    assert.match(overviewMarkup, /data-testid="overview-cycle-status"/);
+  });
 });
