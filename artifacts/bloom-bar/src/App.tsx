@@ -82,6 +82,7 @@ import {
 } from 'wouter';
 
 import NotFound from '@/pages/not-found';
+import { trackMarketPlanSave } from '@/lib/analytics';
 import { MarketCycleBanner } from '@/lib/market-cycle-banner';
 import { formatMarketDate, formatMarketDay, getMarketDate, getMarketStatus, getUtcDayKey, marketSchedule, millisecondsUntilNextUtcDay, type MarketCycleSummary } from '@/lib/market-schedule';
 
@@ -558,6 +559,7 @@ export function BuyPage({
       saved = await reportPurchases();
       savedMessage = 'Buy List Report saved for this market date.';
     }
+    trackMarketPlanSave('buy_list', saved ? 'success' : 'failure');
     setIsSaving(false);
     setSaveState(saved ? 'saved' : 'error');
     announceSave(saved, savedMessage, () => void performSave(action));
@@ -626,6 +628,7 @@ export function BouquetsPage({ bouquetPlan, nextMarket, saveBouquetPlan }: { bou
   const performSave = async () => {
     setSaveState('saving');
     const saved = await saveBouquetPlan(band.name, count);
+    trackMarketPlanSave('bouquet', saved ? 'success' : 'failure');
     setSaveState(saved ? 'saved' : 'error');
     announceSave(saved, 'Sunday bouquet plan saved.', () => void performSave());
   };
@@ -651,6 +654,7 @@ export function ClosePage({ closeMarket, actualPurchases, nextMarket, saveCloseM
     const nextClosed = !closed;
     setSaveState('saving');
     const saved = await saveCloseMarket(counts, nextClosed);
+    trackMarketPlanSave('close_market', saved ? 'success' : 'failure');
     if (saved) setClosed(nextClosed);
     setSaveState(saved ? 'saved' : 'error');
     announceSave(saved, nextClosed ? 'Pack-down count saved and market closed.' : 'Pack-down count saved and market reopened.', () => void performSave());
