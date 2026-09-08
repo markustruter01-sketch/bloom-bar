@@ -40,6 +40,21 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Market"
+  /markets/flower-prices:
+    get:
+      operationId: listFlowerPrices
+      tags: [markets]
+      summary: List reported flower price history
+      description: Returns actual unit costs from completed Buy List Reports, grouped by flower.
+      responses:
+        "200":
+          description: Reported flower price history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlowerPriceHistory"
   /markets/context/{cycle}:
     get:
       operationId: getMarketContext
@@ -352,6 +367,41 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ActualPurchase"
+    FlowerPricePoint:
+      type: object
+      required: [marketCycle, date, unitCost]
+      properties:
+        marketCycle:
+          type: number
+        date:
+          type: string
+        unitCost:
+          type: number
+          minimum: 0
+    FlowerPriceHistory:
+      type: object
+      required: [flower, category, latest, previous, change, changePercent, history]
+      properties:
+        flower:
+          type: string
+        category:
+          type: string
+        latest:
+          $ref: "#/components/schemas/FlowerPricePoint"
+        previous:
+          anyOf:
+            - $ref: "#/components/schemas/FlowerPricePoint"
+            - type: "null"
+        change:
+          type: number
+          nullable: true
+        changePercent:
+          type: number
+          nullable: true
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowerPricePoint"
     BouquetPlan:
       type: object
       required: [marketCycle, selectedBand, count]

@@ -119,6 +119,23 @@ export interface ActualPurchasesResponse {
   purchases: ActualPurchase[];
 }
 
+export interface FlowerPricePoint {
+  marketCycle: number;
+  date: string;
+  /** @minimum 0 */
+  unitCost: number;
+}
+
+export interface FlowerPriceHistory {
+  flower: string;
+  category: string;
+  latest: FlowerPricePoint;
+  previous: FlowerPricePoint | null;
+  change: number | null;
+  changePercent: number | null;
+  history: FlowerPricePoint[];
+}
+
 export interface BouquetPlan {
   marketCycle: number;
   selectedBand: string;

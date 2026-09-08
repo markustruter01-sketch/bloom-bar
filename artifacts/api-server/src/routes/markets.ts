@@ -12,6 +12,7 @@ import {
 import {
   GetMarketContextParams,
   GetMarketContextResponse,
+  ListFlowerPricesResponse,
   ListMarketsResponse,
   ReportMarketPurchasesResponse,
   ReportMarketPurchasesParams,
@@ -113,6 +114,34 @@ async function readMarketContext(cycle: number) {
   const actualPurchases = await db.select().from(marketActualPurchasesTable).where(eq(marketActualPurchasesTable.marketCycle, cycle)).orderBy(marketActualPurchasesTable.id);
   const [bouquetPlan] = await db.select().from(bouquetPlansTable).where(eq(bouquetPlansTable.marketCycle, cycle));
   const [closeMarket] = await db.select().from(closeMarketsTable).where(eq(closeMarketsTable.marketCycle, cycle));
+  const reportedPurchases = await db
+    .select({
+      marketCycle: marketActualPurchasesTable.marketCycle,
+      flower: marketActualPurchasesTable.flower,
+      unitCost: marketActualPurchasesTable.unitCost,
+    })
+    .from(marketActualPurchasesTable)
+    .innerJoin(
+      marketBuyListStatesTable,
+      eq(marketBuyListStatesTable.marketCycle, marketActualPurchasesTable.marketCycle),
+    )
+    .where(
+      and(
+        eq(marketBuyListStatesTable.reported, true),
+      ),
+    );
+  const latestReportedPrice = new Map<string, { marketCycle: number; unitCost: number }>();
+  for (const purchase of reportedPurchases) {
+    if (purchase.marketCycle >= cycle) continue;
+    const current = latestReportedPrice.get(purchase.flower);
+    if (!current || purchase.marketCycle > current.marketCycle) {
+      latestReportedPrice.set(purchase.flower, purchase);
+    }
+  }
+  const estimatedBuyItems = buyItems.map((item) => {
+    const latest = latestReportedPrice.get(item.flower);
+    return latest ? { ...item, lastPrice: latest.unitCost } : item;
+  });
 
   return {
     cycle,
@@ -121,13 +150,66 @@ async function readMarketContext(cycle: number) {
     spend: market.spend,
     revenue: market.revenue,
     margin: market.margin,
-    buyItems,
+    buyItems: estimatedBuyItems,
     buyList,
     actualPurchases,
     bouquetPlan,
     closeMarket,
   };
 }
+
+router.get("/markets/flower-prices", async (_req, res): Promise<void> => {
+  const reportedPurchases = await db
+    .select({
+      marketCycle: marketActualPurchasesTable.marketCycle,
+      flower: marketActualPurchasesTable.flower,
+      category: marketActualPurchasesTable.category,
+      unitCost: marketActualPurchasesTable.unitCost,
+    })
+    .from(marketActualPurchasesTable)
+    .innerJoin(
+      marketBuyListStatesTable,
+      eq(marketBuyListStatesTable.marketCycle, marketActualPurchasesTable.marketCycle),
+    )
+    .where(eq(marketBuyListStatesTable.reported, true));
+
+  const byFlower = new Map<string, {
+    flower: string;
+    category: string;
+    history: Array<{ marketCycle: number; date: string; unitCost: number }>;
+  }>();
+  for (const purchase of reportedPurchases) {
+    const existing = byFlower.get(purchase.flower) ?? {
+      flower: purchase.flower,
+      category: purchase.category,
+      history: [],
+    };
+    existing.history.push({
+      marketCycle: purchase.marketCycle,
+      date: formatScheduledMarketDate(purchase.marketCycle),
+      unitCost: purchase.unitCost,
+    });
+    byFlower.set(purchase.flower, existing);
+  }
+
+  const history = Array.from(byFlower.values()).map((entry) => {
+    entry.history.sort((a, b) => b.marketCycle - a.marketCycle);
+    const [latest, previous] = entry.history;
+    const change = previous ? latest.unitCost - previous.unitCost : null;
+    const changePercent = previous && previous.unitCost !== 0
+      ? (change! / previous.unitCost) * 100
+      : null;
+    return {
+      ...entry,
+      latest,
+      previous: previous ?? null,
+      change,
+      changePercent,
+    };
+  }).sort((a, b) => a.flower.localeCompare(b.flower));
+
+  res.json(ListFlowerPricesResponse.parse(history));
+});
 
 router.get("/markets", async (_req, res): Promise<void> => {
   for (const market of seededMarkets) {

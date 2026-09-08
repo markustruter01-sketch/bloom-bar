@@ -8,11 +8,13 @@ import {
   buyItemsTable,
   closeMarketsTable,
   db,
+  marketActualPurchasesTable,
+  marketBuyListStatesTable,
   marketsTable,
   pool,
 } from "@workspace/db";
 
-const testCycles = [9001, 9002];
+const testCycles = [9001, 9002, 9003];
 
 let server: Server;
 let baseUrl: string;
@@ -39,6 +41,8 @@ async function request(path: string, init?: RequestInit): Promise<ApiResult> {
 
 async function resetTestCycles() {
   await db.transaction(async (tx) => {
+    await tx.delete(marketActualPurchasesTable).where(inArray(marketActualPurchasesTable.marketCycle, testCycles));
+    await tx.delete(marketBuyListStatesTable).where(inArray(marketBuyListStatesTable.marketCycle, testCycles));
     await tx.delete(buyItemsTable).where(inArray(buyItemsTable.marketCycle, testCycles));
     await tx.delete(bouquetPlansTable).where(inArray(bouquetPlansTable.marketCycle, testCycles));
     await tx.delete(closeMarketsTable).where(inArray(closeMarketsTable.marketCycle, testCycles));
@@ -141,6 +145,56 @@ describe("market context persistence", () => {
 
     const otherCycleReloaded = await getContext(testCycles[1]);
     assert.deepEqual(otherCycleReloaded, otherCycleInitial);
+  });
+
+  it("tracks reported flower prices and uses the latest report for future estimates", async () => {
+    for (const [cycle, unitCost] of [[9001, 24], [9002, 25]] as const) {
+      const context = await getContext(cycle);
+      const lock = await patch(`/markets/context/${cycle}/buy-list`, { locked: true });
+      assert.equal(lock.status, 200);
+
+      const saved = await request(`/markets/context/${cycle}/actual-purchases`, {
+        method: "PUT",
+        body: JSON.stringify({
+          purchases: [{
+            flower: "Lisianthus",
+            detail: "White · classic blooms",
+            category: "Classic Blooms",
+            stems: 4,
+            unitCost,
+            source: "manual",
+          }],
+        }),
+      });
+      assert.equal(saved.status, 200);
+      assert.equal(saved.body.purchases[0].unitCost, unitCost);
+
+      const report = await request(`/markets/context/${cycle}/report-purchases`, { method: "POST" });
+      assert.equal(report.status, 200);
+      assert.equal(report.body.reported, true);
+      assert.equal(
+        context.buyItems.find((item: any) => item.flower === "Lisianthus")?.lastPrice,
+        cycle === 9001 ? 18.5 : 24,
+      );
+    }
+
+    const prices = await request("/markets/flower-prices");
+    assert.equal(prices.status, 200);
+    const lisianthus = prices.body.find((price: any) => price.flower === "Lisianthus");
+    assert.ok(lisianthus);
+    assert.equal(lisianthus.latest.marketCycle, 9002);
+    assert.equal(lisianthus.latest.unitCost, 25);
+    assert.equal(lisianthus.previous.marketCycle, 9001);
+    assert.equal(lisianthus.previous.unitCost, 24);
+    assert.equal(lisianthus.change, 1);
+    assert.equal(lisianthus.changePercent, (1 / 24) * 100);
+    assert.deepEqual(lisianthus.history.map((point: any) => point.marketCycle), [9002, 9001]);
+
+    const futureContext = await getContext(9003);
+    assert.equal(
+      futureContext.buyItems.find((item: any) => item.flower === "Lisianthus")?.lastPrice,
+      25,
+    );
   });
 
   it("rejects invalid cycles and item updates without changing saved data", async () => {

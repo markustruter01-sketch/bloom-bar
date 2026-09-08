@@ -21,6 +21,8 @@ export * from './closeMarket';
 export * from './closeMarketCounts';
 export * from './closeMarketUpdate';
 export * from './closeMarketUpdateCounts';
+export * from './flowerPriceHistory';
+export * from './flowerPricePoint';
 export * from './healthStatus';
 export * from './market';
 export * from './marketBuyListState';

@@ -33,6 +33,42 @@ export const ListMarketsResponse = zod.array(ListMarketsResponseItem)
 
 
 /**
+ * Returns actual unit costs from completed Buy List Reports, grouped by flower.
+ * @summary List reported flower price history
+ */
+export const listFlowerPricesResponseLatestUnitCostMin = 0;
+
+export const listFlowerPricesResponsePreviousOneUnitCostMin = 0;
+
+export const listFlowerPricesResponseHistoryItemUnitCostMin = 0;
+
+
+
+export const ListFlowerPricesResponseItem = zod.object({
+  "flower": zod.string(),
+  "category": zod.string(),
+  "latest": zod.object({
+  "marketCycle": zod.number(),
+  "date": zod.string(),
+  "unitCost": zod.number().min(listFlowerPricesResponseLatestUnitCostMin)
+}),
+  "previous": zod.union([zod.object({
+  "marketCycle": zod.number(),
+  "date": zod.string(),
+  "unitCost": zod.number().min(listFlowerPricesResponsePreviousOneUnitCostMin)
+}),zod.null()]),
+  "change": zod.number().nullable(),
+  "changePercent": zod.number().nullable(),
+  "history": zod.array(zod.object({
+  "marketCycle": zod.number(),
+  "date": zod.string(),
+  "unitCost": zod.number().min(listFlowerPricesResponseHistoryItemUnitCostMin)
+}))
+})
+export const ListFlowerPricesResponse = zod.array(ListFlowerPricesResponseItem)
+
+
+/**
  * @summary Get the saved context for a scheduled market cycle
  */
 export const GetMarketContextParams = zod.object({
