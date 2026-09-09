@@ -143,4 +143,21 @@ describe('UTC day rollover', () => {
     assert.equal(setTimeoutCalls, 2);
     assert.equal(clearTimeoutCalls, 1);
   });
+
+  it('reconciles the UTC day when a suspended tab becomes active', async () => {
+    installClock('2026-09-13T23:30:00.000Z');
+    const summaryChanges: string[] = [];
+    render(<RolloverProbe revision={0} summaryChanges={summaryChanges} />);
+
+    assert.equal(screen.getByTestId('market-summary').textContent, 'Sunday 13 Sep');
+
+    nowMs = realDate.parse('2026-09-15T08:00:00.000Z');
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    assert.equal(screen.getByTestId('market-summary').textContent, 'Sunday 27 Sep');
+    assert.deepEqual(summaryChanges, ['0:Sunday 13 Sep', '1:Sunday 27 Sep']);
+    assert.equal(timers.length, 1);
+  });
 });

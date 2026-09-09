@@ -684,6 +684,10 @@ export function useUtcDayRollover() {
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
+    const reconcileUtcDay = () => {
+      const currentUtcDay = getUtcDayKey(new Date());
+      setUtcDay((previousUtcDay) => previousUtcDay === currentUtcDay ? previousUtcDay : currentUtcDay);
+    };
     const scheduleRollover = () => {
       timer = setTimeout(() => {
         const currentUtcDay = getUtcDayKey(new Date());
@@ -695,8 +699,16 @@ export function useUtcDayRollover() {
       }, millisecondsUntilNextUtcDay(new Date()));
     };
 
+    window.addEventListener('focus', reconcileUtcDay);
+    window.addEventListener('pageshow', reconcileUtcDay);
+    document.addEventListener('visibilitychange', reconcileUtcDay);
     scheduleRollover();
-    return () => clearTimeout(timer);
+    return () => {
+      window.removeEventListener('focus', reconcileUtcDay);
+      window.removeEventListener('pageshow', reconcileUtcDay);
+      document.removeEventListener('visibilitychange', reconcileUtcDay);
+      clearTimeout(timer);
+    };
   }, [utcDay]);
 
   return utcDay;
@@ -710,6 +722,27 @@ function AppContent() {
   const marketContextQuery = useGetMarketContext(nextMarketCycle);
   const marketsQuery = useListMarkets();
   const flowerPricesQuery = useListFlowerPrices();
+  useEffect(() => {
+    const refreshMarketData = () => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetMarketContextQueryKey(nextMarketCycle) }),
+        queryClient.invalidateQueries({ queryKey: getListMarketsQueryKey() }),
+      ]);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshMarketData();
+    };
+
+    window.addEventListener('focus', refreshMarketData);
+    window.addEventListener('pageshow', refreshMarketData);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('focus', refreshMarketData);
+      window.removeEventListener('pageshow', refreshMarketData);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [nextMarketCycle]);
+
   const buyItemMutation = useUpdateMarketBuyItem();
   const buyListMutation = useUpdateMarketBuyList();
   const actualPurchasesMutation = useReplaceMarketActualPurchases();
