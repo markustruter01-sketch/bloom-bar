@@ -329,7 +329,21 @@ function Dashboard({ buyItems, markets, nextMarket }: { buyItems: BuyItem[]; mar
   </div>;
 }
 
-function FlowerPriceTracker({ prices, isLoading }: { prices: FlowerPriceHistory[]; isLoading: boolean }) {
+export function FlowerPriceTracker({ prices, isLoading }: { prices: FlowerPriceHistory[]; isLoading: boolean }) {
+  const [expandedFlowers, setExpandedFlowers] = useState<Set<string>>(() => new Set());
+
+  const toggleHistory = (flower: string) => {
+    setExpandedFlowers((current) => {
+      const next = new Set(current);
+      if (next.has(flower)) {
+        next.delete(flower);
+      } else {
+        next.add(flower);
+      }
+      return next;
+    });
+  };
+
   return <section className="mb-8 rounded-lg border border-primary/15 bg-[#e8e4cd] p-5 md:p-6" data-testid="section-flower-price-tracker">
     <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
       <div>
@@ -342,12 +356,44 @@ function FlowerPriceTracker({ prices, isLoading }: { prices: FlowerPriceHistory[
     {isLoading ? <p className="mt-5 rounded-md bg-primary/5 px-4 py-3 text-xs text-primary/65" role="status">Loading reported prices…</p> : prices.length === 0 ? <p className="mt-5 rounded-md bg-primary/5 px-4 py-3 text-xs text-primary/65">Complete a Buy List Report to start building price history.</p> : <div className="mt-5 overflow-hidden rounded-md border border-primary/10 bg-card">
       <div className="hidden grid-cols-[1.35fr_1fr_1fr_1fr] border-b border-foreground/10 bg-muted/55 px-4 py-3 font-mono text-[9px] uppercase tracking-[.14em] text-muted-foreground md:grid"><span>Flower</span><span>Latest</span><span>Previous</span><span>Movement</span></div>
       {prices.map((price) => {
+        const flowerKey = price.flower.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const historyPanelId = `flower-price-history-${flowerKey}`;
+        const isExpanded = expandedFlowers.has(price.flower);
         const changeLabel = price.change === null ? 'New' : `${price.change >= 0 ? '+' : ''}${unitMoney(price.change)}${price.changePercent === null ? '' : ` (${price.changePercent >= 0 ? '+' : ''}${price.changePercent.toFixed(1)}%)`}`;
-        return <div key={price.flower} data-testid={`row-flower-price-${price.flower.toLowerCase().replaceAll(' ', '-')}`} className="grid gap-3 border-b border-foreground/10 px-4 py-4 last:border-0 md:grid-cols-[1.35fr_1fr_1fr_1fr] md:items-center">
-          <div><span className="block text-sm font-semibold">{price.flower}</span><span className="mt-1 block text-[11px] text-muted-foreground">{price.category}</span></div>
+        return <div key={price.flower} data-testid={`row-flower-price-${flowerKey}`} className="grid gap-3 border-b border-foreground/10 px-4 py-4 last:border-0 md:grid-cols-[1.35fr_1fr_1fr_1fr] md:items-center">
+          <div>
+            <span className="block text-sm font-semibold">{price.flower}</span>
+            <span className="mt-1 block text-[11px] text-muted-foreground">{price.category}</span>
+            <button
+              type="button"
+              aria-expanded={isExpanded}
+              aria-controls={historyPanelId}
+              data-testid={`button-toggle-flower-history-${flowerKey}`}
+              onClick={() => toggleHistory(price.flower)}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-sm text-[11px] font-semibold text-primary underline decoration-primary/30 underline-offset-4 transition-colors hover:text-primary/70"
+            >
+              {isExpanded ? 'Hide full history' : 'View full history'}
+              <ChevronDown size={13} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
           <div><span className="block font-mono text-sm">{unitMoney(price.latest.unitCost)}</span><span className="mt-1 block text-[11px] text-muted-foreground">{price.latest.date}</span></div>
           <div><span className="block font-mono text-sm">{price.previous ? unitMoney(price.previous.unitCost) : '—'}</span><span className="mt-1 block text-[11px] text-muted-foreground">{price.previous ? price.previous.date : 'No previous report'}</span></div>
           <div className={price.change === null ? 'text-xs text-muted-foreground' : price.change > 0 ? 'text-xs font-semibold text-[#a65e4f]' : price.change < 0 ? 'text-xs font-semibold text-[#64804e]' : 'text-xs font-semibold text-muted-foreground'}>{changeLabel}</div>
+          {isExpanded && <div id={historyPanelId} data-testid={`panel-flower-history-${flowerKey}`} className="col-span-full rounded-md border border-primary/10 bg-primary/[.035] p-3 md:p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="font-mono text-[10px] uppercase tracking-[.14em] text-primary/70">Full reported history</h3>
+              <span className="font-mono text-[10px] text-muted-foreground">{price.history.length} report{price.history.length === 1 ? '' : 's'}</span>
+            </div>
+            <div className="mt-3 divide-y divide-foreground/10 rounded border border-foreground/10 bg-card">
+              {price.history.map((point: { marketCycle: number; date: string; unitCost: number }, index: number) => <div key={`${point.marketCycle}-${point.date}`} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-2.5 text-xs">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="font-semibold">{point.date}</span>
+                  {index === 0 && <span className="rounded-full bg-[#dce3c2] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-primary">Latest</span>}
+                </span>
+                <span className="font-mono font-semibold text-primary">{unitMoney(point.unitCost)} / unit</span>
+              </div>)}
+            </div>
+          </div>}
         </div>;
       })}
     </div>}

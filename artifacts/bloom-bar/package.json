@@ -7,7 +7,7 @@
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
-    "test": "tsx --test src/lib/market-schedule.test.ts src/lib/market-cycle-banner.test.tsx src/planning-save-pages.test.tsx src/utc-day-rollover.test.tsx",
+    "test": "tsx --test src/lib/market-schedule.test.ts src/lib/market-cycle-banner.test.tsx src/planning-save-pages.test.tsx src/flower-price-tracker.test.tsx src/utc-day-rollover.test.tsx",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
