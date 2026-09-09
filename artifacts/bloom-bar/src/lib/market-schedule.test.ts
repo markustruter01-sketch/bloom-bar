@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
   daysUntilMarket,
+  formatMarketDate,
+  formatMarketDay,
   getMarketCycleSummary,
   getMarketDate,
   getMarketStatus,
@@ -66,6 +68,32 @@ describe('market schedule Sunday invariant', () => {
       const difference = getMarketDate(cycle + 1).getTime() - getMarketDate(cycle).getTime();
 
       assert.equal(difference, 14 * MILLISECONDS_IN_DAY);
+    }
+  });
+});
+
+describe('market date formatting', () => {
+  it('keeps canonical UTC dates around spring-forward and fall-back transitions', () => {
+    const transitionAdjacentMarketDates = [
+      {
+        date: new Date('2026-03-15T00:00:00.000Z'),
+        full: 'Sunday · 15 March 2026',
+        short: 'Sunday 15 Mar',
+        table: '15 Mar 2026',
+      },
+      {
+        date: new Date('2026-11-08T00:00:00.000Z'),
+        full: 'Sunday · 8 November 2026',
+        short: 'Sunday 8 Nov',
+        table: '08 Nov 2026',
+      },
+    ];
+
+    for (const { date, full, short, table } of transitionAdjacentMarketDates) {
+      assert.equal(formatMarketDate(date, 'full'), full);
+      assert.equal(formatMarketDate(date, 'short'), short);
+      assert.equal(formatMarketDate(date, 'table'), table);
+      assert.equal(formatMarketDay(date), 'Sunday');
     }
   });
 });
