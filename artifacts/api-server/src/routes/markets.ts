@@ -9,6 +9,7 @@ import {
   marketBuyListStatesTable,
   marketCostsTable,
   marketsTable,
+  marketScheduleOverridesTable,
   flowerCategories,
 } from "@workspace/db";
 import {
@@ -37,9 +38,19 @@ import {
   UpdateMarketCloseBody,
   UpdateMarketCloseParams,
   UpdateMarketCloseResponse,
+  ListMarketScheduleOverridesResponse,
+  UpsertMarketScheduleOverrideBody,
+  UpsertMarketScheduleOverrideParams,
+  UpsertMarketScheduleOverrideResponse,
+  DeleteMarketScheduleOverrideParams,
 } from "@workspace/api-zod";
 import type { FlowerCategory, SellThroughRecord } from "@workspace/db";
-import { formatScheduledMarketDate, getScheduledMarketDate } from "../lib/market-schedule";
+import {
+  formatScheduledMarketDate,
+  getScheduledMarketDate,
+  isSkippedMarketCycle,
+  type MarketScheduleOverride as ScheduleOverride,
+} from "../lib/market-schedule";
 
 const router: IRouter = Router();
 
@@ -168,6 +179,24 @@ function parseCycles(raw: unknown): number[] | null {
   return cycles.length ? cycles : null;
 }
 
+async function readScheduleOverrides(): Promise<ScheduleOverride[]> {
+  const overrides = await db
+    .select()
+    .from(marketScheduleOverridesTable)
+    .orderBy(marketScheduleOverridesTable.marketCycle);
+  return overrides.map((override) => ({
+    marketCycle: override.marketCycle,
+    status: override.status,
+    rescheduledDate: override.rescheduledDate,
+  }));
+}
+
+function isValidIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 async function ensureMarketContext(cycle: number) {
   await db.transaction(async (tx) => {
     for (const market of seededMarkets) {
@@ -250,6 +279,7 @@ async function recalculateMarketTotals(cycle: number, tx: any, previousCostTotal
 
 async function readMarketContext(cycle: number) {
   await ensureMarketContext(cycle);
+  const overrides = await readScheduleOverrides();
   const [market] = await db.select().from(marketsTable).where(eq(marketsTable.cycle, cycle));
   const buyItems = await db.select().from(buyItemsTable).where(eq(buyItemsTable.marketCycle, cycle)).orderBy(buyItemsTable.id);
   const [buyList] = await db.select().from(marketBuyListStatesTable).where(eq(marketBuyListStatesTable.marketCycle, cycle));
@@ -281,7 +311,7 @@ async function readMarketContext(cycle: number) {
     );
   const latestReportedPrice = new Map<string, { marketCycle: number; pricePerBunch: number }>();
   for (const purchase of reportedPurchases) {
-    if (purchase.marketCycle >= cycle) continue;
+    if (purchase.marketCycle >= cycle || isSkippedMarketCycle(purchase.marketCycle, overrides)) continue;
     const current = latestReportedPrice.get(purchase.flower);
     if (!current || purchase.marketCycle > current.marketCycle) {
       latestReportedPrice.set(purchase.flower, purchase);
@@ -296,7 +326,7 @@ async function readMarketContext(cycle: number) {
         ? {
             kind: "reported" as const,
             marketCycle: latest.marketCycle,
-            date: formatScheduledMarketDate(latest.marketCycle),
+            date: formatScheduledMarketDate(latest.marketCycle, overrides),
           }
         : {
             kind: "fallback" as const,
@@ -308,7 +338,7 @@ async function readMarketContext(cycle: number) {
 
   return {
     cycle,
-    date: getScheduledMarketDate(cycle),
+    date: getScheduledMarketDate(cycle, overrides),
     venue: market.venue,
     spend: market.spend,
     revenue: market.revenue,
@@ -322,7 +352,53 @@ async function readMarketContext(cycle: number) {
   };
 }
 
+router.get("/markets/schedule/overrides", async (_req, res): Promise<void> => {
+  res.json(ListMarketScheduleOverridesResponse.parse(await readScheduleOverrides()));
+});
+
+router.put("/markets/schedule/overrides/:cycle", async (req, res): Promise<void> => {
+  const params = UpsertMarketScheduleOverrideParams.safeParse(req.params);
+  const body = UpsertMarketScheduleOverrideBody.safeParse(req.body);
+  const rescheduledDate = body.success && body.data.status === "rescheduled"
+    ? body.data.rescheduledDate
+    : null;
+  if (
+    !params.success ||
+    !Number.isInteger(params.data.cycle) ||
+    !body.success ||
+    (body.data.status === "rescheduled" && (!rescheduledDate || !isValidIsoDate(rescheduledDate)))
+  ) {
+    res.status(400).json({ error: "Provide a valid market cycle and rescheduled date." });
+    return;
+  }
+
+  const [override] = await db
+    .insert(marketScheduleOverridesTable)
+    .values({
+      marketCycle: params.data.cycle,
+      status: body.data.status,
+      rescheduledDate,
+    })
+    .onConflictDoUpdate({
+      target: marketScheduleOverridesTable.marketCycle,
+      set: { status: body.data.status, rescheduledDate },
+    })
+    .returning();
+  res.json(UpsertMarketScheduleOverrideResponse.parse(override));
+});
+
+router.delete("/markets/schedule/overrides/:cycle", async (req, res): Promise<void> => {
+  const params = DeleteMarketScheduleOverrideParams.safeParse(req.params);
+  if (!params.success || !Number.isInteger(params.data.cycle)) {
+    res.status(400).json({ error: "Market cycle must be an integer." });
+    return;
+  }
+  await db.delete(marketScheduleOverridesTable).where(eq(marketScheduleOverridesTable.marketCycle, params.data.cycle));
+  res.status(204).send();
+});
+
 router.get("/markets/flower-prices", async (_req, res): Promise<void> => {
+  const overrides = await readScheduleOverrides();
   const reportedPurchases = await db
     .select({
       marketCycle: marketActualPurchasesTable.marketCycle,
@@ -343,7 +419,7 @@ router.get("/markets/flower-prices", async (_req, res): Promise<void> => {
     category: string;
     history: Array<{ marketCycle: number; date: string; pricePerBunch: number; costPerStem: number; unitCost: number }>;
   }>();
-  for (const purchase of reportedPurchases) {
+  for (const purchase of reportedPurchases.filter((purchase) => !isSkippedMarketCycle(purchase.marketCycle, overrides))) {
     const existing = byFlower.get(purchase.flower) ?? {
       flower: purchase.flower,
       category: purchase.category,
@@ -351,7 +427,7 @@ router.get("/markets/flower-prices", async (_req, res): Promise<void> => {
     };
     existing.history.push({
       marketCycle: purchase.marketCycle,
-      date: formatScheduledMarketDate(purchase.marketCycle),
+      date: formatScheduledMarketDate(purchase.marketCycle, overrides),
       pricePerBunch: purchase.pricePerBunch,
       costPerStem: purchase.costPerStem ?? 0,
       unitCost: purchase.pricePerBunch,
@@ -383,6 +459,7 @@ router.get("/markets", async (_req, res): Promise<void> => {
     await db.insert(marketsTable).values(market).onConflictDoNothing({ target: marketsTable.cycle });
   }
   const markets = await db.select().from(marketsTable).orderBy(marketsTable.cycle);
+  const overrides = await readScheduleOverrides();
   const marketCycles = markets.map((market) => market.cycle);
   const [closeRecords, costRecords, purchaseRecords] = marketCycles.length
     ? await Promise.all([
@@ -421,7 +498,7 @@ router.get("/markets", async (_req, res): Promise<void> => {
   }
   res.json(ListMarketsResponse.parse(markets.map((market) => ({
     ...market,
-    date: formatScheduledMarketDate(market.cycle),
+    date: formatScheduledMarketDate(market.cycle, overrides),
     closed: closedByCycle.get(market.cycle) ?? false,
     flowerSpend: purchaseRecords.some((purchase) => purchase.marketCycle === market.cycle)
       ? flowerSpendByCycle.get(market.cycle) ?? 0
@@ -434,6 +511,12 @@ router.get("/markets/sell-through", async (req, res): Promise<void> => {
   const cycles = parseCycles(req.query.cycles);
   if (!cycles) {
     res.status(400).json({ error: "Select at least one completed market cycle." });
+    return;
+  }
+
+  const overrides = await readScheduleOverrides();
+  if (cycles.some((cycle) => isSkippedMarketCycle(cycle, overrides))) {
+    res.status(400).json({ error: "Skipped market cycles are not available for sell-through comparisons." });
     return;
   }
 
@@ -477,7 +560,7 @@ router.get("/markets/sell-through", async (req, res): Promise<void> => {
       const market = marketByCycle.get(cycle)!;
       return {
         cycle,
-        date: formatScheduledMarketDate(cycle),
+        date: formatScheduledMarketDate(cycle, overrides),
         venue: market.venue,
       };
     }),

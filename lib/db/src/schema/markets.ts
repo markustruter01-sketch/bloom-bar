@@ -55,6 +55,21 @@ export const marketsTable = pgTable(
   (table) => ({ cycleUnique: unique("markets_cycle_unique").on(table.cycle) }),
 );
 
+export const marketScheduleOverridesTable = pgTable(
+  "market_schedule_overrides",
+  {
+    marketCycle: integer("market_cycle").primaryKey(),
+    status: text("status", { enum: ["skipped", "rescheduled"] }).notNull(),
+    rescheduledDate: text("rescheduled_date"),
+  },
+  (table) => ({
+    statusDatePair: check(
+      "market_schedule_overrides_status_date_pair",
+      sql`("status" = 'skipped' AND "rescheduled_date" IS NULL) OR ("status" = 'rescheduled' AND "rescheduled_date" IS NOT NULL)`,
+    ),
+  }),
+);
+
 export const buyItemsTable = pgTable("market_buy_items", {
   id: serial("id").primaryKey(),
   marketCycle: integer("market_cycle")
@@ -140,6 +155,7 @@ export const closeMarketsTable = pgTable("market_close_records", {
 });
 
 export const insertMarketSchema = createInsertSchema(marketsTable).omit({ id: true });
+export const insertMarketScheduleOverrideSchema = createInsertSchema(marketScheduleOverridesTable);
 export const insertBuyItemSchema = createInsertSchema(buyItemsTable).omit({ id: true });
 export const insertMarketBuyListStateSchema = createInsertSchema(marketBuyListStatesTable);
 export const insertMarketActualPurchaseSchema = createInsertSchema(marketActualPurchasesTable).omit({ id: true });
@@ -148,6 +164,7 @@ export const insertBouquetPlanSchema = createInsertSchema(bouquetPlansTable);
 export const insertCloseMarketSchema = createInsertSchema(closeMarketsTable);
 
 export type InsertMarket = z.infer<typeof insertMarketSchema>;
+export type InsertMarketScheduleOverride = z.infer<typeof insertMarketScheduleOverrideSchema>;
 export type InsertBuyItem = z.infer<typeof insertBuyItemSchema>;
 export type InsertMarketBuyListState = z.infer<typeof insertMarketBuyListStateSchema>;
 export type InsertMarketActualPurchase = z.infer<typeof insertMarketActualPurchaseSchema>;
@@ -155,6 +172,7 @@ export type InsertMarketCost = z.infer<typeof insertMarketCostSchema>;
 export type InsertBouquetPlan = z.infer<typeof insertBouquetPlanSchema>;
 export type InsertCloseMarket = z.infer<typeof insertCloseMarketSchema>;
 export type Market = typeof marketsTable.$inferSelect;
+export type MarketScheduleOverride = typeof marketScheduleOverridesTable.$inferSelect;
 export type BuyItem = typeof buyItemsTable.$inferSelect;
 export type MarketBuyListState = typeof marketBuyListStatesTable.$inferSelect;
 export type MarketActualPurchase = typeof marketActualPurchasesTable.$inferSelect;

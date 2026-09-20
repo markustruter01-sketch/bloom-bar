@@ -11,6 +11,7 @@ import {
   marketActualPurchasesTable,
   marketBuyListStatesTable,
   marketCostsTable,
+  marketScheduleOverridesTable,
   marketsTable,
   pool,
 } from "@workspace/db";
@@ -48,6 +49,7 @@ async function resetTestCycles() {
     await tx.delete(buyItemsTable).where(inArray(buyItemsTable.marketCycle, testCycles));
     await tx.delete(bouquetPlansTable).where(inArray(bouquetPlansTable.marketCycle, testCycles));
     await tx.delete(closeMarketsTable).where(inArray(closeMarketsTable.marketCycle, testCycles));
+    await tx.delete(marketScheduleOverridesTable).where(inArray(marketScheduleOverridesTable.marketCycle, testCycles));
     await tx.delete(marketsTable).where(inArray(marketsTable.cycle, testCycles));
   });
 }
@@ -89,6 +91,53 @@ after(async () => {
 });
 
 describe("market context persistence", () => {
+  it("persists a skipped date and keeps downstream comparisons from treating it as real", async () => {
+    const cycle = testCycles[0];
+    await getContext(cycle);
+    await db.update(closeMarketsTable).set({ closed: true }).where(eq(closeMarketsTable.marketCycle, cycle));
+
+    const saved = await request(`/markets/schedule/overrides/${cycle}`, {
+      method: "PUT",
+      body: JSON.stringify({ status: "skipped", rescheduledDate: null }),
+    });
+    assert.equal(saved.status, 200);
+    assert.deepEqual(saved.body, {
+      marketCycle: cycle,
+      status: "skipped",
+      rescheduledDate: null,
+    });
+
+    const listed = await request("/markets/schedule/overrides");
+    assert.equal(listed.status, 200);
+    assert.deepEqual(listed.body, [saved.body]);
+
+    const comparison = await request(`/markets/sell-through?cycles=${cycle}`);
+    assert.equal(comparison.status, 400);
+    assert.match(comparison.body.error, /Skipped market cycles/);
+
+    const lock = await patch(`/markets/context/${cycle}/buy-list`, { locked: true });
+    assert.equal(lock.status, 200);
+    const purchases = await request(`/markets/context/${cycle}/actual-purchases`, {
+      method: "PUT",
+      body: JSON.stringify({
+        purchases: [{
+          flower: "Lisianthus",
+          detail: "Skipped-cycle price sample",
+          category: "Classic Blooms",
+          stems: 4,
+          unitCost: 99,
+          source: "manual",
+        }],
+      }),
+    });
+    assert.equal(purchases.status, 200);
+    const report = await request(`/markets/context/${cycle}/report-purchases`, { method: "POST" });
+    assert.equal(report.status, 200);
+    const prices = await request("/markets/flower-prices");
+    assert.equal(prices.status, 200);
+    assert.equal(prices.body.some((entry: { history: Array<{ marketCycle: number }> }) => entry.history.some((point) => point.marketCycle === cycle)), false);
+  });
+
   it("stores multiple bunch-based supplier lines for the same flower and calculates totals", async () => {
     const cycle = testCycles[2];
     await getContext(cycle);
@@ -361,7 +410,7 @@ describe("market context persistence", () => {
         initialLisianthus?.priceSource,
         cycle === 9001
           ? { kind: "fallback", marketCycle: null, date: null }
-          : { kind: "reported", marketCycle: 9001, date: "19 Sep 2371" },
+          : { kind: "reported", marketCycle: 9001, date: "05 Sep 2371" },
       );
 
       const saved = await request(`/markets/context/${cycle}/actual-purchases`, {
@@ -407,7 +456,7 @@ describe("market context persistence", () => {
     assert.deepEqual(futureLisianthus?.priceSource, {
       kind: "reported",
       marketCycle: 9002,
-      date: "03 Oct 2371",
+      date: "19 Sep 2371",
     });
   });
 

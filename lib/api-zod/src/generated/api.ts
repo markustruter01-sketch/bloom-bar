@@ -47,6 +47,46 @@ export const ListMarketsResponse = zod.array(ListMarketsResponseItem)
 
 
 /**
+ * @summary List market schedule overrides
+ */
+export const ListMarketScheduleOverridesResponseItem = zod.object({
+  "marketCycle": zod.number(),
+  "status": zod.enum(['skipped', 'rescheduled']),
+  "rescheduledDate": zod.string().nullable()
+})
+export const ListMarketScheduleOverridesResponse = zod.array(ListMarketScheduleOverridesResponseItem)
+
+
+/**
+ * @summary Skip or reschedule a calculated market date
+ */
+export const UpsertMarketScheduleOverrideParams = zod.object({
+  "cycle": zod.coerce.number()
+})
+
+export const UpsertMarketScheduleOverrideBody = zod.object({
+  "status": zod.enum(['skipped', 'rescheduled']),
+  "rescheduledDate": zod.string().nullish()
+})
+
+export const UpsertMarketScheduleOverrideResponse = zod.object({
+  "marketCycle": zod.number(),
+  "status": zod.enum(['skipped', 'rescheduled']),
+  "rescheduledDate": zod.string().nullable()
+})
+
+
+/**
+ * @summary Remove a market schedule override
+ */
+export const DeleteMarketScheduleOverrideParams = zod.object({
+  "cycle": zod.coerce.number()
+})
+
+export const DeleteMarketScheduleOverrideResponse = zod.void()
+
+
+/**
  * @summary Compare sell-through across completed market cycles
  */
 

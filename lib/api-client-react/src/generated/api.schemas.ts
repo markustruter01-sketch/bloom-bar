@@ -42,6 +42,33 @@ export interface Market {
   closed: boolean;
 }
 
+export type MarketScheduleOverrideStatus = typeof MarketScheduleOverrideStatus[keyof typeof MarketScheduleOverrideStatus];
+
+
+export const MarketScheduleOverrideStatus = {
+  skipped: 'skipped',
+  rescheduled: 'rescheduled',
+} as const;
+
+export interface MarketScheduleOverride {
+  marketCycle: number;
+  status: MarketScheduleOverrideStatus;
+  rescheduledDate: string | null;
+}
+
+export type MarketScheduleOverrideUpdateStatus = typeof MarketScheduleOverrideUpdateStatus[keyof typeof MarketScheduleOverrideUpdateStatus];
+
+
+export const MarketScheduleOverrideUpdateStatus = {
+  skipped: 'skipped',
+  rescheduled: 'rescheduled',
+} as const;
+
+export interface MarketScheduleOverrideUpdate {
+  status: MarketScheduleOverrideUpdateStatus;
+  rescheduledDate?: string | null;
+}
+
 export type BuyItemPriceSourceKind = typeof BuyItemPriceSourceKind[keyof typeof BuyItemPriceSourceKind];
 
 

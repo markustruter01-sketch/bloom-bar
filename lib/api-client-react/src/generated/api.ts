@@ -37,6 +37,8 @@ import type {
   MarketContext,
   MarketCostsResponse,
   MarketCostsUpdate,
+  MarketScheduleOverride,
+  MarketScheduleOverrideUpdate,
   SellThroughComparison
 } from './api.schemas';
 
@@ -221,6 +223,226 @@ export function useListMarkets<TData = Awaited<ReturnType<typeof listMarkets>>, 
 
 
 
+
+export const getListMarketScheduleOverridesUrl = () => {
+
+
+
+
+  return `/api/markets/schedule/overrides`
+}
+
+/**
+ * @summary List market schedule overrides
+ */
+export const listMarketScheduleOverrides = async ( options?: Parameters<typeof customFetch>[1]): Promise<MarketScheduleOverride[]> => {
+
+  return customFetch<MarketScheduleOverride[]>(getListMarketScheduleOverridesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMarketScheduleOverridesQueryKey = () => {
+    return [
+    `/api/markets/schedule/overrides`
+    ] as const;
+    }
+
+
+export const getListMarketScheduleOverridesQueryOptions = <TData = Awaited<ReturnType<typeof listMarketScheduleOverrides>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMarketScheduleOverrides>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMarketScheduleOverridesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMarketScheduleOverrides>>> = ({ signal }) => listMarketScheduleOverrides({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMarketScheduleOverrides>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMarketScheduleOverridesQueryResult = NonNullable<Awaited<ReturnType<typeof listMarketScheduleOverrides>>>
+export type ListMarketScheduleOverridesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List market schedule overrides
+ */
+
+export function useListMarketScheduleOverrides<TData = Awaited<ReturnType<typeof listMarketScheduleOverrides>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMarketScheduleOverrides>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMarketScheduleOverridesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpsertMarketScheduleOverrideUrl = (cycle: number,) => {
+
+
+
+
+  return `/api/markets/schedule/overrides/${cycle}`
+}
+
+/**
+ * @summary Skip or reschedule a calculated market date
+ */
+export const upsertMarketScheduleOverride = async (cycle: number,
+    marketScheduleOverrideUpdate: MarketScheduleOverrideUpdate, options?: Parameters<typeof customFetch>[1]): Promise<MarketScheduleOverride> => {
+
+  return customFetch<MarketScheduleOverride>(getUpsertMarketScheduleOverrideUrl(cycle),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(marketScheduleOverrideUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpsertMarketScheduleOverrideMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertMarketScheduleOverride>>, TError,{cycle: number;data: BodyType<MarketScheduleOverrideUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertMarketScheduleOverride>>, TError,{cycle: number;data: BodyType<MarketScheduleOverrideUpdate>}, TContext> => {
+
+const mutationKey = ['upsertMarketScheduleOverride'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertMarketScheduleOverride>>, {cycle: number;data: BodyType<MarketScheduleOverrideUpdate>}> = (props) => {
+          const {cycle,data} = props ?? {};
+
+          return  upsertMarketScheduleOverride(cycle,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertMarketScheduleOverrideMutationResult = NonNullable<Awaited<ReturnType<typeof upsertMarketScheduleOverride>>>
+    export type UpsertMarketScheduleOverrideMutationBody = BodyType<MarketScheduleOverrideUpdate>
+    export type UpsertMarketScheduleOverrideMutationError = ErrorType<void>
+
+    /**
+ * @summary Skip or reschedule a calculated market date
+ */
+export const useUpsertMarketScheduleOverride = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertMarketScheduleOverride>>, TError,{cycle: number;data: BodyType<MarketScheduleOverrideUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upsertMarketScheduleOverride>>,
+        TError,
+        {cycle: number;data: BodyType<MarketScheduleOverrideUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpsertMarketScheduleOverrideMutationOptions(options));
+    }
+
+export const getDeleteMarketScheduleOverrideUrl = (cycle: number,) => {
+
+
+
+
+  return `/api/markets/schedule/overrides/${cycle}`
+}
+
+/**
+ * @summary Remove a market schedule override
+ */
+export const deleteMarketScheduleOverride = async (cycle: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteMarketScheduleOverrideUrl(cycle),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteMarketScheduleOverrideMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMarketScheduleOverride>>, TError,{cycle: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMarketScheduleOverride>>, TError,{cycle: number}, TContext> => {
+
+const mutationKey = ['deleteMarketScheduleOverride'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMarketScheduleOverride>>, {cycle: number}> = (props) => {
+          const {cycle} = props ?? {};
+
+          return  deleteMarketScheduleOverride(cycle,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMarketScheduleOverrideMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMarketScheduleOverride>>>
+
+    export type DeleteMarketScheduleOverrideMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Remove a market schedule override
+ */
+export const useDeleteMarketScheduleOverride = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMarketScheduleOverride>>, TError,{cycle: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMarketScheduleOverride>>,
+        TError,
+        {cycle: number},
+        TContext
+      > => {
+      return useMutation(getDeleteMarketScheduleOverrideMutationOptions(options));
+    }
 
 export const getGetSellThroughComparisonUrl = (params: GetSellThroughComparisonParams,) => {
   const normalizedParams = new URLSearchParams();

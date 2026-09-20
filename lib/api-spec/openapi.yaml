@@ -40,6 +40,51 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Market"
+  /markets/schedule/overrides:
+    get:
+      operationId: listMarketScheduleOverrides
+      tags: [markets]
+      summary: List market schedule overrides
+      responses:
+        "200":
+          description: Saved skipped and rescheduled market dates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MarketScheduleOverride"
+  /markets/schedule/overrides/{cycle}:
+    put:
+      operationId: upsertMarketScheduleOverride
+      tags: [markets]
+      summary: Skip or reschedule a calculated market date
+      parameters:
+        - $ref: "#/components/parameters/MarketCycle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarketScheduleOverrideUpdate"
+      responses:
+        "200":
+          description: Saved market schedule override
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketScheduleOverride"
+        "400":
+          description: Invalid market cycle or rescheduled date
+    delete:
+      operationId: deleteMarketScheduleOverride
+      tags: [markets]
+      summary: Remove a market schedule override
+      parameters:
+        - $ref: "#/components/parameters/MarketCycle"
+      responses:
+        "204":
+          description: Override removed
   /markets/sell-through:
     get:
       operationId: getSellThroughComparison
@@ -291,6 +336,28 @@ components:
           type: number
         closed:
           type: boolean
+    MarketScheduleOverride:
+      type: object
+      required: [marketCycle, status, rescheduledDate]
+      properties:
+        marketCycle:
+          type: number
+        status:
+          type: string
+          enum: [skipped, rescheduled]
+        rescheduledDate:
+          type: string
+          nullable: true
+    MarketScheduleOverrideUpdate:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [skipped, rescheduled]
+        rescheduledDate:
+          type: string
+          nullable: true
     BuyItemPriceSource:
       type: object
       required: [kind, marketCycle, date]

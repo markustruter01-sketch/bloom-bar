@@ -122,14 +122,14 @@ describe('UTC day rollover', () => {
     const view = render(<RolloverProbe revision={0} summaryChanges={summaryChanges} />);
 
     assert.equal(screen.getByTestId('market-summary').textContent, 'Sunday 13 Sep');
-    assert.deepEqual(summaryChanges, ['0:Sunday 13 Sep']);
+     assert.deepEqual(summaryChanges, ['1:Sunday 13 Sep']);
     assert.equal(timers.length, 1);
     assert.equal(setTimeoutCalls, 1);
 
     view.rerender(<RolloverProbe revision={1} summaryChanges={summaryChanges} />);
     view.rerender(<RolloverProbe revision={2} summaryChanges={summaryChanges} />);
     assert.equal(screen.getByTestId('market-summary').getAttribute('data-revision'), '2');
-    assert.deepEqual(summaryChanges, ['0:Sunday 13 Sep']);
+     assert.deepEqual(summaryChanges, ['1:Sunday 13 Sep']);
     assert.equal(timers.length, 1);
     assert.equal(setTimeoutCalls, 1);
 
@@ -138,7 +138,7 @@ describe('UTC day rollover', () => {
     });
 
     assert.equal(screen.getByTestId('market-summary').textContent, 'Sunday 27 Sep');
-    assert.deepEqual(summaryChanges, ['0:Sunday 13 Sep', '1:Sunday 27 Sep']);
+     assert.deepEqual(summaryChanges, ['1:Sunday 13 Sep', '2:Sunday 27 Sep']);
     assert.equal(timers.length, 1);
     assert.equal(setTimeoutCalls, 2);
     assert.equal(clearTimeoutCalls, 1);
@@ -157,7 +157,7 @@ describe('UTC day rollover', () => {
     });
 
     assert.equal(screen.getByTestId('market-summary').textContent, 'Sunday 27 Sep');
-    assert.deepEqual(summaryChanges, ['0:Sunday 13 Sep', '1:Sunday 27 Sep']);
+     assert.deepEqual(summaryChanges, ['1:Sunday 13 Sep', '2:Sunday 27 Sep']);
     assert.equal(timers.length, 1);
   });
 });
