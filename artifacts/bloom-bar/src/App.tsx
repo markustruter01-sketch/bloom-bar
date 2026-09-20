@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   getGetMarketContextQueryKey,
+  getGetSellThroughComparisonQueryKey,
   getListMarketsQueryKey,
+  useGetSellThroughComparison,
   useListFlowerPrices,
   useGetMarketContext,
   useListMarkets,
@@ -429,6 +431,71 @@ function MarketsPage({ markets, nextMarket }: { markets: Market[]; nextMarket: M
   return <div><PageIntro eyebrow="The studio / market history" title="Every Sunday, accounted for." description="A clear view of what the stall costs, what it earns, and what to carry forward." action={<Button onClick={() => window.alert('New markets are ready to add when your market calendar is connected.')} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-add-market"><Plus size={15} /> Add market</Button>} /><div className="mb-4 flex justify-end"><MarketCycleBanner summary={nextMarket} testId="markets-cycle" /></div><div className="mb-6 flex items-center gap-1 border-b border-foreground/10"><button onClick={() => setActiveTab('All markets')} data-testid="tab-all-markets" className={`border-b-2 px-3 py-3 text-xs font-semibold ${activeTab === 'All markets' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}>All markets <span className="ml-1 font-mono text-[10px] opacity-60">{listedMarkets.length}</span></button><button onClick={() => setActiveTab('Upcoming')} data-testid="tab-upcoming-markets" className={`border-b-2 px-3 py-3 text-xs font-semibold ${activeTab === 'Upcoming' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}>Upcoming <span className="ml-1 font-mono text-[10px] opacity-60">{listedMarkets.filter((market) => market.status !== 'Closed').length}</span></button><button onClick={() => setActiveTab('Closed')} data-testid="tab-closed-markets" className={`border-b-2 px-3 py-3 text-xs font-semibold ${activeTab === 'Closed' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}>Closed <span className="ml-1 font-mono text-[10px] opacity-60">{listedMarkets.filter((market) => market.status === 'Closed').length}</span></button></div><div className="grid gap-3 md:grid-cols-3"><MetricCard label="Total revenue" value={money(totalRevenue)} detail={`Across ${markets.length} Redcliffe Sundays`} icon={DollarSign} accent="sage" /><MetricCard label="Average spend" value={money(averageSpend)} detail="Flowers + stall costs" icon={ShoppingBasket} accent="peach" /><MetricCard label="Average margin" value={`${averageMargin.toFixed(1)}%`} detail="A healthy bunch of trade" icon={BarChart3} accent="lilac" /></div><div className="mt-7 overflow-hidden rounded-lg border border-card-border bg-card"><div className="hidden grid-cols-[1.3fr_1.4fr_.8fr_.8fr_.8fr] border-b border-foreground/10 bg-muted/55 px-5 py-3 font-mono text-[9px] uppercase tracking-[.14em] text-muted-foreground md:grid"><span>Market</span><span>Venue</span><span>Spend</span><span>Revenue</span><span>Margin</span></div>{filtered.map((market) => <div key={market.id} data-testid={`row-market-${market.id}`} className="grid gap-3 border-b border-foreground/10 px-4 py-5 last:border-0 md:grid-cols-[1.3fr_1.4fr_.8fr_.8fr_.8fr] md:items-center md:px-5"><div className="flex items-center justify-between md:block"><div className="flex items-center gap-2"><CalendarDays size={15} className="text-muted-foreground" /><span className="text-sm font-semibold">{market.displayDate}</span><span className={`rounded-full px-2 py-1 font-mono text-[9px] uppercase ${market.status === 'Next up' ? 'bg-[#dce3c2] text-primary' : 'bg-muted text-muted-foreground'}`}>{market.status}</span></div><span className="mt-1 block pl-5 text-xs text-muted-foreground md:pl-0">{market.day}</span></div><div className="hidden text-sm text-muted-foreground md:block">{market.venue}</div><div className="grid grid-cols-3 gap-3 border-t border-foreground/10 pt-3 md:contents"><div><span className="block font-mono text-[9px] uppercase text-muted-foreground md:hidden">Spend</span><span className="font-mono text-sm">{money(market.spend)}</span></div><div><span className="block font-mono text-[9px] uppercase text-muted-foreground md:hidden">Revenue</span><span className="font-mono text-sm">{money(market.revenue)}</span></div><div><span className="block font-mono text-[9px] uppercase text-muted-foreground md:hidden">Margin</span><span className="font-mono text-sm text-[#64804e]">{market.margin}%</span></div></div></div>)}</div></div>;
 }
 
+function SellThroughComparisonPanel({ markets }: { markets: Market[] }) {
+  const completedMarkets = useMemo(
+    () => markets.filter((market) => market.closed).sort((a, b) => b.cycle - a.cycle),
+    [markets],
+  );
+  const completedCycleKey = completedMarkets.map((market) => market.cycle).join(',');
+  const [selectedCycles, setSelectedCycles] = useState<number[]>([]);
+
+  useEffect(() => {
+    setSelectedCycles((current) => {
+      const available = new Set(completedMarkets.map((market) => market.cycle));
+      const stillAvailable = current.filter((cycle) => available.has(cycle));
+      return stillAvailable.length ? stillAvailable : completedMarkets.slice(0, 3).map((market) => market.cycle);
+    });
+  }, [completedCycleKey]);
+
+  const comparisonQuery = useGetSellThroughComparison(
+    { cycles: selectedCycles },
+    { query: { enabled: selectedCycles.length > 0, queryKey: getGetSellThroughComparisonQueryKey({ cycles: selectedCycles }) } },
+  );
+  const toggleCycle = (cycle: number) => {
+    setSelectedCycles((current) => current.includes(cycle) ? current.filter((value) => value !== cycle) : [...current, cycle]);
+  };
+  const comparison = comparisonQuery.data;
+  const gridColumns = comparison ? `minmax(150px, 1.2fr) repeat(${comparison.cycles.length}, minmax(130px, 1fr))` : undefined;
+
+  return <section data-testid="panel-sell-through-comparison" className="rounded-lg border border-card-border bg-card p-5 md:p-6">
+    <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div>
+        <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><TrendingUp size={13} /> Across completed markets</div>
+        <h2 className="mt-1 font-serif text-2xl">Compare what moved</h2>
+        <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">Select completed market cycles to see the same flowers side by side. Stem counts keep repeat overbuying easy to spot.</p>
+      </div>
+      <span className="font-mono text-[10px] uppercase tracking-[.12em] text-muted-foreground">{selectedCycles.length} cycle{selectedCycles.length === 1 ? '' : 's'} selected</span>
+    </div>
+    {completedMarkets.length ? <div className="mt-5 flex flex-wrap gap-2" aria-label="Completed market cycles">
+      {completedMarkets.map((market) => <label key={market.cycle} className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs transition-colors ${selectedCycles.includes(market.cycle) ? 'border-primary/30 bg-primary/10 text-primary' : 'border-foreground/10 bg-background text-muted-foreground hover:border-primary/20'}`}>
+        <input type="checkbox" checked={selectedCycles.includes(market.cycle)} onChange={() => toggleCycle(market.cycle)} data-testid={`checkbox-compare-cycle-${market.cycle}`} className="accent-primary" />
+        <span><span className="block font-semibold">{market.date}</span><span className="font-mono text-[10px] opacity-70">Cycle {market.cycle}</span></span>
+      </label>)}
+    </div> : <div className="mt-5 rounded-md border border-dashed border-foreground/15 bg-background/60 p-5 text-center text-sm text-muted-foreground">Close a market cycle to make it available for comparison.</div>}
+    {comparisonQuery.isLoading && <p className="mt-5 rounded-md bg-primary/5 px-4 py-3 text-xs text-primary/70" role="status">Loading sell-through comparison…</p>}
+    {comparisonQuery.isError && <p className="mt-5 rounded-md bg-destructive/10 px-4 py-3 text-xs text-destructive" role="alert">The selected market results could not be loaded. Try selecting the cycles again.</p>}
+    {comparison && <div className="mt-5 overflow-x-auto rounded-md border border-primary/10">
+      {comparison.flowers.length ? <div className="min-w-[560px]">
+        <div className="grid border-b border-primary/10 bg-primary/[.035] px-4 py-3 font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground" style={{ gridTemplateColumns: gridColumns }}>
+          <span>Flower</span>
+          {comparison.cycles.map((cycle) => <span key={cycle.cycle} className="text-right"><span className="block text-primary">{cycle.date}</span><span className="font-normal normal-case tracking-normal">{cycle.venue} · cycle {cycle.cycle}</span></span>)}
+        </div>
+        {comparison.flowers.map((flower) => <div key={flower.flower} className="grid items-center border-b border-foreground/10 px-4 py-4 last:border-0" style={{ gridTemplateColumns: gridColumns }}>
+          <span className="text-sm font-semibold">{flower.flower}</span>
+          {comparison.cycles.map((cycle) => {
+            const result = flower.results.find((candidate) => candidate.marketCycle === cycle.cycle);
+            return <span key={cycle.cycle} className="text-right" data-testid={`comparison-${flower.flower.toLowerCase().replaceAll(' ', '-')}-${cycle.cycle}`}>
+              <span className="block font-mono text-lg font-semibold text-primary">{result?.sellThroughPercent ?? 0}%</span>
+              <span className="mt-0.5 block text-[11px] text-muted-foreground">{result?.soldStems ?? 0} sold / {result?.purchasedStems ?? 0} bought</span>
+              <span className="block text-[10px] text-muted-foreground/75">{result?.leftoverStems ?? 0} came home</span>
+            </span>;
+          })}
+        </div>)}
+      </div> : <div className="p-6 text-center text-sm text-muted-foreground">No flower movement has been recorded for the selected cycles.</div>}
+    </div>}
+  </section>;
+}
+
 function MarketSubnav({ active, nextMarket }: { active: 'buy' | 'bouquets' | 'close'; nextMarket: MarketCycleSummary }) {
   return <div className="mb-8 flex items-center justify-between gap-3 overflow-x-auto border-b border-foreground/10"><div className="flex gap-1">{[{ id: 'buy', label: 'Buy list', href: '/markets/next/buy', icon: ShoppingBasket }, { id: 'bouquets', label: 'Bouquets', href: '/markets/next/bouquets', icon: Sparkles }, { id: 'close', label: 'Close market', href: '/markets/next/close', icon: ClipboardCheck }].map(({ id, label, href, icon: Icon }) => <Link key={id} href={href} data-testid={`tab-market-${id}`} className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-xs font-semibold ${active === id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}><Icon size={14} />{label}</Link>)}</div><MarketCycleBanner summary={nextMarket} testId="planning-cycle" /></div>;
 }
@@ -722,7 +789,7 @@ export function ClosePage({ closeMarket, actualPurchases, nextMarket, saveCloseM
 }
 
 function Router({ nextMarket, buyItems, actualPurchases, costs, buyList, markets, bouquetPlan, closeMarket, flowerPrices, flowerPricesLoading, toggleBuyItem, lockBuyList, saveActualPurchases, saveCosts, reportPurchases, saveBouquetPlan, saveCloseMarket }: { nextMarket: MarketCycleSummary; buyItems: BuyItem[]; actualPurchases: ActualPurchase[]; costs: MarketCost[]; buyList: MarketContext['buyList']; markets: Market[]; bouquetPlan: BouquetPlan; closeMarket: CloseMarket; flowerPrices: FlowerPriceHistory[]; flowerPricesLoading: boolean; toggleBuyItem: (id: number) => Promise<boolean>; lockBuyList: () => Promise<boolean>; saveActualPurchases: (purchases: ActualPurchaseInput[], receipt: ReceiptPayload) => Promise<boolean>; saveCosts: (costs: MarketCostInput[]) => Promise<boolean>; reportPurchases: () => Promise<boolean>; saveBouquetPlan: (selectedBand: string, count: number) => Promise<boolean>; saveCloseMarket: (counts: Record<string, number>, closed: boolean) => Promise<boolean> }) {
-  return <AppShell nextMarket={nextMarket} remainingBuyItems={buyItems.filter((item) => !item.checked).length}><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} markets={markets} nextMarket={nextMarket} />} /><Route path="/flowers" component={() => <FlowersPage flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesLoading} />} /><Route path="/markets" component={() => <MarketsPage markets={markets} nextMarket={nextMarket} />} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} nextMarket={nextMarket} toggleBuyItem={toggleBuyItem} lockBuyList={lockBuyList} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} />} /><Route path="/markets/next/close" component={() => <ClosePage closeMarket={closeMarket} actualPurchases={actualPurchases} nextMarket={nextMarket} saveCloseMarket={saveCloseMarket} />} /><Route path="/markets/next/bouquets" component={() => <BouquetsPage bouquetPlan={bouquetPlan} nextMarket={nextMarket} saveBouquetPlan={saveBouquetPlan} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
+  return <AppShell nextMarket={nextMarket} remainingBuyItems={buyItems.filter((item) => !item.checked).length}><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} markets={markets} nextMarket={nextMarket} />} /><Route path="/flowers" component={() => <FlowersPage flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesLoading} />} /><Route path="/markets" component={() => <div className="space-y-7"><MarketsPage markets={markets} nextMarket={nextMarket} /><SellThroughComparisonPanel markets={markets} /></div>} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} nextMarket={nextMarket} toggleBuyItem={toggleBuyItem} lockBuyList={lockBuyList} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} />} /><Route path="/markets/next/close" component={() => <ClosePage closeMarket={closeMarket} actualPurchases={actualPurchases} nextMarket={nextMarket} saveCloseMarket={saveCloseMarket} />} /><Route path="/markets/next/bouquets" component={() => <BouquetsPage bouquetPlan={bouquetPlan} nextMarket={nextMarket} saveBouquetPlan={saveBouquetPlan} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
 }
 
 export function useUtcDayRollover() {

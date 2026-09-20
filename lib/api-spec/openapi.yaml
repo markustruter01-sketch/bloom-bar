@@ -40,6 +40,32 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Market"
+  /markets/sell-through:
+    get:
+      operationId: getSellThroughComparison
+      tags: [markets]
+      summary: Compare sell-through across completed market cycles
+      parameters:
+        - name: cycles
+          in: query
+          required: true
+          description: Completed market cycles to compare
+          style: form
+          explode: true
+          schema:
+            type: array
+            minItems: 1
+            items:
+              type: number
+      responses:
+        "200":
+          description: Sell-through comparison scoped to the selected cycles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SellThroughComparison"
+        "400":
+          description: The selection is empty or includes an incomplete market
   /markets/flower-prices:
     get:
       operationId: listFlowerPrices
@@ -230,7 +256,7 @@ components:
         - status
     Market:
       type: object
-      required: [id, cycle, date, venue, spend, revenue, margin]
+      required: [id, cycle, date, venue, spend, revenue, margin, closed]
       properties:
         id:
           type: number
@@ -246,6 +272,8 @@ components:
           type: number
         margin:
           type: number
+        closed:
+          type: boolean
     BuyItemPriceSource:
       type: object
       required: [kind, marketCycle, date]
@@ -521,6 +549,57 @@ components:
       properties:
         flower:
           type: string
+        purchasedStems:
+          type: number
+          minimum: 0
+        leftoverStems:
+          type: number
+          minimum: 0
+        soldStems:
+          type: number
+          minimum: 0
+        sellThroughPercent:
+          type: number
+          minimum: 0
+          maximum: 100
+    SellThroughComparison:
+      type: object
+      required: [cycles, flowers]
+      properties:
+        cycles:
+          type: array
+          items:
+            $ref: "#/components/schemas/SellThroughComparisonCycle"
+        flowers:
+          type: array
+          items:
+            $ref: "#/components/schemas/SellThroughComparisonFlower"
+    SellThroughComparisonCycle:
+      type: object
+      required: [cycle, date, venue]
+      properties:
+        cycle:
+          type: number
+        date:
+          type: string
+        venue:
+          type: string
+    SellThroughComparisonFlower:
+      type: object
+      required: [flower, results]
+      properties:
+        flower:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SellThroughComparisonResult"
+    SellThroughComparisonResult:
+      type: object
+      required: [marketCycle, purchasedStems, leftoverStems, soldStems, sellThroughPercent]
+      properties:
+        marketCycle:
+          type: number
         purchasedStems:
           type: number
           minimum: 0

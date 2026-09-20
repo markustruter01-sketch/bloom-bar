@@ -17,6 +17,7 @@ export interface Market {
   spend: number;
   revenue: number;
   margin: number;
+  closed: boolean;
 }
 
 export type BuyItemPriceSourceKind = typeof BuyItemPriceSourceKind[keyof typeof BuyItemPriceSourceKind];
@@ -211,6 +212,37 @@ export interface CloseMarket {
   closed: boolean;
 }
 
+export interface SellThroughComparisonCycle {
+  cycle: number;
+  date: string;
+  venue: string;
+}
+
+export interface SellThroughComparisonResult {
+  marketCycle: number;
+  /** @minimum 0 */
+  purchasedStems: number;
+  /** @minimum 0 */
+  leftoverStems: number;
+  /** @minimum 0 */
+  soldStems: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  sellThroughPercent: number;
+}
+
+export interface SellThroughComparisonFlower {
+  flower: string;
+  results: SellThroughComparisonResult[];
+}
+
+export interface SellThroughComparison {
+  cycles: SellThroughComparisonCycle[];
+  flowers: SellThroughComparisonFlower[];
+}
+
 export type CloseMarketUpdateCounts = {[key: string]: number};
 
 export interface CloseMarketUpdate {
@@ -232,4 +264,12 @@ export interface MarketContext {
   bouquetPlan: BouquetPlan;
   closeMarket: CloseMarket;
 }
+
+export type GetSellThroughComparisonParams = {
+/**
+ * Completed market cycles to compare
+ * @minItems 1
+ */
+cycles: number[];
+};
 

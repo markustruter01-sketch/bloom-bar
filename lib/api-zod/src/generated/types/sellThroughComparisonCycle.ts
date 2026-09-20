@@ -6,13 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface Market {
-  id: number;
+export interface SellThroughComparisonCycle {
   cycle: number;
   date: string;
   venue: string;
-  spend: number;
-  revenue: number;
-  margin: number;
-  closed: boolean;
 }

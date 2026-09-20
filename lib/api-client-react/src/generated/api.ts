@@ -30,12 +30,14 @@ import type {
   CloseMarket,
   CloseMarketUpdate,
   FlowerPriceHistory,
+  GetSellThroughComparisonParams,
   HealthStatus,
   Market,
   MarketBuyListState,
   MarketContext,
   MarketCostsResponse,
-  MarketCostsUpdate
+  MarketCostsUpdate,
+  SellThroughComparison
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -208,6 +210,96 @@ export function useListMarkets<TData = Awaited<ReturnType<typeof listMarkets>>, 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListMarketsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetSellThroughComparisonUrl = (params: GetSellThroughComparisonParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    const explodeParameters = ["cycles"];
+
+    if (Array.isArray(value) && explodeParameters.includes(key)) {
+      value.forEach((v) => {
+        normalizedParams.append(key, v === null ? 'null' : String(v));
+      });
+      return;
+    }
+
+
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/markets/sell-through?${stringifiedParams}` : `/api/markets/sell-through`
+}
+
+/**
+ * @summary Compare sell-through across completed market cycles
+ */
+export const getSellThroughComparison = async (params: GetSellThroughComparisonParams, options?: Parameters<typeof customFetch>[1]): Promise<SellThroughComparison> => {
+
+  return customFetch<SellThroughComparison>(getGetSellThroughComparisonUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSellThroughComparisonQueryKey = (params?: GetSellThroughComparisonParams,) => {
+    return [
+    `/api/markets/sell-through`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetSellThroughComparisonQueryOptions = <TData = Awaited<ReturnType<typeof getSellThroughComparison>>, TError = ErrorType<void>>(params: GetSellThroughComparisonParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSellThroughComparison>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSellThroughComparisonQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSellThroughComparison>>> = ({ signal }) => getSellThroughComparison(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSellThroughComparison>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSellThroughComparisonQueryResult = NonNullable<Awaited<ReturnType<typeof getSellThroughComparison>>>
+export type GetSellThroughComparisonQueryError = ErrorType<void>
+
+
+/**
+ * @summary Compare sell-through across completed market cycles
+ */
+
+export function useGetSellThroughComparison<TData = Awaited<ReturnType<typeof getSellThroughComparison>>, TError = ErrorType<void>>(
+ params: GetSellThroughComparisonParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSellThroughComparison>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSellThroughComparisonQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

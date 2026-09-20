@@ -27,9 +27,50 @@ export const ListMarketsResponseItem = zod.object({
   "venue": zod.string(),
   "spend": zod.number(),
   "revenue": zod.number(),
-  "margin": zod.number()
+  "margin": zod.number(),
+  "closed": zod.boolean()
 })
 export const ListMarketsResponse = zod.array(ListMarketsResponseItem)
+
+
+/**
+ * @summary Compare sell-through across completed market cycles
+ */
+
+
+
+export const GetSellThroughComparisonQueryParams = zod.object({
+  "cycles": zod.array(zod.coerce.number()).min(1).describe('Completed market cycles to compare')
+})
+
+export const getSellThroughComparisonResponseFlowersItemResultsItemPurchasedStemsMin = 0;
+
+export const getSellThroughComparisonResponseFlowersItemResultsItemLeftoverStemsMin = 0;
+
+export const getSellThroughComparisonResponseFlowersItemResultsItemSoldStemsMin = 0;
+
+export const getSellThroughComparisonResponseFlowersItemResultsItemSellThroughPercentMin = 0;
+export const getSellThroughComparisonResponseFlowersItemResultsItemSellThroughPercentMax = 100;
+
+
+
+export const GetSellThroughComparisonResponse = zod.object({
+  "cycles": zod.array(zod.object({
+  "cycle": zod.number(),
+  "date": zod.string(),
+  "venue": zod.string()
+})),
+  "flowers": zod.array(zod.object({
+  "flower": zod.string(),
+  "results": zod.array(zod.object({
+  "marketCycle": zod.number(),
+  "purchasedStems": zod.number().min(getSellThroughComparisonResponseFlowersItemResultsItemPurchasedStemsMin),
+  "leftoverStems": zod.number().min(getSellThroughComparisonResponseFlowersItemResultsItemLeftoverStemsMin),
+  "soldStems": zod.number().min(getSellThroughComparisonResponseFlowersItemResultsItemSoldStemsMin),
+  "sellThroughPercent": zod.number().min(getSellThroughComparisonResponseFlowersItemResultsItemSellThroughPercentMin).max(getSellThroughComparisonResponseFlowersItemResultsItemSellThroughPercentMax)
+}))
+}))
+})
 
 
 /**

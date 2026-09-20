@@ -89,6 +89,50 @@ after(async () => {
 });
 
 describe("market context persistence", () => {
+  it("compares sell-through only across the selected completed cycles", async () => {
+    for (const [cycle, stems, leftover] of [[testCycles[0], 10, 2], [testCycles[1], 8, 4]]) {
+      await getContext(cycle);
+      const lock = await patch(`/markets/context/${cycle}/buy-list`, { locked: true });
+      assert.equal(lock.status, 200);
+      const purchases = await request(`/markets/context/${cycle}/actual-purchases`, {
+        method: "PUT",
+        body: JSON.stringify({
+          purchases: [{
+            flower: "Lisianthus",
+            detail: "White · classic blooms",
+            category: "Classic Blooms",
+            stems,
+            unitCost: 18,
+            source: "manual",
+          }],
+        }),
+      });
+      assert.equal(purchases.status, 200);
+      const close = await patch(`/markets/context/${cycle}/close`, {
+        counts: { Lisianthus: leftover },
+        closed: true,
+      });
+      assert.equal(close.status, 200);
+    }
+
+    const comparison = await request(`/markets/sell-through?cycles=${testCycles[0]}&cycles=${testCycles[1]}`);
+    assert.equal(comparison.status, 200);
+    assert.deepEqual(comparison.body.cycles.map((cycle: any) => cycle.cycle), testCycles.slice(0, 2));
+    assert.deepEqual(comparison.body.flowers[0].results.map((result: any) => ({
+      marketCycle: result.marketCycle,
+      purchasedStems: result.purchasedStems,
+      leftoverStems: result.leftoverStems,
+      soldStems: result.soldStems,
+      sellThroughPercent: result.sellThroughPercent,
+    })), [
+      { marketCycle: testCycles[0], purchasedStems: 10, leftoverStems: 2, soldStems: 8, sellThroughPercent: 80 },
+      { marketCycle: testCycles[1], purchasedStems: 8, leftoverStems: 4, soldStems: 4, sellThroughPercent: 50 },
+    ]);
+
+    const incomplete = await request(`/markets/sell-through?cycles=${testCycles[0]}&cycles=${testCycles[2]}`);
+    assert.equal(incomplete.status, 400);
+  });
+
   it("saves every planning mutation and reloads it for the requested cycle", async () => {
     const initial = await getContext(testCycles[0]);
     const otherCycleInitial = await getContext(testCycles[1]);

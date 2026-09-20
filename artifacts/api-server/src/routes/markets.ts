@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
   buyItemsTable,
@@ -15,6 +15,7 @@ import {
   GetMarketContextResponse,
   ListFlowerPricesResponse,
   ListMarketsResponse,
+  GetSellThroughComparisonResponse,
   ReplaceMarketCostsBody,
   ReplaceMarketCostsParams,
   ReplaceMarketCostsResponse,
@@ -90,6 +91,15 @@ function parseCycle(raw: string | string[] | undefined): number | null {
   const value = Array.isArray(raw) ? raw[0] : raw;
   if (value == null || !/^-?\d+$/.test(value)) return null;
   return Number(value);
+}
+
+function parseCycles(raw: unknown): number[] | null {
+  const values = Array.isArray(raw)
+    ? raw.flatMap((value) => typeof value === "string" ? value.split(",") : [])
+    : typeof raw === "string" ? raw.split(",") : undefined;
+  if (!values?.length || values.some((value) => !/^-?\d+$/.test(value))) return null;
+  const cycles = [...new Set(values.map(Number))];
+  return cycles.length ? cycles : null;
 }
 
 async function ensureMarketContext(cycle: number) {
@@ -292,10 +302,79 @@ router.get("/markets", async (_req, res): Promise<void> => {
     await db.insert(marketsTable).values(market).onConflictDoNothing({ target: marketsTable.cycle });
   }
   const markets = await db.select().from(marketsTable).orderBy(marketsTable.cycle);
+  const closeRecords = await db
+    .select({ marketCycle: closeMarketsTable.marketCycle, closed: closeMarketsTable.closed })
+    .from(closeMarketsTable)
+    .where(inArray(closeMarketsTable.marketCycle, markets.map((market) => market.cycle)));
+  const closedByCycle = new Map(closeRecords.map((record) => [record.marketCycle, record.closed]));
   res.json(ListMarketsResponse.parse(markets.map((market) => ({
     ...market,
     date: formatScheduledMarketDate(market.cycle),
+    closed: closedByCycle.get(market.cycle) ?? false,
   }))));
+});
+
+router.get("/markets/sell-through", async (req, res): Promise<void> => {
+  const cycles = parseCycles(req.query.cycles);
+  if (!cycles) {
+    res.status(400).json({ error: "Select at least one completed market cycle." });
+    return;
+  }
+
+  const [markets, closeRecords] = await Promise.all([
+    db.select().from(marketsTable).where(inArray(marketsTable.cycle, cycles)),
+    db.select().from(closeMarketsTable).where(inArray(closeMarketsTable.marketCycle, cycles)),
+  ]);
+  const closeByCycle = new Map(closeRecords.map((record) => [record.marketCycle, record]));
+  if (markets.length !== cycles.length || cycles.some((cycle) => !closeByCycle.get(cycle)?.closed)) {
+    res.status(400).json({ error: "Sell-through comparisons are available only for completed market cycles." });
+    return;
+  }
+
+  const purchases = await db
+    .select({
+      marketCycle: marketActualPurchasesTable.marketCycle,
+      flower: marketActualPurchasesTable.flower,
+      stems: marketActualPurchasesTable.stems,
+    })
+    .from(marketActualPurchasesTable)
+    .where(inArray(marketActualPurchasesTable.marketCycle, cycles));
+  const purchasesByCycle = new Map<number, Array<{ flower: string; stems: number }>>();
+  for (const purchase of purchases) {
+    const cyclePurchases = purchasesByCycle.get(purchase.marketCycle) ?? [];
+    cyclePurchases.push({ flower: purchase.flower, stems: purchase.stems });
+    purchasesByCycle.set(purchase.marketCycle, cyclePurchases);
+  }
+
+  const sellThroughByCycle = new Map(
+    cycles.map((cycle) => {
+      const closeRecord = closeByCycle.get(cycle);
+      return [cycle, calculateSellThrough(purchasesByCycle.get(cycle) ?? [], closeRecord?.counts ?? {})];
+    }),
+  );
+  const flowers = [...new Set(cycles.flatMap((cycle) => sellThroughByCycle.get(cycle)?.map((record) => record.flower) ?? []))]
+    .sort((a, b) => a.localeCompare(b));
+  const marketByCycle = new Map(markets.map((market) => [market.cycle, market]));
+
+  res.json(GetSellThroughComparisonResponse.parse({
+    cycles: cycles.map((cycle) => {
+      const market = marketByCycle.get(cycle)!;
+      return {
+        cycle,
+        date: formatScheduledMarketDate(cycle),
+        venue: market.venue,
+      };
+    }),
+    flowers: flowers.map((flower) => ({
+      flower,
+      results: cycles.map((cycle) => {
+        const record = sellThroughByCycle.get(cycle)?.find((candidate) => candidate.flower === flower);
+        return record
+          ? { marketCycle: cycle, purchasedStems: record.purchasedStems, leftoverStems: record.leftoverStems, soldStems: record.soldStems, sellThroughPercent: record.sellThroughPercent }
+          : { marketCycle: cycle, purchasedStems: 0, leftoverStems: 0, soldStems: 0, sellThroughPercent: 0 };
+      }),
+    })),
+  }));
 });
 
 router.get("/markets/context/:cycle", async (req, res): Promise<void> => {
