@@ -5,12 +5,16 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { MarketCost } from './marketCost';
 
 export interface Market {
   id: number;
   cycle: number;
   date: string;
   venue: string;
+  /** @minimum 0 */
+  flowerSpend: number;
+  costs: MarketCost[];
   spend: number;
   revenue: number;
   margin: number;

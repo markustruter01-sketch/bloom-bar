@@ -377,11 +377,18 @@ describe("market context persistence", () => {
     const market = totals.body.find((entry: any) => entry.cycle === testCycles[0]);
     assert.equal(market.spend, 131);
     assert.equal(market.margin, 34.5);
+    assert.equal(market.flowerSpend, 96);
+    assert.deepEqual(market.costs.map((cost: any) => [cost.description, cost.amount]), [["Stall fee", 35]]);
 
     const reloaded = await getContext(testCycles[0]);
     assert.deepEqual(reloaded.costs.map((cost: any) => [cost.description, cost.amount]), [["Stall fee", 35]]);
     assert.equal(reloaded.spend, 131);
     assert.equal(reloaded.margin, 34.5);
+
+    const reloadedHistory = await request("/markets");
+    const reloadedMarket = reloadedHistory.body.find((entry: any) => entry.cycle === testCycles[0]);
+    assert.equal(reloadedMarket.spend, reloadedMarket.flowerSpend + reloadedMarket.costs.reduce((sum: number, cost: any) => sum + cost.amount, 0));
+    assert.deepEqual(reloadedMarket.costs.map((cost: any) => [cost.description, cost.amount]), [["Stall fee", 35]]);
   });
 
   it("rejects invalid cycles and item updates without changing saved data", async () => {

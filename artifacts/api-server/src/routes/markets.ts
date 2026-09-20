@@ -302,15 +302,50 @@ router.get("/markets", async (_req, res): Promise<void> => {
     await db.insert(marketsTable).values(market).onConflictDoNothing({ target: marketsTable.cycle });
   }
   const markets = await db.select().from(marketsTable).orderBy(marketsTable.cycle);
-  const closeRecords = await db
-    .select({ marketCycle: closeMarketsTable.marketCycle, closed: closeMarketsTable.closed })
-    .from(closeMarketsTable)
-    .where(inArray(closeMarketsTable.marketCycle, markets.map((market) => market.cycle)));
+  const marketCycles = markets.map((market) => market.cycle);
+  const [closeRecords, costRecords, purchaseRecords] = marketCycles.length
+    ? await Promise.all([
+      db
+        .select({ marketCycle: closeMarketsTable.marketCycle, closed: closeMarketsTable.closed })
+        .from(closeMarketsTable)
+        .where(inArray(closeMarketsTable.marketCycle, marketCycles)),
+      db
+        .select()
+        .from(marketCostsTable)
+        .where(inArray(marketCostsTable.marketCycle, marketCycles))
+        .orderBy(marketCostsTable.id),
+      db
+        .select({
+          marketCycle: marketActualPurchasesTable.marketCycle,
+          stems: marketActualPurchasesTable.stems,
+          unitCost: marketActualPurchasesTable.unitCost,
+        })
+        .from(marketActualPurchasesTable)
+        .where(inArray(marketActualPurchasesTable.marketCycle, marketCycles)),
+    ])
+    : [[], [], []];
   const closedByCycle = new Map(closeRecords.map((record) => [record.marketCycle, record.closed]));
+  const costsByCycle = new Map<number, typeof costRecords>();
+  for (const cost of costRecords) {
+    const current = costsByCycle.get(cost.marketCycle) ?? [];
+    current.push(cost);
+    costsByCycle.set(cost.marketCycle, current);
+  }
+  const flowerSpendByCycle = new Map<number, number>();
+  for (const purchase of purchaseRecords) {
+    flowerSpendByCycle.set(
+      purchase.marketCycle,
+      (flowerSpendByCycle.get(purchase.marketCycle) ?? 0) + purchase.stems * purchase.unitCost,
+    );
+  }
   res.json(ListMarketsResponse.parse(markets.map((market) => ({
     ...market,
     date: formatScheduledMarketDate(market.cycle),
     closed: closedByCycle.get(market.cycle) ?? false,
+    flowerSpend: purchaseRecords.some((purchase) => purchase.marketCycle === market.cycle)
+      ? flowerSpendByCycle.get(market.cycle) ?? 0
+      : Math.max(0, market.spend - (costsByCycle.get(market.cycle) ?? []).reduce((sum, cost) => sum + cost.amount, 0)),
+    costs: costsByCycle.get(market.cycle) ?? [],
   }))));
 });
 

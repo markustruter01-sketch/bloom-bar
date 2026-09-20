@@ -9,11 +9,22 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface MarketCost {
+  id: number;
+  marketCycle: number;
+  description: string;
+  /** @minimum 0 */
+  amount: number;
+}
+
 export interface Market {
   id: number;
   cycle: number;
   date: string;
   venue: string;
+  /** @minimum 0 */
+  flowerSpend: number;
+  costs: MarketCost[];
   spend: number;
   revenue: number;
   margin: number;
@@ -133,14 +144,6 @@ export interface ActualPurchasesUpdate {
 export interface ActualPurchasesResponse {
   buyList: MarketBuyListState;
   purchases: ActualPurchase[];
-}
-
-export interface MarketCost {
-  id: number;
-  marketCycle: number;
-  description: string;
-  /** @minimum 0 */
-  amount: number;
 }
 
 export interface MarketCostInput {

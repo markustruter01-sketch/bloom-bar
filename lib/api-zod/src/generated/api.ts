@@ -20,11 +20,24 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary List market history
  */
+export const listMarketsResponseFlowerSpendMin = 0;
+
+export const listMarketsResponseCostsItemAmountMin = 0;
+
+
+
 export const ListMarketsResponseItem = zod.object({
   "id": zod.number(),
   "cycle": zod.number(),
   "date": zod.string(),
   "venue": zod.string(),
+  "flowerSpend": zod.number().min(listMarketsResponseFlowerSpendMin),
+  "costs": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "description": zod.string(),
+  "amount": zod.number().min(listMarketsResponseCostsItemAmountMin)
+})),
   "spend": zod.number(),
   "revenue": zod.number(),
   "margin": zod.number(),
