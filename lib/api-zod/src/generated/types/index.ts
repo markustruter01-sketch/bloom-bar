@@ -8,12 +8,13 @@
 
 export * from './actualPurchase';
 export * from './actualPurchaseInput';
-export * from './actualPurchaseInputSource';
 export * from './actualPurchaseSource';
 export * from './actualPurchasesResponse';
 export * from './actualPurchasesUpdate';
 export * from './bouquetPlan';
 export * from './bouquetPlanUpdate';
+export * from './bunchPurchaseInput';
+export * from './bunchPurchaseInputSource';
 export * from './buyItem';
 export * from './buyItemPriceSource';
 export * from './buyItemPriceSourceKind';
@@ -27,6 +28,8 @@ export * from './flowerPriceHistory';
 export * from './flowerPricePoint';
 export * from './getSellThroughComparisonParams';
 export * from './healthStatus';
+export * from './legacyActualPurchaseInput';
+export * from './legacyActualPurchaseInputSource';
 export * from './market';
 export * from './marketBuyListState';
 export * from './marketContext';

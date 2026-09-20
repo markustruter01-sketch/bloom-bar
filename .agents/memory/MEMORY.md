@@ -1,2 +1,3 @@
 - [OpenAPI integer compatibility](openapi-zod-compatibility.md) — use numeric transport fields until the generated client/runtime Zod versions are aligned.
 - [Artifact API proxy](artifact-api-proxy.md) — the Bloom Bar Vite preview must proxy `/api` to the API workflow for direct artifact previews.
+- [Drizzle rename prompts](drizzle-dev-schema-push.md) — noninteractive schema pushes can still prompt on column renames; resolve development changes carefully and leave production to Publish.

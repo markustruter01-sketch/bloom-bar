@@ -90,9 +90,21 @@ export const GetSellThroughComparisonResponse = zod.object({
  * Returns actual unit costs from completed Buy List Reports, grouped by flower.
  * @summary List reported flower price history
  */
+export const listFlowerPricesResponseLatestPricePerBunchMin = 0;
+
+export const listFlowerPricesResponseLatestCostPerStemMin = 0;
+
 export const listFlowerPricesResponseLatestUnitCostMin = 0;
 
+export const listFlowerPricesResponsePreviousOnePricePerBunchMin = 0;
+
+export const listFlowerPricesResponsePreviousOneCostPerStemMin = 0;
+
 export const listFlowerPricesResponsePreviousOneUnitCostMin = 0;
+
+export const listFlowerPricesResponseHistoryItemPricePerBunchMin = 0;
+
+export const listFlowerPricesResponseHistoryItemCostPerStemMin = 0;
 
 export const listFlowerPricesResponseHistoryItemUnitCostMin = 0;
 
@@ -104,19 +116,25 @@ export const ListFlowerPricesResponseItem = zod.object({
   "latest": zod.object({
   "marketCycle": zod.number(),
   "date": zod.string(),
-  "unitCost": zod.number().min(listFlowerPricesResponseLatestUnitCostMin)
+  "pricePerBunch": zod.number().min(listFlowerPricesResponseLatestPricePerBunchMin).describe('AUD price per purchased bunch'),
+  "costPerStem": zod.number().min(listFlowerPricesResponseLatestCostPerStemMin).describe('Calculated AUD cost per stem'),
+  "unitCost": zod.number().min(listFlowerPricesResponseLatestUnitCostMin).describe('Compatibility alias for pricePerBunch')
 }),
   "previous": zod.union([zod.object({
   "marketCycle": zod.number(),
   "date": zod.string(),
-  "unitCost": zod.number().min(listFlowerPricesResponsePreviousOneUnitCostMin)
+  "pricePerBunch": zod.number().min(listFlowerPricesResponsePreviousOnePricePerBunchMin).describe('AUD price per purchased bunch'),
+  "costPerStem": zod.number().min(listFlowerPricesResponsePreviousOneCostPerStemMin).describe('Calculated AUD cost per stem'),
+  "unitCost": zod.number().min(listFlowerPricesResponsePreviousOneUnitCostMin).describe('Compatibility alias for pricePerBunch')
 }),zod.null()]),
   "change": zod.number().nullable(),
   "changePercent": zod.number().nullable(),
   "history": zod.array(zod.object({
   "marketCycle": zod.number(),
   "date": zod.string(),
-  "unitCost": zod.number().min(listFlowerPricesResponseHistoryItemUnitCostMin)
+  "pricePerBunch": zod.number().min(listFlowerPricesResponseHistoryItemPricePerBunchMin).describe('AUD price per purchased bunch'),
+  "costPerStem": zod.number().min(listFlowerPricesResponseHistoryItemCostPerStemMin).describe('Calculated AUD cost per stem'),
+  "unitCost": zod.number().min(listFlowerPricesResponseHistoryItemUnitCostMin).describe('Compatibility alias for pricePerBunch')
 }))
 })
 export const ListFlowerPricesResponse = zod.array(ListFlowerPricesResponseItem)
@@ -132,6 +150,14 @@ export const GetMarketContextParams = zod.object({
 export const getMarketContextResponseBuyListReceiptCandidatesItemStemsMin = 0;
 
 export const getMarketContextResponseBuyListReceiptCandidatesItemUnitCostMin = 0;
+
+
+
+export const getMarketContextResponseActualPurchasesItemPricePerBunchMin = 0;
+
+export const getMarketContextResponseActualPurchasesItemTotalStemQtyMin = 0;
+
+export const getMarketContextResponseActualPurchasesItemCostPerStemMin = 0;
 
 export const getMarketContextResponseActualPurchasesItemStemsMin = 0;
 
@@ -195,8 +221,14 @@ export const GetMarketContextResponse = zod.object({
   "flower": zod.string(),
   "detail": zod.string(),
   "category": zod.string(),
-  "stems": zod.number().min(getMarketContextResponseActualPurchasesItemStemsMin),
-  "unitCost": zod.number().min(getMarketContextResponseActualPurchasesItemUnitCostMin),
+  "bunchSize": zod.number().min(1).describe('Stems contained in one purchased bunch'),
+  "bunchesPurchased": zod.number().min(1).describe('Number of bunches purchased on this line'),
+  "pricePerBunch": zod.number().min(getMarketContextResponseActualPurchasesItemPricePerBunchMin).describe('AUD price for one bunch'),
+  "supplier": zod.string().nullable().describe('Optional wholesaler or supplier name'),
+  "totalStemQty": zod.number().min(getMarketContextResponseActualPurchasesItemTotalStemQtyMin).describe('Calculated as bunchSize multiplied by bunchesPurchased'),
+  "costPerStem": zod.number().min(getMarketContextResponseActualPurchasesItemCostPerStemMin).describe('Calculated as pricePerBunch divided by bunchSize'),
+  "stems": zod.number().min(getMarketContextResponseActualPurchasesItemStemsMin).describe('Compatibility alias for totalStemQty'),
+  "unitCost": zod.number().min(getMarketContextResponseActualPurchasesItemUnitCostMin).describe('Compatibility alias for costPerStem'),
   "source": zod.enum(['manual', 'receipt'])
 })),
   "costs": zod.array(zod.object({
@@ -295,9 +327,12 @@ export const ReplaceMarketActualPurchasesParams = zod.object({
   "cycle": zod.coerce.number()
 })
 
-export const replaceMarketActualPurchasesBodyPurchasesItemStemsMin = 0;
 
-export const replaceMarketActualPurchasesBodyPurchasesItemUnitCostMin = 0;
+
+export const replaceMarketActualPurchasesBodyPurchasesItemOnePricePerBunchMin = 0;
+
+
+export const replaceMarketActualPurchasesBodyPurchasesItemTwoUnitCostMin = 0;
 
 export const replaceMarketActualPurchasesBodyReceiptCandidatesItemStemsMin = 0;
 
@@ -306,14 +341,23 @@ export const replaceMarketActualPurchasesBodyReceiptCandidatesItemUnitCostMin = 
 
 
 export const ReplaceMarketActualPurchasesBody = zod.object({
-  "purchases": zod.array(zod.object({
+  "purchases": zod.array(zod.union([zod.object({
   "flower": zod.string(),
   "detail": zod.string(),
   "category": zod.string(),
-  "stems": zod.number().min(replaceMarketActualPurchasesBodyPurchasesItemStemsMin),
-  "unitCost": zod.number().min(replaceMarketActualPurchasesBodyPurchasesItemUnitCostMin),
+  "bunchSize": zod.number().min(1).describe('Stems contained in one purchased bunch'),
+  "bunchesPurchased": zod.number().min(1).describe('Number of bunches purchased on this line'),
+  "pricePerBunch": zod.number().min(replaceMarketActualPurchasesBodyPurchasesItemOnePricePerBunchMin).describe('AUD price for one bunch'),
+  "supplier": zod.string().nullish().describe('Optional wholesaler or supplier name'),
   "source": zod.enum(['manual', 'receipt'])
-})),
+}),zod.object({
+  "flower": zod.string(),
+  "detail": zod.string(),
+  "category": zod.string(),
+  "stems": zod.number().min(1),
+  "unitCost": zod.number().min(replaceMarketActualPurchasesBodyPurchasesItemTwoUnitCostMin),
+  "source": zod.enum(['manual', 'receipt'])
+}).describe('Temporary compatibility shape. It is normalized to one-stem bunches before storage.')])),
   "receiptFileName": zod.string().nullish(),
   "receiptText": zod.string().nullish(),
   "receiptCandidates": zod.array(zod.object({
@@ -328,6 +372,14 @@ export const ReplaceMarketActualPurchasesBody = zod.object({
 export const replaceMarketActualPurchasesResponseBuyListReceiptCandidatesItemStemsMin = 0;
 
 export const replaceMarketActualPurchasesResponseBuyListReceiptCandidatesItemUnitCostMin = 0;
+
+
+
+export const replaceMarketActualPurchasesResponsePurchasesItemPricePerBunchMin = 0;
+
+export const replaceMarketActualPurchasesResponsePurchasesItemTotalStemQtyMin = 0;
+
+export const replaceMarketActualPurchasesResponsePurchasesItemCostPerStemMin = 0;
 
 export const replaceMarketActualPurchasesResponsePurchasesItemStemsMin = 0;
 
@@ -356,8 +408,14 @@ export const ReplaceMarketActualPurchasesResponse = zod.object({
   "flower": zod.string(),
   "detail": zod.string(),
   "category": zod.string(),
-  "stems": zod.number().min(replaceMarketActualPurchasesResponsePurchasesItemStemsMin),
-  "unitCost": zod.number().min(replaceMarketActualPurchasesResponsePurchasesItemUnitCostMin),
+  "bunchSize": zod.number().min(1).describe('Stems contained in one purchased bunch'),
+  "bunchesPurchased": zod.number().min(1).describe('Number of bunches purchased on this line'),
+  "pricePerBunch": zod.number().min(replaceMarketActualPurchasesResponsePurchasesItemPricePerBunchMin).describe('AUD price for one bunch'),
+  "supplier": zod.string().nullable().describe('Optional wholesaler or supplier name'),
+  "totalStemQty": zod.number().min(replaceMarketActualPurchasesResponsePurchasesItemTotalStemQtyMin).describe('Calculated as bunchSize multiplied by bunchesPurchased'),
+  "costPerStem": zod.number().min(replaceMarketActualPurchasesResponsePurchasesItemCostPerStemMin).describe('Calculated as pricePerBunch divided by bunchSize'),
+  "stems": zod.number().min(replaceMarketActualPurchasesResponsePurchasesItemStemsMin).describe('Compatibility alias for totalStemQty'),
+  "unitCost": zod.number().min(replaceMarketActualPurchasesResponsePurchasesItemUnitCostMin).describe('Compatibility alias for costPerStem'),
   "source": zod.enum(['manual', 'receipt'])
 }))
 })

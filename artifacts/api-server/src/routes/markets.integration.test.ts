@@ -89,6 +89,91 @@ after(async () => {
 });
 
 describe("market context persistence", () => {
+  it("stores multiple bunch-based supplier lines for the same flower and calculates totals", async () => {
+    const cycle = testCycles[2];
+    await getContext(cycle);
+    const lock = await patch(`/markets/context/${cycle}/buy-list`, { locked: true });
+    assert.equal(lock.status, 200);
+
+    const saved = await request(`/markets/context/${cycle}/actual-purchases`, {
+      method: "PUT",
+      body: JSON.stringify({
+        purchases: [
+          {
+            flower: "David Austin roses",
+            detail: "Blush · premium blooms",
+            category: "Statement Blooms",
+            bunchSize: 10,
+            bunchesPurchased: 2,
+            pricePerBunch: 18,
+            supplier: "Supplier A",
+            source: "manual",
+          },
+          {
+            flower: "David Austin roses",
+            detail: "Blush · premium blooms",
+            category: "Statement Blooms",
+            bunchSize: 10,
+            bunchesPurchased: 3,
+            pricePerBunch: 20,
+            supplier: "Supplier B",
+            source: "manual",
+          },
+        ],
+      }),
+    });
+
+    assert.equal(saved.status, 200);
+    assert.deepEqual(saved.body.purchases.map((purchase: any) => ({
+      flower: purchase.flower,
+      bunchSize: purchase.bunchSize,
+      bunchesPurchased: purchase.bunchesPurchased,
+      pricePerBunch: purchase.pricePerBunch,
+      supplier: purchase.supplier,
+      totalStemQty: purchase.totalStemQty,
+      costPerStem: purchase.costPerStem,
+    })), [
+      {
+        flower: "David Austin roses",
+        bunchSize: 10,
+        bunchesPurchased: 2,
+        pricePerBunch: 18,
+        supplier: "Supplier A",
+        totalStemQty: 20,
+        costPerStem: 1.8,
+      },
+      {
+        flower: "David Austin roses",
+        bunchSize: 10,
+        bunchesPurchased: 3,
+        pricePerBunch: 20,
+        supplier: "Supplier B",
+        totalStemQty: 30,
+        costPerStem: 2,
+      },
+    ]);
+
+    const rows = await db
+      .select({
+        flower: marketActualPurchasesTable.flower,
+        supplier: marketActualPurchasesTable.supplier,
+        totalStemQty: marketActualPurchasesTable.totalStemQty,
+        costPerStem: marketActualPurchasesTable.costPerStem,
+      })
+      .from(marketActualPurchasesTable)
+      .where(eq(marketActualPurchasesTable.marketCycle, cycle));
+    assert.equal(rows.length, 2);
+    assert.deepEqual(rows.map((row) => [row.flower, row.supplier, row.totalStemQty, row.costPerStem]), [
+      ["David Austin roses", "Supplier A", 20, 1.8],
+      ["David Austin roses", "Supplier B", 30, 2],
+    ]);
+
+    const markets = await request("/markets");
+    assert.equal(markets.status, 200);
+    const market = markets.body.find((candidate: any) => candidate.cycle === cycle);
+    assert.equal(market.flowerSpend, 96);
+  });
+
   it("compares sell-through only across the selected completed cycles", async () => {
     for (const [cycle, stems, leftover] of [[testCycles[0], 10, 2], [testCycles[1], 8, 4]]) {
       await getContext(cycle);

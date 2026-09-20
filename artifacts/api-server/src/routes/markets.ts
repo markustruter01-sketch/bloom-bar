@@ -61,6 +61,58 @@ const defaultBuyItems = [
 
 const defaultCloseCounts = { Lisianthus: 2, Daisy: 7, Snapdragon: 3, "Eucalyptus foliage": 5 };
 
+type CanonicalPurchaseInput = {
+  flower: string;
+  detail: string;
+  category: string;
+  bunchSize: number;
+  bunchesPurchased: number;
+  pricePerBunch: number;
+  supplier: string | null;
+  source: "manual" | "receipt";
+};
+
+function normalizePurchaseInput(purchase: Record<string, unknown>): CanonicalPurchaseInput {
+  if ("bunchSize" in purchase) {
+    return {
+      flower: String(purchase.flower),
+      detail: String(purchase.detail),
+      category: String(purchase.category),
+      bunchSize: Number(purchase.bunchSize),
+      bunchesPurchased: Number(purchase.bunchesPurchased),
+      pricePerBunch: Number(purchase.pricePerBunch),
+      supplier: typeof purchase.supplier === "string" && purchase.supplier.trim() ? purchase.supplier.trim() : null,
+      source: purchase.source === "receipt" ? "receipt" : "manual",
+    };
+  }
+
+  // Keep the existing API/UI working while the later bunch-entry UI is built.
+  // Legacy rows are represented as one-stem bunches so their totals remain exact.
+  return {
+    flower: String(purchase.flower),
+    detail: String(purchase.detail),
+    category: String(purchase.category),
+    bunchSize: 1,
+    bunchesPurchased: Number(purchase.stems),
+    pricePerBunch: Number(purchase.unitCost),
+    supplier: null,
+    source: purchase.source === "receipt" ? "receipt" : "manual",
+  };
+}
+
+function serializePurchase(purchase: typeof marketActualPurchasesTable.$inferSelect) {
+  const totalStemQty = purchase.totalStemQty ?? purchase.bunchSize * purchase.bunchesPurchased;
+  const costPerStem = purchase.costPerStem ?? purchase.pricePerBunch / purchase.bunchSize;
+  return {
+    ...purchase,
+    totalStemQty,
+    costPerStem,
+    // Deprecated compatibility aliases for the current UI/API consumers.
+    stems: totalStemQty,
+    unitCost: costPerStem,
+  };
+}
+
 function calculateSellThrough(
   purchases: Array<{ flower: string; stems: number }>,
   leftovers: Record<string, number>,
@@ -151,7 +203,10 @@ async function recalculateMarketTotals(cycle: number, tx: any, previousCostTotal
   const [market] = await tx.select().from(marketsTable).where(eq(marketsTable.cycle, cycle));
   if (!market) return null;
   const purchases = await tx
-    .select({ stems: marketActualPurchasesTable.stems, unitCost: marketActualPurchasesTable.unitCost })
+    .select({
+      totalStemQty: marketActualPurchasesTable.totalStemQty,
+      costPerStem: marketActualPurchasesTable.costPerStem,
+    })
     .from(marketActualPurchasesTable)
     .where(eq(marketActualPurchasesTable.marketCycle, cycle));
   const costs = await tx
@@ -159,7 +214,11 @@ async function recalculateMarketTotals(cycle: number, tx: any, previousCostTotal
     .from(marketCostsTable)
     .where(eq(marketCostsTable.marketCycle, cycle));
   const nonFlowerSpend = costs.reduce((sum: number, cost: { amount: number }) => sum + cost.amount, 0);
-  const flowerSpend = purchases.reduce((sum: number, purchase: { stems: number; unitCost: number }) => sum + purchase.stems * purchase.unitCost, 0);
+  const flowerSpend = purchases.reduce(
+    (sum: number, purchase: { totalStemQty: number | null; costPerStem: number | null }) =>
+      sum + (purchase.totalStemQty ?? 0) * (purchase.costPerStem ?? 0),
+    0,
+  );
   const baseSpend = purchases.length > 0
     ? flowerSpend
     : market.spend - (previousCostTotal ?? nonFlowerSpend);
@@ -180,16 +239,21 @@ async function readMarketContext(cycle: number) {
   const [market] = await db.select().from(marketsTable).where(eq(marketsTable.cycle, cycle));
   const buyItems = await db.select().from(buyItemsTable).where(eq(buyItemsTable.marketCycle, cycle)).orderBy(buyItemsTable.id);
   const [buyList] = await db.select().from(marketBuyListStatesTable).where(eq(marketBuyListStatesTable.marketCycle, cycle));
-  const actualPurchases = await db.select().from(marketActualPurchasesTable).where(eq(marketActualPurchasesTable.marketCycle, cycle)).orderBy(marketActualPurchasesTable.id);
+  const actualPurchaseRows = await db.select().from(marketActualPurchasesTable).where(eq(marketActualPurchasesTable.marketCycle, cycle)).orderBy(marketActualPurchasesTable.id);
+  const actualPurchases = actualPurchaseRows.map(serializePurchase);
   const costs = await db.select().from(marketCostsTable).where(eq(marketCostsTable.marketCycle, cycle)).orderBy(marketCostsTable.id);
   const [bouquetPlan] = await db.select().from(bouquetPlansTable).where(eq(bouquetPlansTable.marketCycle, cycle));
   const [closeMarket] = await db.select().from(closeMarketsTable).where(eq(closeMarketsTable.marketCycle, cycle));
-  const sellThrough = calculateSellThrough(actualPurchases, closeMarket.counts);
+  const sellThrough = calculateSellThrough(
+    actualPurchases.map((purchase) => ({ flower: purchase.flower, stems: purchase.totalStemQty })),
+    closeMarket.counts,
+  );
   const reportedPurchases = await db
     .select({
       marketCycle: marketActualPurchasesTable.marketCycle,
       flower: marketActualPurchasesTable.flower,
-      unitCost: marketActualPurchasesTable.unitCost,
+      pricePerBunch: marketActualPurchasesTable.pricePerBunch,
+      costPerStem: marketActualPurchasesTable.costPerStem,
     })
     .from(marketActualPurchasesTable)
     .innerJoin(
@@ -201,7 +265,7 @@ async function readMarketContext(cycle: number) {
         eq(marketBuyListStatesTable.reported, true),
       ),
     );
-  const latestReportedPrice = new Map<string, { marketCycle: number; unitCost: number }>();
+  const latestReportedPrice = new Map<string, { marketCycle: number; pricePerBunch: number }>();
   for (const purchase of reportedPurchases) {
     if (purchase.marketCycle >= cycle) continue;
     const current = latestReportedPrice.get(purchase.flower);
@@ -213,7 +277,7 @@ async function readMarketContext(cycle: number) {
     const latest = latestReportedPrice.get(item.flower);
     return {
       ...item,
-      ...(latest ? { lastPrice: latest.unitCost } : {}),
+      ...(latest ? { lastPrice: latest.pricePerBunch } : {}),
       priceSource: latest
         ? {
             kind: "reported" as const,
@@ -250,7 +314,8 @@ router.get("/markets/flower-prices", async (_req, res): Promise<void> => {
       marketCycle: marketActualPurchasesTable.marketCycle,
       flower: marketActualPurchasesTable.flower,
       category: marketActualPurchasesTable.category,
-      unitCost: marketActualPurchasesTable.unitCost,
+      pricePerBunch: marketActualPurchasesTable.pricePerBunch,
+      costPerStem: marketActualPurchasesTable.costPerStem,
     })
     .from(marketActualPurchasesTable)
     .innerJoin(
@@ -262,7 +327,7 @@ router.get("/markets/flower-prices", async (_req, res): Promise<void> => {
   const byFlower = new Map<string, {
     flower: string;
     category: string;
-    history: Array<{ marketCycle: number; date: string; unitCost: number }>;
+    history: Array<{ marketCycle: number; date: string; pricePerBunch: number; costPerStem: number; unitCost: number }>;
   }>();
   for (const purchase of reportedPurchases) {
     const existing = byFlower.get(purchase.flower) ?? {
@@ -273,7 +338,9 @@ router.get("/markets/flower-prices", async (_req, res): Promise<void> => {
     existing.history.push({
       marketCycle: purchase.marketCycle,
       date: formatScheduledMarketDate(purchase.marketCycle),
-      unitCost: purchase.unitCost,
+      pricePerBunch: purchase.pricePerBunch,
+      costPerStem: purchase.costPerStem ?? 0,
+      unitCost: purchase.pricePerBunch,
     });
     byFlower.set(purchase.flower, existing);
   }
@@ -281,9 +348,9 @@ router.get("/markets/flower-prices", async (_req, res): Promise<void> => {
   const history = Array.from(byFlower.values()).map((entry) => {
     entry.history.sort((a, b) => b.marketCycle - a.marketCycle);
     const [latest, previous] = entry.history;
-    const change = previous ? latest.unitCost - previous.unitCost : null;
-    const changePercent = previous && previous.unitCost !== 0
-      ? (change! / previous.unitCost) * 100
+    const change = previous ? latest.pricePerBunch - previous.pricePerBunch : null;
+    const changePercent = previous && previous.pricePerBunch !== 0
+      ? (change! / previous.pricePerBunch) * 100
       : null;
     return {
       ...entry,
@@ -317,8 +384,8 @@ router.get("/markets", async (_req, res): Promise<void> => {
       db
         .select({
           marketCycle: marketActualPurchasesTable.marketCycle,
-          stems: marketActualPurchasesTable.stems,
-          unitCost: marketActualPurchasesTable.unitCost,
+          totalStemQty: marketActualPurchasesTable.totalStemQty,
+          costPerStem: marketActualPurchasesTable.costPerStem,
         })
         .from(marketActualPurchasesTable)
         .where(inArray(marketActualPurchasesTable.marketCycle, marketCycles)),
@@ -335,7 +402,7 @@ router.get("/markets", async (_req, res): Promise<void> => {
   for (const purchase of purchaseRecords) {
     flowerSpendByCycle.set(
       purchase.marketCycle,
-      (flowerSpendByCycle.get(purchase.marketCycle) ?? 0) + purchase.stems * purchase.unitCost,
+      (flowerSpendByCycle.get(purchase.marketCycle) ?? 0) + (purchase.totalStemQty ?? 0) * (purchase.costPerStem ?? 0),
     );
   }
   res.json(ListMarketsResponse.parse(markets.map((market) => ({
@@ -370,14 +437,14 @@ router.get("/markets/sell-through", async (req, res): Promise<void> => {
     .select({
       marketCycle: marketActualPurchasesTable.marketCycle,
       flower: marketActualPurchasesTable.flower,
-      stems: marketActualPurchasesTable.stems,
+      totalStemQty: marketActualPurchasesTable.totalStemQty,
     })
     .from(marketActualPurchasesTable)
     .where(inArray(marketActualPurchasesTable.marketCycle, cycles));
   const purchasesByCycle = new Map<number, Array<{ flower: string; stems: number }>>();
   for (const purchase of purchases) {
     const cyclePurchases = purchasesByCycle.get(purchase.marketCycle) ?? [];
-    cyclePurchases.push({ flower: purchase.flower, stems: purchase.stems });
+    cyclePurchases.push({ flower: purchase.flower, stems: purchase.totalStemQty ?? 0 });
     purchasesByCycle.set(purchase.marketCycle, cyclePurchases);
   }
 
@@ -453,15 +520,26 @@ router.put("/markets/context/:cycle/actual-purchases", async (req, res): Promise
     res.status(409).json({ error: "Lock the proposed buy list before entering actual purchases." });
     return;
   }
-  if (body.data.purchases.some((purchase) => !purchase.flower.trim() || purchase.stems <= 0 || purchase.unitCost < 0)) {
-    res.status(400).json({ error: "Each actual purchase needs a flower name, positive stem quantity, and non-negative cost." });
+  const normalizedPurchases = body.data.purchases.map((purchase) =>
+    normalizePurchaseInput(purchase as unknown as Record<string, unknown>),
+  );
+  if (normalizedPurchases.some((purchase) =>
+    !purchase.flower.trim()
+    || !Number.isInteger(purchase.bunchSize)
+    || purchase.bunchSize <= 0
+    || !Number.isInteger(purchase.bunchesPurchased)
+    || purchase.bunchesPurchased <= 0
+    || !Number.isFinite(purchase.pricePerBunch)
+    || purchase.pricePerBunch < 0
+  )) {
+    res.status(400).json({ error: "Each actual purchase needs a flower name, positive bunch size/count, and non-negative price per bunch." });
     return;
   }
 
   const saved = await db.transaction(async (tx) => {
     await tx.delete(marketActualPurchasesTable).where(eq(marketActualPurchasesTable.marketCycle, params.data.cycle));
-    if (body.data.purchases.length > 0) {
-      await tx.insert(marketActualPurchasesTable).values(body.data.purchases.map((purchase) => ({
+    if (normalizedPurchases.length > 0) {
+      await tx.insert(marketActualPurchasesTable).values(normalizedPurchases.map((purchase) => ({
         marketCycle: params.data.cycle,
         ...purchase,
       })));
@@ -482,7 +560,7 @@ router.put("/markets/context/:cycle/actual-purchases", async (req, res): Promise
       .where(eq(marketActualPurchasesTable.marketCycle, params.data.cycle))
       .orderBy(marketActualPurchasesTable.id);
     await recalculateMarketTotals(params.data.cycle, tx);
-    return { buyList: updatedBuyList, purchases };
+    return { buyList: updatedBuyList, purchases: purchases.map(serializePurchase) };
   });
   res.json(ReplaceMarketActualPurchasesResponse.parse(saved));
 });
@@ -613,10 +691,13 @@ router.patch("/markets/context/:cycle/close", async (req, res): Promise<void> =>
     return;
   }
   const purchases = await db
-    .select({ flower: marketActualPurchasesTable.flower, stems: marketActualPurchasesTable.stems })
+    .select({ flower: marketActualPurchasesTable.flower, totalStemQty: marketActualPurchasesTable.totalStemQty })
     .from(marketActualPurchasesTable)
     .where(eq(marketActualPurchasesTable.marketCycle, params.data.cycle));
-  const sellThrough = calculateSellThrough(purchases, body.data.counts);
+  const sellThrough = calculateSellThrough(
+    purchases.map((purchase) => ({ flower: purchase.flower, stems: purchase.totalStemQty ?? 0 })),
+    body.data.counts,
+  );
   const [closeMarket] = await db
     .update(closeMarketsTable)
     .set({ counts: body.data.counts, sellThrough, closed: body.data.closed })

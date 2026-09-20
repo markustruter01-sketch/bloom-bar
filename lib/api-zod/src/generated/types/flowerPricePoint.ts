@@ -9,6 +9,20 @@
 export interface FlowerPricePoint {
   marketCycle: number;
   date: string;
-  /** @minimum 0 */
+  /**
+     * AUD price per purchased bunch
+     * @minimum 0
+     */
+  pricePerBunch: number;
+  /**
+     * Calculated AUD cost per stem
+     * @minimum 0
+     */
+  costPerStem: number;
+  /**
+     * Compatibility alias for pricePerBunch
+     * @deprecated
+     * @minimum 0
+     */
   unitCost: number;
 }

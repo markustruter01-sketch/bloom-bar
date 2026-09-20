@@ -371,7 +371,7 @@ components:
             $ref: "#/components/schemas/ReceiptCandidate"
     ActualPurchase:
       type: object
-      required: [id, marketCycle, flower, detail, category, stems, unitCost, source]
+      required: [id, marketCycle, flower, detail, category, bunchSize, bunchesPurchased, pricePerBunch, supplier, totalStemQty, costPerStem, source, stems, unitCost]
       properties:
         id:
           type: number
@@ -383,18 +383,76 @@ components:
           type: string
         category:
           type: string
+        bunchSize:
+          type: number
+          minimum: 1
+          description: Stems contained in one purchased bunch
+        bunchesPurchased:
+          type: number
+          minimum: 1
+          description: Number of bunches purchased on this line
+        pricePerBunch:
+          type: number
+          minimum: 0
+          description: AUD price for one bunch
+        supplier:
+          type: string
+          nullable: true
+          description: Optional wholesaler or supplier name
+        totalStemQty:
+          type: number
+          minimum: 0
+          description: Calculated as bunchSize multiplied by bunchesPurchased
+        costPerStem:
+          type: number
+          minimum: 0
+          description: Calculated as pricePerBunch divided by bunchSize
         stems:
           type: number
           minimum: 0
+          deprecated: true
+          description: Compatibility alias for totalStemQty
         unitCost:
           type: number
           minimum: 0
+          deprecated: true
+          description: Compatibility alias for costPerStem
         source:
           type: string
           enum: [manual, receipt]
-    ActualPurchaseInput:
+    BunchPurchaseInput:
+      type: object
+      required: [flower, detail, category, bunchSize, bunchesPurchased, pricePerBunch, source]
+      properties:
+        flower:
+          type: string
+        detail:
+          type: string
+        category:
+          type: string
+        bunchSize:
+          type: number
+          minimum: 1
+          description: Stems contained in one purchased bunch
+        bunchesPurchased:
+          type: number
+          minimum: 1
+          description: Number of bunches purchased on this line
+        pricePerBunch:
+          type: number
+          minimum: 0
+          description: AUD price for one bunch
+        supplier:
+          type: string
+          nullable: true
+          description: Optional wholesaler or supplier name
+        source:
+          type: string
+          enum: [manual, receipt]
+    LegacyActualPurchaseInput:
       type: object
       required: [flower, detail, category, stems, unitCost, source]
+      description: Temporary compatibility shape. It is normalized to one-stem bunches before storage.
       properties:
         flower:
           type: string
@@ -404,13 +462,17 @@ components:
           type: string
         stems:
           type: number
-          minimum: 0
+          minimum: 1
         unitCost:
           type: number
           minimum: 0
         source:
           type: string
           enum: [manual, receipt]
+    ActualPurchaseInput:
+      oneOf:
+        - $ref: "#/components/schemas/BunchPurchaseInput"
+        - $ref: "#/components/schemas/LegacyActualPurchaseInput"
     ActualPurchasesUpdate:
       type: object
       required: [purchases]
@@ -483,15 +545,25 @@ components:
           type: number
     FlowerPricePoint:
       type: object
-      required: [marketCycle, date, unitCost]
+      required: [marketCycle, date, pricePerBunch, costPerStem, unitCost]
       properties:
         marketCycle:
           type: number
         date:
           type: string
+        pricePerBunch:
+          type: number
+          minimum: 0
+          description: AUD price per purchased bunch
+        costPerStem:
+          type: number
+          minimum: 0
+          description: Calculated AUD cost per stem
         unitCost:
           type: number
           minimum: 0
+          deprecated: true
+          description: Compatibility alias for pricePerBunch
     FlowerPriceHistory:
       type: object
       required: [flower, category, latest, previous, change, changePercent, history]

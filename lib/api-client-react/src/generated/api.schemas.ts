@@ -108,31 +108,103 @@ export interface ActualPurchase {
   flower: string;
   detail: string;
   category: string;
-  /** @minimum 0 */
+  /**
+     * Stems contained in one purchased bunch
+     * @minimum 1
+     */
+  bunchSize: number;
+  /**
+     * Number of bunches purchased on this line
+     * @minimum 1
+     */
+  bunchesPurchased: number;
+  /**
+     * AUD price for one bunch
+     * @minimum 0
+     */
+  pricePerBunch: number;
+  /** Optional wholesaler or supplier name */
+  supplier: string | null;
+  /**
+     * Calculated as bunchSize multiplied by bunchesPurchased
+     * @minimum 0
+     */
+  totalStemQty: number;
+  /**
+     * Calculated as pricePerBunch divided by bunchSize
+     * @minimum 0
+     */
+  costPerStem: number;
+  /**
+     * Compatibility alias for totalStemQty
+     * @deprecated
+     * @minimum 0
+     */
   stems: number;
-  /** @minimum 0 */
+  /**
+     * Compatibility alias for costPerStem
+     * @deprecated
+     * @minimum 0
+     */
   unitCost: number;
   source: ActualPurchaseSource;
 }
 
-export type ActualPurchaseInputSource = typeof ActualPurchaseInputSource[keyof typeof ActualPurchaseInputSource];
+export type BunchPurchaseInputSource = typeof BunchPurchaseInputSource[keyof typeof BunchPurchaseInputSource];
 
 
-export const ActualPurchaseInputSource = {
+export const BunchPurchaseInputSource = {
   manual: 'manual',
   receipt: 'receipt',
 } as const;
 
-export interface ActualPurchaseInput {
+export interface BunchPurchaseInput {
   flower: string;
   detail: string;
   category: string;
-  /** @minimum 0 */
+  /**
+     * Stems contained in one purchased bunch
+     * @minimum 1
+     */
+  bunchSize: number;
+  /**
+     * Number of bunches purchased on this line
+     * @minimum 1
+     */
+  bunchesPurchased: number;
+  /**
+     * AUD price for one bunch
+     * @minimum 0
+     */
+  pricePerBunch: number;
+  /** Optional wholesaler or supplier name */
+  supplier?: string | null;
+  source: BunchPurchaseInputSource;
+}
+
+export type LegacyActualPurchaseInputSource = typeof LegacyActualPurchaseInputSource[keyof typeof LegacyActualPurchaseInputSource];
+
+
+export const LegacyActualPurchaseInputSource = {
+  manual: 'manual',
+  receipt: 'receipt',
+} as const;
+
+/**
+ * Temporary compatibility shape. It is normalized to one-stem bunches before storage.
+ */
+export interface LegacyActualPurchaseInput {
+  flower: string;
+  detail: string;
+  category: string;
+  /** @minimum 1 */
   stems: number;
   /** @minimum 0 */
   unitCost: number;
-  source: ActualPurchaseInputSource;
+  source: LegacyActualPurchaseInputSource;
 }
+
+export type ActualPurchaseInput = BunchPurchaseInput | LegacyActualPurchaseInput;
 
 export interface ActualPurchasesUpdate {
   purchases: ActualPurchaseInput[];
@@ -165,7 +237,21 @@ export interface MarketCostsResponse {
 export interface FlowerPricePoint {
   marketCycle: number;
   date: string;
-  /** @minimum 0 */
+  /**
+     * AUD price per purchased bunch
+     * @minimum 0
+     */
+  pricePerBunch: number;
+  /**
+     * Calculated AUD cost per stem
+     * @minimum 0
+     */
+  costPerStem: number;
+  /**
+     * Compatibility alias for pricePerBunch
+     * @deprecated
+     * @minimum 0
+     */
   unitCost: number;
 }
 

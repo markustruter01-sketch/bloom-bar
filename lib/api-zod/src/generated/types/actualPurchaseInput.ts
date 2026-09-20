@@ -5,15 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { ActualPurchaseInputSource } from './actualPurchaseInputSource';
+import type { BunchPurchaseInput } from './bunchPurchaseInput';
+import type { LegacyActualPurchaseInput } from './legacyActualPurchaseInput';
 
-export interface ActualPurchaseInput {
-  flower: string;
-  detail: string;
-  category: string;
-  /** @minimum 0 */
-  stems: number;
-  /** @minimum 0 */
-  unitCost: number;
-  source: ActualPurchaseInputSource;
-}
+export type ActualPurchaseInput = BunchPurchaseInput | LegacyActualPurchaseInput;

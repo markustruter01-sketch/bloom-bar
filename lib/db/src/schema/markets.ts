@@ -1,7 +1,10 @@
 import { createInsertSchema } from "drizzle-zod";
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   doublePrecision,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -75,11 +78,24 @@ export const marketActualPurchasesTable = pgTable(
     flower: text("flower").notNull(),
     detail: text("detail").notNull(),
     category: text("category").notNull(),
-    stems: integer("stems").notNull(),
-    unitCost: doublePrecision("unit_cost").notNull(),
+    bunchSize: integer("bunch_size").notNull(),
+    bunchesPurchased: integer("bunches_purchased").notNull(),
+    pricePerBunch: doublePrecision("price_per_bunch").notNull(),
+    supplier: text("supplier"),
+    totalStemQty: integer("total_stem_qty").generatedAlwaysAs(
+      sql`"bunch_size" * "bunches_purchased"`,
+    ),
+    costPerStem: doublePrecision("cost_per_stem").generatedAlwaysAs(
+      sql`CASE WHEN "bunch_size" > 0 THEN "price_per_bunch" / "bunch_size" ELSE 0 END`,
+    ),
     source: text("source").notNull().default("manual"),
   },
-  (table) => ({ marketFlowerUnique: unique("market_actual_purchases_cycle_flower_unique").on(table.marketCycle, table.flower) }),
+  (table) => ({
+    marketFlowerIndex: index("market_actual_purchases_cycle_flower_idx").on(table.marketCycle, table.flower),
+    bunchSizePositive: check("market_actual_purchases_bunch_size_positive", sql`"bunch_size" > 0`),
+    bunchesPurchasedPositive: check("market_actual_purchases_bunches_positive", sql`"bunches_purchased" > 0`),
+    pricePerBunchNonNegative: check("market_actual_purchases_price_per_bunch_non_negative", sql`"price_per_bunch" >= 0`),
+  }),
 );
 
 export const marketCostsTable = pgTable("market_costs", {

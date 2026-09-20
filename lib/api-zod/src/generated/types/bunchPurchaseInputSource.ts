@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ActualPurchaseInputSource = typeof ActualPurchaseInputSource[keyof typeof ActualPurchaseInputSource];
+export type BunchPurchaseInputSource = typeof BunchPurchaseInputSource[keyof typeof BunchPurchaseInputSource];
 
 
-export const ActualPurchaseInputSource = {
+export const BunchPurchaseInputSource = {
   manual: 'manual',
   receipt: 'receipt',
 } as const;

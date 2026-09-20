@@ -29,14 +29,14 @@ const { FlowerPriceTracker } = await import('./App');
 const priceHistory = [{
   flower: 'Lisianthus',
   category: 'Classic Blooms',
-  latest: { marketCycle: 0, date: '13 Sep 2026', unitCost: 3.2 },
-  previous: { marketCycle: -1, date: '30 Aug 2026', unitCost: 2.8 },
+  latest: { marketCycle: 0, date: '13 Sep 2026', pricePerBunch: 3.2, costPerStem: 3.2, unitCost: 3.2 },
+  previous: { marketCycle: -1, date: '30 Aug 2026', pricePerBunch: 2.8, costPerStem: 2.8, unitCost: 2.8 },
   change: 0.4,
   changePercent: 14.2857,
   history: [
-    { marketCycle: 0, date: '13 Sep 2026', unitCost: 3.2 },
-    { marketCycle: -1, date: '30 Aug 2026', unitCost: 2.8 },
-    { marketCycle: -2, date: '16 Aug 2026', unitCost: 2.55 },
+    { marketCycle: 0, date: '13 Sep 2026', pricePerBunch: 3.2, costPerStem: 3.2, unitCost: 3.2 },
+    { marketCycle: -1, date: '30 Aug 2026', pricePerBunch: 2.8, costPerStem: 2.8, unitCost: 2.8 },
+    { marketCycle: -2, date: '16 Aug 2026', pricePerBunch: 2.55, costPerStem: 2.55, unitCost: 2.55 },
   ],
 }];
 
