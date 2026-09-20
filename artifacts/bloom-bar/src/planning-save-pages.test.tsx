@@ -119,6 +119,93 @@ describe('planning save rejection states', () => {
     assert.equal(flowerInput.value, 'Disbud chrysanthemum');
   });
 
+  it('keeps added, edited, and removed market costs through a failed save and retry', async () => {
+    const failed = deferred<boolean>();
+    const retried = deferred<boolean>();
+    const savedCostSets: Array<Array<{ description: string; amount: number }>> = [];
+    const saveCosts = async (nextCosts: Array<{ description: string; amount: number }>) => {
+      savedCostSets.push(nextCosts);
+      return savedCostSets.length === 1 ? failed.promise : retried.promise;
+    };
+
+    render(
+      <BuyPage
+        buyItems={buyItems}
+        actualPurchases={[actualPurchase]}
+        costs={[
+          { id: 1, marketCycle: 0, description: 'Stall fee', amount: 30 },
+          { id: 2, marketCycle: 0, description: 'Packaging', amount: 12 },
+        ]}
+        buyList={{
+          marketCycle: 0,
+          locked: true,
+          reported: false,
+          receiptFileName: null,
+          receiptText: null,
+          receiptCandidates: [],
+        }}
+        nextMarket={nextMarket}
+        toggleBuyItem={async () => true}
+        lockBuyList={async () => true}
+        saveActualPurchases={async () => true}
+        saveCosts={saveCosts}
+        reportPurchases={async () => true}
+      />,
+    );
+
+    const descriptions = screen.getAllByLabelText('Description') as HTMLInputElement[];
+    const amounts = screen.getAllByLabelText('Amount') as HTMLInputElement[];
+    fireEvent.change(descriptions[0], { target: { value: 'Stall fee' } });
+    fireEvent.change(amounts[0], { target: { value: '35' } });
+    fireEvent.click(screen.getByTestId('button-add-market-cost'));
+
+    const addedDescription = screen.getAllByLabelText('Description')[2] as HTMLInputElement;
+    const addedAmount = screen.getAllByLabelText('Amount')[2] as HTMLInputElement;
+    fireEvent.change(addedDescription, { target: { value: 'Transport' } });
+    fireEvent.change(addedAmount, { target: { value: '18' } });
+    fireEvent.click(screen.getByTestId('button-remove-market-cost-1'));
+
+    assert.deepEqual(
+      (screen.getAllByLabelText('Description') as HTMLInputElement[]).map((input) => input.value),
+      ['Stall fee', 'Transport'],
+    );
+    assert.deepEqual(
+      (screen.getAllByLabelText('Amount') as HTMLInputElement[]).map((input) => input.value),
+      ['35', '18'],
+    );
+
+    fireEvent.click(screen.getByTestId('button-save-market-costs'));
+    assert.deepEqual(savedCostSets, [[
+      { description: 'Stall fee', amount: 35 },
+      { description: 'Transport', amount: 18 },
+    ]]);
+
+    failed.resolve(false);
+    await waitFor(() => screen.getByTestId('save-status-error'));
+    assert.deepEqual(
+      (screen.getAllByLabelText('Description') as HTMLInputElement[]).map((input) => input.value),
+      ['Stall fee', 'Transport'],
+    );
+    assert.deepEqual(
+      (screen.getAllByLabelText('Amount') as HTMLInputElement[]).map((input) => input.value),
+      ['35', '18'],
+    );
+
+    fireEvent.click(screen.getByTestId('button-retry-save'));
+    retried.resolve(true);
+    await waitFor(() => assert.match(screen.getByTestId('save-status-saved').textContent ?? '', /Saved to the market plan/));
+    assert.deepEqual(savedCostSets, [
+      [
+        { description: 'Stall fee', amount: 35 },
+        { description: 'Transport', amount: 18 },
+      ],
+      [
+        { description: 'Stall fee', amount: 35 },
+        { description: 'Transport', amount: 18 },
+      ],
+    ]);
+  });
+
   it('keeps the edited bouquet plan visible through a failed save and retry', async () => {
     const failed = deferred<boolean>();
     const retried = deferred<boolean>();
