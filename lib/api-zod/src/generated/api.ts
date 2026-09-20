@@ -253,6 +253,13 @@ export const GetMarketContextResponse = zod.object({
   "unitCost": zod.number().min(getMarketContextResponseBuyListReceiptCandidatesItemUnitCostMin),
   "confidence": zod.enum(['high', 'medium', 'low']),
   "rawLine": zod.string()
+})),
+  "editLog": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "action": zod.enum(['unlocked', 'item_updated', 'relocked']),
+  "summary": zod.string(),
+  "createdAt": zod.coerce.date()
 }))
 }),
   "actualPurchases": zod.array(zod.object({
@@ -356,12 +363,19 @@ export const UpdateMarketBuyListResponse = zod.object({
   "unitCost": zod.number().min(updateMarketBuyListResponseReceiptCandidatesItemUnitCostMin),
   "confidence": zod.enum(['high', 'medium', 'low']),
   "rawLine": zod.string()
+})),
+  "editLog": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "action": zod.enum(['unlocked', 'item_updated', 'relocked']),
+  "summary": zod.string(),
+  "createdAt": zod.coerce.date()
 }))
 })
 
 
 /**
- * @summary Save actual purchases and receipt analysis for a market cycle
+ * @summary Save actual purchases for a market cycle
  */
 export const ReplaceMarketActualPurchasesParams = zod.object({
   "cycle": zod.coerce.number()
@@ -440,6 +454,13 @@ export const ReplaceMarketActualPurchasesResponse = zod.object({
   "unitCost": zod.number().min(replaceMarketActualPurchasesResponseBuyListReceiptCandidatesItemUnitCostMin),
   "confidence": zod.enum(['high', 'medium', 'low']),
   "rawLine": zod.string()
+})),
+  "editLog": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "action": zod.enum(['unlocked', 'item_updated', 'relocked']),
+  "summary": zod.string(),
+  "createdAt": zod.coerce.date()
 }))
 }),
   "purchases": zod.array(zod.object({
@@ -520,6 +541,13 @@ export const ReportMarketPurchasesResponse = zod.object({
   "unitCost": zod.number().min(reportMarketPurchasesResponseReceiptCandidatesItemUnitCostMin),
   "confidence": zod.enum(['high', 'medium', 'low']),
   "rawLine": zod.string()
+})),
+  "editLog": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "action": zod.enum(['unlocked', 'item_updated', 'relocked']),
+  "summary": zod.string(),
+  "createdAt": zod.coerce.date()
 }))
 })
 

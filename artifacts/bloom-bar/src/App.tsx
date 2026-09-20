@@ -23,21 +23,18 @@ import {
 } from '@workspace/api-client-react';
 import type {
   ActualPurchase,
-  ActualPurchasesUpdate,
+  BunchPurchaseInput,
   BouquetPlan,
   BuyItem as ApiBuyItem,
   CloseMarket,
   FlowerPriceHistory,
-  LegacyActualPurchaseInput,
   Market,
   MarketContext,
   MarketCost,
   MarketCostInput,
   MarketScheduleOverride,
   MarketScheduleOverrideUpdate,
-  ReceiptCandidate,
 } from '@workspace/api-client-react';
-import { createWorker } from 'tesseract.js';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { ToastAction } from '@/components/ui/toast';
 import { Toaster } from '@/components/ui/toaster';
@@ -68,7 +65,6 @@ import {
   Package,
   Pencil,
   Plus,
-  ReceiptText,
   Search,
   ShoppingBasket,
   Sparkles,
@@ -76,9 +72,7 @@ import {
   Tag,
   Trash2,
   TrendingUp,
-  Truck,
   UnlockKeyhole,
-  Upload,
   X,
 } from 'lucide-react';
 import {
@@ -168,6 +162,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 type BuySaveAction =
   | { kind: 'toggle'; id: number }
   | { kind: 'lock' }
+  | { kind: 'unlock' }
   | { kind: 'actual-purchases' }
   | { kind: 'costs' }
   | { kind: 'report' };
@@ -564,55 +559,28 @@ function MarketSubnav({ active, nextMarket }: { active: 'buy' | 'bouquets' | 'cl
   return <div className="mb-8 flex items-center justify-between gap-3 overflow-x-auto border-b border-foreground/10"><div className="flex gap-1">{[{ id: 'buy', label: 'Buy list', href: '/markets/next/buy', icon: ShoppingBasket }, { id: 'bouquets', label: 'Bouquets', href: '/markets/next/bouquets', icon: Sparkles }, { id: 'close', label: 'Close market', href: '/markets/next/close', icon: ClipboardCheck }].map(({ id, label, href, icon: Icon }) => <Link key={id} href={href} data-testid={`tab-market-${id}`} className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-xs font-semibold ${active === id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}><Icon size={14} />{label}</Link>)}</div><MarketCycleBanner summary={nextMarket} testId="planning-cycle" /></div>;
 }
 
-type ReceiptPayload = Pick<ActualPurchasesUpdate, 'receiptFileName' | 'receiptText' | 'receiptCandidates'>;
-
-function parseReceiptCandidates(text: string, buyItems: BuyItem[]): ReceiptCandidate[] {
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  return lines.flatMap((rawLine) => {
-    const currencyMatches = [...rawLine.matchAll(/\$\s*(\d+(?:\.\d{1,2})?)/g)];
-    const numberMatches = [...rawLine.matchAll(/\b\d+(?:\.\d{1,2})?\b/g)];
-    const priceText = currencyMatches.at(-1)?.[1] ?? numberMatches.at(-1)?.[0];
-    const unitCost = priceText ? Number(priceText) : NaN;
-    if (!Number.isFinite(unitCost) || unitCost <= 0) return [];
-    const matchedItem = buyItems.find((item) => rawLine.toLowerCase().includes(item.flower.toLowerCase()));
-    const quantityMatch = rawLine.match(/\b(\d+)\s*(?:stems?|bunch(?:es)?|x)\b/i);
-    const stems = quantityMatch ? Number(quantityMatch[1]) : 1;
-    const flower = matchedItem?.flower ?? rawLine
-      .replace(/\$\s*\d+(?:\.\d{1,2})?/g, '')
-      .replace(/\b\d+(?:\.\d{1,2})?\b/g, '')
-      .replace(/[^a-zA-Z\s-]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (!flower) return [];
-    const confidence: ReceiptCandidate['confidence'] = matchedItem ? 'high' : currencyMatches.length ? 'medium' : 'low';
-    return [{
-      flower,
-      stems: Number.isFinite(stems) && stems > 0 ? stems : 1,
-      unitCost,
-      confidence,
-      rawLine,
-    }];
-  }).slice(0, 30);
-}
-
-function purchaseDraftFromItem(item: BuyItem): LegacyActualPurchaseInput {
+function purchaseDraftFromItem(item: BuyItem): BunchPurchaseInput {
   return {
     flower: item.flower,
     detail: item.detail,
     category: item.category,
-    stems: item.qty,
-    unitCost: item.lastPrice,
+    bunchSize: 10,
+    bunchesPurchased: item.qty,
+    pricePerBunch: item.lastPrice,
+    supplier: null,
     source: 'manual',
   };
 }
 
-function purchaseDraftFromActual(purchase: ActualPurchase): LegacyActualPurchaseInput {
+function purchaseDraftFromActual(purchase: ActualPurchase): BunchPurchaseInput {
   return {
     flower: purchase.flower,
     detail: purchase.detail,
     category: purchase.category,
-    stems: purchase.stems,
-    unitCost: purchase.unitCost,
+    bunchSize: purchase.bunchSize,
+    bunchesPurchased: purchase.bunchesPurchased,
+    pricePerBunch: purchase.pricePerBunch,
+    supplier: purchase.supplier,
     source: purchase.source,
   };
 }
@@ -624,7 +592,7 @@ export function BuyPage({
   buyList,
   nextMarket,
   toggleBuyItem,
-  lockBuyList,
+  setBuyListLock,
   saveActualPurchases,
   saveCosts,
   reportPurchases,
@@ -635,16 +603,14 @@ export function BuyPage({
   buyList: MarketContext['buyList'];
   nextMarket: MarketCycleSummary;
   toggleBuyItem: (id: number) => Promise<boolean>;
-  lockBuyList: () => Promise<boolean>;
-  saveActualPurchases: (purchases: LegacyActualPurchaseInput[], receipt: ReceiptPayload) => Promise<boolean>;
+  setBuyListLock: (locked: boolean) => Promise<boolean>;
+  saveActualPurchases: (purchases: BunchPurchaseInput[]) => Promise<boolean>;
   saveCosts: (costs: MarketCostInput[]) => Promise<boolean>;
   reportPurchases: () => Promise<boolean>;
 }) {
   const [filter, setFilter] = useState('All categories');
-  const [drafts, setDrafts] = useState<LegacyActualPurchaseInput[]>([]);
+  const [drafts, setDrafts] = useState<BunchPurchaseInput[]>([]);
   const [costDrafts, setCostDrafts] = useState<MarketCostInput[]>([]);
-  const [receipt, setReceipt] = useState<ReceiptPayload>({});
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -653,28 +619,23 @@ export function BuyPage({
   const items = buyItems.filter((item) => filter === 'All categories' || item.category === filter);
   const done = buyItems.filter((item) => item.checked).length;
   const proposedTotal = buyItems.reduce((sum, item) => sum + item.qty * item.lastPrice, 0);
-  const actualTotal = drafts.reduce((sum, purchase) => sum + purchase.stems * purchase.unitCost, 0);
+  const actualTotal = drafts.reduce((sum, purchase) => sum + purchase.bunchesPurchased * purchase.pricePerBunch, 0);
   const nonFlowerTotal = costDrafts.reduce((sum, cost) => sum + cost.amount, 0);
 
   useEffect(() => {
     if (!buyList.locked) return;
     setDrafts(actualPurchases.length ? actualPurchases.map(purchaseDraftFromActual) : buyItems.map(purchaseDraftFromItem));
-    setReceipt({
-      receiptFileName: buyList.receiptFileName ?? undefined,
-      receiptText: buyList.receiptText ?? undefined,
-      receiptCandidates: buyList.receiptCandidates,
-    });
     setCostDrafts(costs.map(({ description, amount }) => ({ description, amount })));
-  }, [buyList.marketCycle, buyList.locked, buyList.receiptFileName, buyList.receiptText, buyList.receiptCandidates, actualPurchases, buyItems, costs]);
+  }, [buyList.marketCycle, buyList.locked, actualPurchases, buyItems, costs]);
 
-  const updateDraft = (index: number, patch: Partial<LegacyActualPurchaseInput>) => {
+  const updateDraft = (index: number, patch: Partial<BunchPurchaseInput>) => {
     setSaveState('idle');
     setDrafts((current) => current.map((purchase, purchaseIndex) => purchaseIndex === index ? { ...purchase, ...patch } : purchase));
   };
 
   const addDraft = () => {
     setSaveState('idle');
-    setDrafts((current) => [...current, { flower: '', detail: 'Added after purchase', category: ApiFlowerCategory.Classic_Blooms, stems: 1, unitCost: 0, source: 'manual' }]);
+    setDrafts((current) => [...current, { flower: '', detail: 'Added after purchase', category: ApiFlowerCategory.Classic_Blooms, bunchSize: 1, bunchesPurchased: 1, pricePerBunch: 0, supplier: null, source: 'manual' }]);
   };
 
   const addCost = () => {
@@ -687,39 +648,9 @@ export function BuyPage({
     setCostDrafts((current) => current.map((cost, costIndex) => costIndex === index ? { ...cost, ...patch } : cost));
   };
 
-  const analyzeReceipt = async (file: File) => {
-    setIsAnalyzing(true);
-    setSaveState('idle');
-    setFeedback('Reading the receipt image…');
-    try {
-      const worker = await createWorker('eng');
-      const result = await worker.recognize(file);
-      await worker.terminate();
-      const candidates = parseReceiptCandidates(result.data.text, buyItems);
-      const nextDrafts = candidates.map((candidate) => {
-        const matchedItem = buyItems.find((item) => item.flower.toLowerCase() === candidate.flower.toLowerCase());
-        return {
-          flower: candidate.flower,
-          detail: matchedItem?.detail ?? 'Receipt line — please confirm',
-          category: matchedItem?.category ?? 'Classic Blooms',
-          stems: candidate.stems,
-          unitCost: candidate.unitCost,
-          source: 'receipt' as const,
-        };
-      });
-      setReceipt({ receiptFileName: file.name, receiptText: result.data.text, receiptCandidates: candidates });
-      if (nextDrafts.length) setDrafts(nextDrafts);
-      setFeedback(candidates.length ? `${candidates.length} receipt line${candidates.length === 1 ? '' : 's'} found. Check the values before saving.` : 'No priced flower lines were found. Add the actual purchases manually.');
-    } catch {
-      setFeedback('Receipt analysis could not finish. You can still enter actual purchases manually.');
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
   const performSave = async (action: BuySaveAction) => {
-    if (action.kind === 'actual-purchases' && drafts.some((purchase) => !purchase.flower.trim() || purchase.stems <= 0 || purchase.unitCost < 0)) {
-      setFeedback('Each purchase needs a flower name, positive stems, and a non-negative cost.');
+    if (action.kind === 'actual-purchases' && drafts.some((purchase) => !purchase.flower.trim() || purchase.bunchSize <= 0 || purchase.bunchesPurchased <= 0 || purchase.pricePerBunch < 0)) {
+      setFeedback('Each purchase needs a flower name, positive bunch size/count, and a non-negative price per bunch.');
       setSaveState('idle');
       return;
     }
@@ -737,10 +668,13 @@ export function BuyPage({
       saved = await toggleBuyItem(action.id);
       savedMessage = 'Buy-list progress saved.';
     } else if (action.kind === 'lock') {
-      saved = await lockBuyList();
+      saved = await setBuyListLock(true);
       savedMessage = 'Buy list locked for shopping.';
+    } else if (action.kind === 'unlock') {
+      saved = await setBuyListLock(false);
+      savedMessage = 'Buy list unlocked for editing.';
     } else if (action.kind === 'actual-purchases') {
-      saved = await saveActualPurchases(drafts, receipt);
+      saved = await saveActualPurchases(drafts);
       savedMessage = 'Actual purchases saved against this market date.';
     } else if (action.kind === 'costs') {
       saved = await saveCosts(costDrafts);
@@ -763,8 +697,8 @@ export function BuyPage({
     <PageIntro
       eyebrow="Next market / preparation"
       title={buyList.locked ? 'Record what really came home.' : 'Buy with a clear head.'}
-      description={buyList.locked ? 'The proposed list is frozen. Confirm quantities and costs from the receipt, then report the completed purchase record.' : 'Build the proposed flower run, tick items off as they land in your trolley, then lock the list before shopping.'}
-      action={<div className="rounded-md bg-[#dce3c2] px-3 py-2 text-center"><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">{nextMarket.shortDate}</div><div className="text-sm font-semibold text-primary">{nextMarket.daysUntil} to go</div></div>}
+      description={buyList.locked ? 'The proposed list is locked. Record each bunch you actually bought, including supplier details when useful.' : 'Build the proposed flower run, tick items off as they land in your trolley, then lock the list before shopping.'}
+      action={<div className="flex items-center gap-2"><div className="rounded-md bg-[#dce3c2] px-3 py-2 text-center"><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">{nextMarket.shortDate}</div><div className="text-sm font-semibold text-primary">{nextMarket.daysUntil} to go</div></div>{buyList.locked && <Button onClick={() => { if (window.confirm('Unlock this proposed list so you can edit it? Your actual purchases will stay saved.')) void performSave({ kind: 'unlock' }); }} disabled={isSaving} className="border border-primary/20 bg-background text-primary hover:bg-primary/5" testId="button-unlock-buy-list"><UnlockKeyhole size={15} /> Unlock to Edit</Button>}</div>}
     />
     <MarketSubnav active="buy" nextMarket={nextMarket} />
     {!buyList.locked ? <div className="grid gap-5 lg:grid-cols-[1fr_330px]">
@@ -776,22 +710,17 @@ export function BuyPage({
          <div className="space-y-2">{items.map((item) => <button type="button" key={item.id} onClick={() => void performSave({ kind: 'toggle', id: item.id })} disabled={isSaving} data-testid={`button-check-buy-${item.id}`} className={`group flex w-full items-center gap-3 rounded-lg border p-4 text-left transition-all ${item.checked ? 'border-[#ccd6b0] bg-[#edf0df]/75' : 'border-card-border bg-card hover:border-primary/30'}`}><span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-all ${item.checked ? 'check-pop border-primary bg-primary text-primary-foreground' : 'border-foreground/20 group-hover:border-primary'}`}>{item.checked && <Check size={14} strokeWidth={3} />}</span><span className="min-w-0 flex-1"><span className={`block text-sm font-semibold ${item.checked ? 'text-muted-foreground line-through' : ''}`}>{item.flower}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.detail}</span></span><span className="text-right"><span className="block font-mono text-sm">{item.qty}</span><span className="block text-[10px] text-muted-foreground">{item.unit}</span></span><span className="hidden w-32 text-right sm:block"><span className="block font-mono text-xs">{money(item.lastPrice)}</span><span data-testid={`text-buy-price-source-${item.id}`} className="block text-[10px] leading-tight text-muted-foreground">{item.priceSource.kind === 'reported' ? `Buy List Report · ${item.priceSource.date}` : 'Fallback estimate · no report history'}</span></span><MoreHorizontal size={16} className="text-muted-foreground/50" /></button>)}</div>
         <div className="mt-4 rounded-lg border border-primary/15 bg-[#e8e4cd] p-5">
           <div className="flex items-start gap-3"><LockKeyhole size={18} className="mt-0.5 text-primary" /><div><h3 className="font-serif text-xl text-primary">Ready to freeze this run?</h3><p className="mt-1 text-xs leading-relaxed text-primary/70">Locking keeps the proposed list stable while you shop. You can still record different quantities, prices, or extra flowers in the actual purchase record.</p></div></div>
-          <Button onClick={() => void performSave({ kind: 'lock' })} disabled={isSaving} className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90" testId="button-lock-buy-list">{isSaving && saveAction?.kind === 'lock' ? <LoaderCircle size={15} className="animate-spin" /> : <LockKeyhole size={15} />} {isSaving && saveAction?.kind === 'lock' ? 'Saving…' : 'Lock proposed buy list'}</Button>
+           <Button onClick={() => void performSave({ kind: 'lock' })} disabled={isSaving} className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90" testId="button-lock-buy-list">{isSaving && saveAction?.kind === 'lock' ? <LoaderCircle size={15} className="animate-spin" /> : <LockKeyhole size={15} />} {isSaving && saveAction?.kind === 'lock' ? 'Saving…' : 'Lock List'}</Button>
           <div className="mt-3"><SaveFeedback state={saveState} onRetry={handleRetry} /></div>
         </div>
       </div>
-      <aside className="h-fit space-y-3 lg:sticky lg:top-24"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><DollarSign size={13} /> Sourcing estimate</div><div className="mt-4 font-serif text-4xl tracking-[-.04em] text-primary" data-testid="text-buy-estimate">{money(proposedTotal)}</div><p className="mt-1 text-xs leading-relaxed text-primary/65">Based on your last recorded prices. Leave a little room for market morning surprises.</p><div className="mt-5 border-t border-primary/15 pt-4"><div className="flex justify-between text-xs"><span className="text-primary/65">Expected flower spend</span><span className="font-mono font-semibold text-primary">{money(proposedTotal)}</span></div><div className="mt-2 flex justify-between text-xs"><span className="text-primary/65">Target revenue</span><span className="font-mono font-semibold text-primary">$1,846</span></div></div></div><div className="paper-card rounded-lg border border-card-border p-5"><div className="flex items-center gap-2 font-serif text-lg"><Truck size={17} className="text-muted-foreground" /> Sourcing notes</div><ul className="mt-4 space-y-3 text-xs leading-relaxed text-muted-foreground"><li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />Confirm grower availability by Thursday afternoon.</li><li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />Ask for the softest apricot disbuds on the cart.</li><li className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />Pick up buckets and extra paper on the way in.</li></ul></div></aside>
+      <aside className="h-fit space-y-3 lg:sticky lg:top-24"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><DollarSign size={13} /> Sourcing estimate</div><div className="mt-4 font-serif text-4xl tracking-[-.04em] text-primary" data-testid="text-buy-estimate">{money(proposedTotal)}</div><p className="mt-1 text-xs leading-relaxed text-primary/65">Based on your last recorded prices. Leave a little room for market morning surprises.</p><div className="mt-5 border-t border-primary/15 pt-4"><div className="flex justify-between text-xs"><span className="text-primary/65">Expected flower spend</span><span className="font-mono font-semibold text-primary">{money(proposedTotal)}</span></div><div className="mt-2 flex justify-between text-xs"><span className="text-primary/65">Target revenue</span><span className="font-mono font-semibold text-primary">$1,846</span></div></div></div></aside>
     </div> : <div className="grid gap-5 lg:grid-cols-[1fr_330px]">
       <div className="space-y-5">
         <section className="rounded-lg border border-card-border bg-card p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Actual purchases</p><h2 className="mt-1 font-serif text-2xl">What did you buy?</h2><p className="mt-1 text-xs text-muted-foreground">Edit the receipt results or replace the planned quantities with what actually came home.</p></div><span className={`rounded-full px-2.5 py-1 font-mono text-[9px] uppercase ${buyList.reported ? 'bg-[#dce3c2] text-primary' : 'bg-muted text-muted-foreground'}`}>{buyList.reported ? 'Reported' : 'Not reported'}</span></div>
-          <div className="mt-5 space-y-2">{drafts.map((purchase, index) => <div key={`${purchase.flower}-${index}`} className="grid gap-2 rounded-md border border-foreground/10 bg-background p-3 sm:grid-cols-[1.3fr_.7fr_.7fr_auto] sm:items-end"><label className="text-[10px] font-mono uppercase text-muted-foreground">Flower<input value={purchase.flower} onChange={(event) => updateDraft(index, { flower: event.target.value })} className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 text-sm font-sans normal-case text-foreground outline-none focus:border-primary" /></label><label className="text-[10px] font-mono uppercase text-muted-foreground">Stems<input type="number" min="1" value={purchase.stems} onChange={(event) => updateDraft(index, { stems: Number(event.target.value) })} className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 font-mono text-sm text-foreground outline-none focus:border-primary" /></label><label className="text-[10px] font-mono uppercase text-muted-foreground">Unit cost<input type="number" min="0" step="0.01" value={purchase.unitCost} onChange={(event) => updateDraft(index, { unitCost: Number(event.target.value) })} className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 font-mono text-sm text-foreground outline-none focus:border-primary" /></label><Button onClick={() => { setSaveState('idle'); setDrafts((current) => current.filter((_, purchaseIndex) => purchaseIndex !== index)); }} className="h-9 border border-foreground/15 bg-transparent px-2 text-muted-foreground hover:border-destructive hover:text-destructive" testId={`button-remove-purchase-${index}`}><Trash2 size={15} /></Button><div className="text-[10px] text-muted-foreground sm:col-span-4">{purchase.detail} · {purchase.category} · {purchase.source === 'receipt' ? 'receipt result' : 'manual'}</div></div>)}</div>
+           <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Actual purchases</p><h2 className="mt-1 font-serif text-2xl">What did you buy?</h2><p className="mt-1 text-xs text-muted-foreground">Replace the proposed lines with what actually came home. Add new flowers, remove planned flowers, or keep multiple supplier lines for one flower.</p></div><span className={`rounded-full px-2.5 py-1 font-mono text-[9px] uppercase ${buyList.reported ? 'bg-[#dce3c2] text-primary' : 'bg-muted text-muted-foreground'}`}>{buyList.reported ? 'Reported' : 'Not reported'}</span></div>
+           <div className="mt-5 space-y-2">{drafts.length === 0 ? <div className="rounded-md border border-dashed border-foreground/15 bg-background px-4 py-6 text-center text-xs text-muted-foreground">No purchase lines yet. Add every flower you bought, including flowers that were not on the proposed list.</div> : drafts.map((purchase, index) => <div key={`${purchase.flower}-${index}`} className="grid gap-2 rounded-md border border-foreground/10 bg-background p-3 sm:grid-cols-[1.25fr_.7fr_.7fr_.8fr_1fr_auto] sm:items-end"><label className="text-[10px] font-mono uppercase text-muted-foreground">Flower<input value={purchase.flower} onChange={(event) => updateDraft(index, { flower: event.target.value })} placeholder="Flower type" className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 text-sm font-sans normal-case text-foreground outline-none focus:border-primary" /></label><label className="text-[10px] font-mono uppercase text-muted-foreground">Bunch size<input type="number" min="1" step="1" value={purchase.bunchSize} onChange={(event) => updateDraft(index, { bunchSize: Number(event.target.value) })} className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 font-mono text-sm text-foreground outline-none focus:border-primary" /></label><label className="text-[10px] font-mono uppercase text-muted-foreground">Bunches<input type="number" min="1" step="1" value={purchase.bunchesPurchased} onChange={(event) => updateDraft(index, { bunchesPurchased: Number(event.target.value) })} className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 font-mono text-sm text-foreground outline-none focus:border-primary" /></label><label className="text-[10px] font-mono uppercase text-muted-foreground">Price / bunch<input type="number" min="0" step="0.01" value={purchase.pricePerBunch} onChange={(event) => updateDraft(index, { pricePerBunch: Number(event.target.value) })} className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 font-mono text-sm text-foreground outline-none focus:border-primary" /></label><label className="text-[10px] font-mono uppercase text-muted-foreground">Supplier<input value={purchase.supplier ?? ''} onChange={(event) => updateDraft(index, { supplier: event.target.value || null })} placeholder="Optional" className="mt-1 w-full rounded border border-foreground/15 bg-card px-2 py-2 text-sm font-sans normal-case text-foreground outline-none focus:border-primary" /></label><Button onClick={() => { setSaveState('idle'); setDrafts((current) => current.filter((_, purchaseIndex) => purchaseIndex !== index)); }} className="h-9 border border-foreground/15 bg-transparent px-2 text-muted-foreground hover:border-destructive hover:text-destructive" testId={`button-remove-purchase-${index}`}><Trash2 size={15} /></Button><div className="text-[10px] text-muted-foreground sm:col-span-6">{purchase.detail} · {purchase.category} · {purchase.bunchSize * purchase.bunchesPurchased} stems</div></div>)}</div>
           <div className="mt-4 flex flex-wrap gap-2"><Button onClick={addDraft} className="border border-dashed border-foreground/20 bg-transparent text-muted-foreground hover:border-primary hover:text-primary" testId="button-add-actual-purchase"><Plus size={15} /> Add purchase</Button><Button onClick={() => void performSave({ kind: 'actual-purchases' })} disabled={isSaving} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-save-actual-purchases">{isSaving && saveAction?.kind === 'actual-purchases' ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {isSaving && saveAction?.kind === 'actual-purchases' ? 'Saving…' : 'Save actual purchases'}</Button></div>
-        </section>
-        <section className="rounded-lg border border-card-border bg-card p-5">
-          <div className="flex items-start gap-3"><ReceiptText size={18} className="mt-0.5 text-muted-foreground" /><div><h3 className="font-serif text-xl">Upload the receipt</h3><p className="mt-1 text-xs leading-relaxed text-muted-foreground">OCR reads the photo in your browser and pre-fills priced flower lines. Check every result before saving.</p></div></div>
-          <label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-foreground/20 px-4 py-4 text-sm text-muted-foreground hover:border-primary hover:text-primary"><Upload size={16} />{isAnalyzing ? 'Reading receipt…' : receipt.receiptFileName ?? 'Choose a receipt photo'}<input type="file" accept="image/*" className="sr-only" disabled={isAnalyzing} onChange={(event) => { const file = event.target.files?.[0]; if (file) void analyzeReceipt(file); }} /></label>
-          {receipt.receiptText && <details className="mt-3 rounded-md bg-muted p-3 text-xs"><summary className="cursor-pointer font-semibold">View extracted text</summary><pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[10px] text-muted-foreground">{receipt.receiptText}</pre></details>}
         </section>
         <section className="rounded-lg border border-card-border bg-card p-5" data-testid="section-market-costs">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Market costs</p><h2 className="mt-1 font-serif text-2xl">The rest of the market day.</h2><p className="mt-1 text-xs text-muted-foreground">Track stall fees, packaging, transport, and anything else beyond the flowers.</p></div><Button onClick={addCost} disabled={isSaving} className="border border-foreground/15 bg-background hover:border-primary" testId="button-add-market-cost"><Plus size={15} /> Add cost</Button></div>
@@ -801,7 +730,7 @@ export function BuyPage({
         {feedback && <p className="rounded-md bg-[#edf0df] px-4 py-3 text-xs text-primary" role="status">{feedback}</p>}
         <SaveFeedback state={saveState} onRetry={handleRetry} />
       </div>
-      <aside className="h-fit space-y-3 lg:sticky lg:top-24"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><DollarSign size={13} /> Actual flower spend</div><div className="mt-4 font-serif text-4xl tracking-[-.04em] text-primary" data-testid="text-actual-spend">{money(actualTotal)}</div><p className="mt-1 text-xs leading-relaxed text-primary/65">Saved against Sunday {nextMarket.shortDate}. This replaces the proposal when the report is created.</p><div className="mt-5 border-t border-primary/15 pt-4"><div className="flex justify-between text-xs"><span className="text-primary/65">Purchase lines</span><span className="font-mono font-semibold text-primary">{drafts.length}</span></div><div className="mt-2 flex justify-between text-xs"><span className="text-primary/65">Receipt status</span><span className="font-semibold text-primary">{receipt.receiptFileName ? 'Analysed' : 'Not uploaded'}</span></div></div></div><div className="paper-card rounded-lg border border-card-border p-5"><div className="flex items-center gap-2 font-serif text-lg"><UnlockKeyhole size={17} className="text-muted-foreground" /> List locked</div><p className="mt-3 text-xs leading-relaxed text-muted-foreground">The proposed list is frozen for this market cycle. Actual purchases can differ without changing the original plan.</p><Button onClick={() => void performSave({ kind: 'report' })} disabled={isSaving || drafts.length === 0 || buyList.reported} className="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90" testId="button-report-buy-list">{isSaving && saveAction?.kind === 'report' ? <LoaderCircle size={15} className="animate-spin" /> : buyList.reported ? <CheckCircle2 size={15} /> : <ClipboardList size={15} />} {isSaving && saveAction?.kind === 'report' ? 'Saving…' : buyList.reported ? 'Buy List Report saved' : 'Create Buy List Report'}</Button></div></aside>
+      <aside className="h-fit space-y-3 lg:sticky lg:top-24"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><DollarSign size={13} /> Actual flower spend</div><div className="mt-4 font-serif text-4xl tracking-[-.04em] text-primary" data-testid="text-actual-spend">{money(actualTotal)}</div><p className="mt-1 text-xs leading-relaxed text-primary/65">Saved against Sunday {nextMarket.shortDate}. This replaces the proposal when the report is created.</p><div className="mt-5 border-t border-primary/15 pt-4"><div className="flex justify-between text-xs"><span className="text-primary/65">Purchase lines</span><span className="font-mono font-semibold text-primary">{drafts.length}</span></div><div className="mt-2 flex justify-between text-xs"><span className="text-primary/65">Total stems</span><span className="font-mono font-semibold text-primary">{drafts.reduce((sum, purchase) => sum + purchase.bunchSize * purchase.bunchesPurchased, 0)}</span></div></div></div><div className="paper-card rounded-lg border border-card-border p-5"><div className="flex items-center gap-2 font-serif text-lg"><UnlockKeyhole size={17} className="text-muted-foreground" /> List locked</div><p className="mt-3 text-xs leading-relaxed text-muted-foreground">The proposed list is frozen for this market cycle. Actual purchases can differ without changing the original plan.</p><Button onClick={() => void performSave({ kind: 'report' })} disabled={isSaving || drafts.length === 0 || buyList.reported} className="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90" testId="button-report-buy-list">{isSaving && saveAction?.kind === 'report' ? <LoaderCircle size={15} className="animate-spin" /> : buyList.reported ? <CheckCircle2 size={15} /> : <ClipboardList size={15} />} {isSaving && saveAction?.kind === 'report' ? 'Saving…' : buyList.reported ? 'Buy List Report saved' : 'Create Buy List Report'}</Button></div>{buyList.editLog.length > 0 && <section className="paper-card rounded-lg border border-card-border p-5" data-testid="section-buy-list-edit-log"><div className="flex items-center gap-2 font-serif text-lg"><Clock3 size={17} className="text-muted-foreground" /> Edit history</div><p className="mt-2 text-xs leading-relaxed text-muted-foreground">Changes made after this list was first locked.</p><ul className="mt-4 space-y-3">{buyList.editLog.slice().reverse().map((entry) => <li key={entry.id} className="border-l-2 border-primary/20 pl-3 text-xs"><span className="block text-muted-foreground">{new Date(entry.createdAt).toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' })}</span><span className="mt-1 block font-medium">{entry.summary}</span></li>)}</ul></section>}</aside>
     </div>}
   </div>;
 }
@@ -857,8 +786,8 @@ export function ClosePage({ closeMarket, actualPurchases, nextMarket, saveCloseM
   return <div><PageIntro eyebrow="Next market / pack-down" title="Leave the shed lighter." description="A quick count of what came home, what found a vase, and what to carry into the next Sunday." action={<div className={`rounded-md px-3 py-2 text-center ${closed ? 'bg-[#dce3c2]' : 'bg-muted'}`}><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">Market status</div><div className="flex items-center justify-center gap-1 text-sm font-semibold">{closed && <LockKeyhole size={13} />}{closed ? 'Finalized · Locked' : 'Open for edits'}</div></div>} /><MarketSubnav active="close" nextMarket={nextMarket} /><div className="grid gap-6 lg:grid-cols-[1fr_340px]"><div>{closed && <div className="mb-5 flex items-start gap-3 rounded-lg border border-primary/20 bg-[#e8e4cd] p-4 text-primary" role="status" data-testid="close-lock-status"><LockKeyhole size={18} className="mt-0.5 shrink-0" /><div><p className="text-sm font-semibold">Finalized and locked</p><p className="mt-1 text-xs leading-relaxed text-primary/70">This sell-through record is an operational report. Reopen it intentionally before changing leftover counts.</p></div></div>}<div className="mb-4 flex items-end justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Leftover stock</p><h2 className="mt-1 font-serif text-2xl">What came home?</h2></div><span className="font-mono text-xs text-muted-foreground">{totalLeft} stems counted</span></div>{stock.length ? <div className="overflow-hidden rounded-lg border border-card-border bg-card">{stock.map((item) => <div key={item.name} className="flex items-center gap-4 border-b border-foreground/10 p-4 last:border-0"><span className="h-9 w-9 rounded-full border border-foreground/10" style={{ background: `radial-gradient(circle at 40% 30%, ${flowers.find((flower) => flower.common === item.name)?.colour ?? '#b6a1c8'}, #eee5dc)` }} /><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.note} · {item.opening} purchased</span></span><div className="flex items-center gap-2"><Button onClick={() => { setCounts((current) => ({ ...current, [item.name]: Math.max(0, (current[item.name] ?? 0) - 1) })); setSaveState('idle'); }} disabled={closed || (counts[item.name] ?? 0) <= 0} className="h-8 w-8 rounded-full border border-foreground/15 bg-background p-0 text-lg font-normal" testId={`button-decrease-${item.name.toLowerCase().replaceAll(' ', '-')}`}>−</Button><span className="w-6 text-center font-mono text-sm" data-testid={`text-leftover-${item.name.toLowerCase().replaceAll(' ', '-')}`}>{counts[item.name] ?? 0}</span><Button onClick={() => { setCounts((current) => ({ ...current, [item.name]: Math.min(item.opening, (current[item.name] ?? 0) + 1) })); setSaveState('idle'); }} disabled={closed || (counts[item.name] ?? 0) >= item.opening} className="h-8 w-8 rounded-full border border-foreground/15 bg-background p-0 text-lg font-normal" testId={`button-increase-${item.name.toLowerCase().replaceAll(' ', '-')}`}><Plus size={14} /></Button></div></div>)}</div> : <div className="rounded-lg border border-dashed border-foreground/15 bg-card p-8 text-center text-sm text-muted-foreground">Save actual purchases on the Buy list first to compare purchased stems with what came home.</div>}<div className="mb-4 mt-6 flex items-end justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Sell-through</p><h2 className="mt-1 font-serif text-2xl">What moved?</h2></div><span className="font-mono text-xs text-muted-foreground">Cycle {closeMarket.marketCycle}</span></div><div className="overflow-hidden rounded-lg border border-card-border bg-card">{sellThrough.length ? sellThrough.map((item) => <div key={item.flower} className="flex items-center gap-4 border-b border-foreground/10 p-4 last:border-0"><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{item.flower}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.soldStems} sold · {item.leftoverStems} came home · {item.purchasedStems} purchased</span></span><span className="font-mono text-lg font-semibold text-primary" data-testid={`text-sell-through-${item.flower.toLowerCase().replaceAll(' ', '-')}`}>{item.sellThroughPercent}%</span></div>) : <div className="p-6 text-center text-sm text-muted-foreground">Sell-through appears here once purchases and leftovers are recorded.</div>}</div><Button onClick={closed ? requestReopen : () => void performSave()} disabled={saveState === 'saving'} className={`mt-4 w-full ${closed ? 'border border-primary bg-transparent text-primary' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`} testId="button-save-close">{saveState === 'saving' ? <LoaderCircle size={15} className="animate-spin" /> : closed ? <UnlockKeyhole size={15} /> : <ClipboardCheck size={15} />} {saveState === 'saving' ? 'Saving…' : closed ? 'Reopen to edit' : 'Save pack-down count'}</Button><div className="mt-3"><SaveFeedback state={saveState} onRetry={() => void performSave()} savedMessage={closed ? 'Pack-down count saved and market closed.' : 'Pack-down count saved and market reopened.'} /></div></div><aside className="h-fit space-y-3"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Package size={13} /> Pack-down notes</div><p className="mt-4 font-serif text-xl leading-snug text-primary">Good flowers deserve<br />a second Sunday.</p><p className="mt-3 text-xs leading-relaxed text-primary/65">Record what is still fresh so it can guide your next buy list. Compost anything that has lost its lift.</p></div><div className="paper-card rounded-lg border border-card-border bg-card p-5"><div className="flex items-center gap-2 font-serif text-lg"><ClipboardList size={17} className="text-muted-foreground" /> Close checklist</div><div className="mt-4 space-y-3 text-xs text-muted-foreground"><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-buckets" className="accent-primary" /> Rinse buckets</label><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-tent" className="accent-primary" /> Pack umbrella sign</label><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-till" className="accent-primary" /> Reconcile the till</label></div></div></aside></div></div>;
 }
 
-function Router({ nextMarket, scheduleOverrides, buyItems, actualPurchases, costs, buyList, markets, bouquetPlan, closeMarket, flowerPrices, flowerPricesLoading, toggleBuyItem, lockBuyList, saveActualPurchases, saveCosts, reportPurchases, saveBouquetPlan, saveCloseMarket, saveScheduleOverride, clearScheduleOverride }: { nextMarket: MarketCycleSummary; scheduleOverrides: MarketScheduleOverride[]; buyItems: BuyItem[]; actualPurchases: ActualPurchase[]; costs: MarketCost[]; buyList: MarketContext['buyList']; markets: Market[]; bouquetPlan: BouquetPlan; closeMarket: CloseMarket; flowerPrices: FlowerPriceHistory[]; flowerPricesLoading: boolean; toggleBuyItem: (id: number) => Promise<boolean>; lockBuyList: () => Promise<boolean>; saveActualPurchases: (purchases: LegacyActualPurchaseInput[], receipt: ReceiptPayload) => Promise<boolean>; saveCosts: (costs: MarketCostInput[]) => Promise<boolean>; reportPurchases: () => Promise<boolean>; saveBouquetPlan: (selectedBand: string, count: number) => Promise<boolean>; saveCloseMarket: (counts: Record<string, number>, closed: boolean, reopen?: boolean) => Promise<boolean>; saveScheduleOverride: (cycle: number, data: MarketScheduleOverrideUpdate) => Promise<boolean>; clearScheduleOverride: (cycle: number) => Promise<boolean> }) {
-  return <AppShell nextMarket={nextMarket} remainingBuyItems={buyItems.filter((item) => !item.checked).length}><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} />} /><Route path="/flowers" component={() => <FlowersPage flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesLoading} />} /><Route path="/markets" component={() => <div className="space-y-7"><MarketsPage markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /><SellThroughComparisonPanel markets={markets} scheduleOverrides={scheduleOverrides} /></div>} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} nextMarket={nextMarket} toggleBuyItem={toggleBuyItem} lockBuyList={lockBuyList} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} />} /><Route path="/markets/next/close" component={() => <ClosePage closeMarket={closeMarket} actualPurchases={actualPurchases} nextMarket={nextMarket} saveCloseMarket={saveCloseMarket} />} /><Route path="/markets/next/bouquets" component={() => <BouquetsPage bouquetPlan={bouquetPlan} nextMarket={nextMarket} saveBouquetPlan={saveBouquetPlan} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
+function Router({ nextMarket, scheduleOverrides, buyItems, actualPurchases, costs, buyList, markets, bouquetPlan, closeMarket, flowerPrices, flowerPricesLoading, toggleBuyItem, setBuyListLock, saveActualPurchases, saveCosts, reportPurchases, saveBouquetPlan, saveCloseMarket, saveScheduleOverride, clearScheduleOverride }: { nextMarket: MarketCycleSummary; scheduleOverrides: MarketScheduleOverride[]; buyItems: BuyItem[]; actualPurchases: ActualPurchase[]; costs: MarketCost[]; buyList: MarketContext['buyList']; markets: Market[]; bouquetPlan: BouquetPlan; closeMarket: CloseMarket; flowerPrices: FlowerPriceHistory[]; flowerPricesLoading: boolean; toggleBuyItem: (id: number) => Promise<boolean>; setBuyListLock: (locked: boolean) => Promise<boolean>; saveActualPurchases: (purchases: BunchPurchaseInput[]) => Promise<boolean>; saveCosts: (costs: MarketCostInput[]) => Promise<boolean>; reportPurchases: () => Promise<boolean>; saveBouquetPlan: (selectedBand: string, count: number) => Promise<boolean>; saveCloseMarket: (counts: Record<string, number>, closed: boolean, reopen?: boolean) => Promise<boolean>; saveScheduleOverride: (cycle: number, data: MarketScheduleOverrideUpdate) => Promise<boolean>; clearScheduleOverride: (cycle: number) => Promise<boolean> }) {
+  return <AppShell nextMarket={nextMarket} remainingBuyItems={buyItems.filter((item) => !item.checked).length}><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} />} /><Route path="/flowers" component={() => <FlowersPage flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesLoading} />} /><Route path="/markets" component={() => <div className="space-y-7"><MarketsPage markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /><SellThroughComparisonPanel markets={markets} scheduleOverrides={scheduleOverrides} /></div>} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} nextMarket={nextMarket} toggleBuyItem={toggleBuyItem} setBuyListLock={setBuyListLock} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} />} /><Route path="/markets/next/close" component={() => <ClosePage closeMarket={closeMarket} actualPurchases={actualPurchases} nextMarket={nextMarket} saveCloseMarket={saveCloseMarket} />} /><Route path="/markets/next/bouquets" component={() => <BouquetsPage bouquetPlan={bouquetPlan} nextMarket={nextMarket} saveBouquetPlan={saveBouquetPlan} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
 }
 
 export function useUtcDayRollover() {
@@ -947,6 +876,7 @@ function AppContent() {
     receiptFileName: null,
     receiptText: null,
     receiptCandidates: [],
+    editLog: [],
   };
   const actualPurchases = context?.actualPurchases ?? [];
   const costs = context?.costs ?? [];
@@ -964,18 +894,18 @@ function AppContent() {
       return false;
     }
   };
-  const lockBuyList = async () => {
+  const setBuyListLock = async (locked: boolean) => {
     try {
-      const buyList = await buyListMutation.mutateAsync({ cycle: nextMarketCycle, data: { locked: true } });
+      const buyList = await buyListMutation.mutateAsync({ cycle: nextMarketCycle, data: { locked } });
       updateContext({ buyList });
       return true;
     } catch {
       return false;
     }
   };
-  const saveActualPurchases = async (purchases: LegacyActualPurchaseInput[], receipt: ReceiptPayload) => {
+  const saveActualPurchases = async (purchases: BunchPurchaseInput[]) => {
     try {
-      const saved = await actualPurchasesMutation.mutateAsync({ cycle: nextMarketCycle, data: { purchases, ...receipt } });
+      const saved = await actualPurchasesMutation.mutateAsync({ cycle: nextMarketCycle, data: { purchases } });
       updateContext({ buyList: saved.buyList, actualPurchases: saved.purchases });
       await queryClient.invalidateQueries({ queryKey: getListMarketsQueryKey() });
       return true;
@@ -1046,7 +976,7 @@ function AppContent() {
   if (marketContextQuery.isLoading || marketsQuery.isLoading || scheduleOverridesQuery.isLoading || !context) {
     return <TooltipProvider><div className="flex min-h-[100dvh] items-center justify-center bg-background font-serif text-lg text-muted-foreground">Loading your market notes…</div></TooltipProvider>;
   }
-  return <TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} markets={markets} bouquetPlan={context.bouquetPlan} closeMarket={context.closeMarket} flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesQuery.isLoading} toggleBuyItem={toggleBuyItem} lockBuyList={lockBuyList} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} saveBouquetPlan={saveBouquetPlan} saveCloseMarket={saveCloseMarket} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /></WouterRouter><Toaster /></TooltipProvider>;
+  return <TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} markets={markets} bouquetPlan={context.bouquetPlan} closeMarket={context.closeMarket} flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesQuery.isLoading} toggleBuyItem={toggleBuyItem} setBuyListLock={setBuyListLock} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} saveBouquetPlan={saveBouquetPlan} saveCloseMarket={saveCloseMarket} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /></WouterRouter><Toaster /></TooltipProvider>;
 }
 
 function App() {

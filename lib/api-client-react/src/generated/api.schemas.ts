@@ -123,6 +123,23 @@ export interface ReceiptCandidate {
   rawLine: string;
 }
 
+export type MarketBuyListEditLogAction = typeof MarketBuyListEditLogAction[keyof typeof MarketBuyListEditLogAction];
+
+
+export const MarketBuyListEditLogAction = {
+  unlocked: 'unlocked',
+  item_updated: 'item_updated',
+  relocked: 'relocked',
+} as const;
+
+export interface MarketBuyListEditLog {
+  id: number;
+  marketCycle: number;
+  action: MarketBuyListEditLogAction;
+  summary: string;
+  createdAt: string;
+}
+
 export interface MarketBuyListState {
   marketCycle: number;
   locked: boolean;
@@ -130,6 +147,7 @@ export interface MarketBuyListState {
   receiptFileName: string | null;
   receiptText: string | null;
   receiptCandidates: ReceiptCandidate[];
+  editLog: MarketBuyListEditLog[];
 }
 
 export type ActualPurchaseSource = typeof ActualPurchaseSource[keyof typeof ActualPurchaseSource];

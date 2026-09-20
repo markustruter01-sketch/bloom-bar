@@ -9,6 +9,7 @@ import {
   closeMarketsTable,
   db,
   marketActualPurchasesTable,
+  marketBuyListEditLogsTable,
   marketBuyListStatesTable,
   marketCostsTable,
   marketScheduleOverridesTable,
@@ -44,6 +45,7 @@ async function request(path: string, init?: RequestInit): Promise<ApiResult> {
 async function resetTestCycles() {
   await db.transaction(async (tx) => {
     await tx.delete(marketActualPurchasesTable).where(inArray(marketActualPurchasesTable.marketCycle, testCycles));
+    await tx.delete(marketBuyListEditLogsTable).where(inArray(marketBuyListEditLogsTable.marketCycle, testCycles));
     await tx.delete(marketCostsTable).where(inArray(marketCostsTable.marketCycle, testCycles));
     await tx.delete(marketBuyListStatesTable).where(inArray(marketBuyListStatesTable.marketCycle, testCycles));
     await tx.delete(buyItemsTable).where(inArray(buyItemsTable.marketCycle, testCycles));
@@ -221,6 +223,72 @@ describe("market context persistence", () => {
     assert.equal(markets.status, 200);
     const market = markets.body.find((candidate: any) => candidate.cycle === cycle);
     assert.equal(market.flowerSpend, 96);
+  });
+
+  it("protects the proposed list, logs unlock edits, and preserves the full purchase flow", async () => {
+    const cycle = testCycles[1];
+    const initial = await getContext(cycle);
+    const item = initial.buyItems[0];
+
+    const locked = await patch(`/markets/context/${cycle}/buy-list`, { locked: true });
+    assert.equal(locked.status, 200);
+    assert.equal(locked.body.locked, true);
+
+    const blockedEdit = await patch(`/markets/context/${cycle}/buy-items/${item.id}`, { checked: !item.checked });
+    assert.equal(blockedEdit.status, 409);
+
+    const unlocked = await patch(`/markets/context/${cycle}/buy-list`, { locked: false });
+    assert.equal(unlocked.status, 200);
+    assert.equal(unlocked.body.locked, false);
+    assert.deepEqual(unlocked.body.editLog.map((entry: any) => entry.action), ["unlocked"]);
+
+    const edited = await patch(`/markets/context/${cycle}/buy-items/${item.id}`, { checked: !item.checked });
+    assert.equal(edited.status, 200);
+    assert.equal(edited.body.checked, !item.checked);
+
+    const relocked = await patch(`/markets/context/${cycle}/buy-list`, { locked: true });
+    assert.equal(relocked.status, 200);
+    assert.equal(relocked.body.locked, true);
+    assert.deepEqual(relocked.body.editLog.map((entry: any) => entry.action), ["unlocked", "item_updated", "relocked"]);
+    assert.match(relocked.body.editLog[1].summary, new RegExp(item.flower));
+
+    const saved = await request(`/markets/context/${cycle}/actual-purchases`, {
+      method: "PUT",
+      body: JSON.stringify({
+        purchases: [
+          {
+            flower: "Dahlia",
+            detail: "Coral · statement blooms",
+            category: "Statement Blooms",
+            bunchSize: 10,
+            bunchesPurchased: 2,
+            pricePerBunch: 24,
+            supplier: "Supplier A",
+            source: "manual",
+          },
+          {
+            flower: "Dahlia",
+            detail: "Coral · statement blooms",
+            category: "Statement Blooms",
+            bunchSize: 5,
+            bunchesPurchased: 1,
+            pricePerBunch: 14,
+            supplier: "Supplier B",
+            source: "manual",
+          },
+        ],
+      }),
+    });
+    assert.equal(saved.status, 200);
+    assert.deepEqual(saved.body.purchases.map((purchase: any) => [purchase.flower, purchase.supplier, purchase.totalStemQty]), [
+      ["Dahlia", "Supplier A", 20],
+      ["Dahlia", "Supplier B", 5],
+    ]);
+
+    const reloaded = await getContext(cycle);
+    assert.equal(reloaded.buyList.locked, true);
+    assert.deepEqual(reloaded.buyList.editLog.map((entry: any) => entry.action), ["unlocked", "item_updated", "relocked"]);
+    assert.deepEqual(reloaded.actualPurchases.map((purchase: any) => purchase.supplier), ["Supplier A", "Supplier B"]);
   });
 
   it("compares sell-through only across the selected completed cycles", async () => {

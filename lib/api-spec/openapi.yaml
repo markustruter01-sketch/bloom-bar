@@ -191,7 +191,7 @@ paths:
     put:
       operationId: replaceMarketActualPurchases
       tags: [markets]
-      summary: Save actual purchases and receipt analysis for a market cycle
+      summary: Save actual purchases for a market cycle
       parameters:
         - $ref: "#/components/parameters/MarketCycle"
       requestBody:
@@ -426,7 +426,7 @@ components:
           type: string
     MarketBuyListState:
       type: object
-      required: [marketCycle, locked, reported, receiptFileName, receiptText, receiptCandidates]
+      required: [marketCycle, locked, reported, receiptFileName, receiptText, receiptCandidates, editLog]
       properties:
         marketCycle:
           type: number
@@ -444,6 +444,26 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ReceiptCandidate"
+        editLog:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarketBuyListEditLog"
+    MarketBuyListEditLog:
+      type: object
+      required: [id, marketCycle, action, summary, createdAt]
+      properties:
+        id:
+          type: number
+        marketCycle:
+          type: number
+        action:
+          type: string
+          enum: [unlocked, item_updated, relocked]
+        summary:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
     ActualPurchase:
       type: object
       required: [id, marketCycle, flower, detail, category, bunchSize, bunchesPurchased, pricePerBunch, supplier, totalStemQty, costPerStem, source, stems, unitCost]

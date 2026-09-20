@@ -32,6 +32,8 @@ export * from './healthStatus';
 export * from './legacyActualPurchaseInput';
 export * from './legacyActualPurchaseInputSource';
 export * from './market';
+export * from './marketBuyListEditLog';
+export * from './marketBuyListEditLogAction';
 export * from './marketBuyListState';
 export * from './marketContext';
 export * from './marketCost';

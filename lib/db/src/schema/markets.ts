@@ -10,6 +10,7 @@ import {
   pgTable,
   serial,
   text,
+  timestamp,
   unique,
 } from "drizzle-orm/pg-core";
 import { z } from "zod/v4";
@@ -97,6 +98,19 @@ export const marketBuyListStatesTable = pgTable("market_buy_list_states", {
   receiptCandidates: jsonb("receipt_candidates").$type<ReceiptCandidate[]>().notNull().default([]),
 });
 
+export const marketBuyListEditLogsTable = pgTable(
+  "market_buy_list_edit_logs",
+  {
+    id: serial("id").primaryKey(),
+    marketCycle: integer("market_cycle")
+      .notNull()
+      .references(() => marketsTable.cycle, { onDelete: "cascade" }),
+    action: text("action", { enum: ["unlocked", "item_updated", "relocked"] }).notNull(),
+    summary: text("summary").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+);
+
 export const marketActualPurchasesTable = pgTable(
   "market_actual_purchases",
   {
@@ -158,6 +172,7 @@ export const insertMarketSchema = createInsertSchema(marketsTable).omit({ id: tr
 export const insertMarketScheduleOverrideSchema = createInsertSchema(marketScheduleOverridesTable);
 export const insertBuyItemSchema = createInsertSchema(buyItemsTable).omit({ id: true });
 export const insertMarketBuyListStateSchema = createInsertSchema(marketBuyListStatesTable);
+export const insertMarketBuyListEditLogSchema = createInsertSchema(marketBuyListEditLogsTable).omit({ id: true });
 export const insertMarketActualPurchaseSchema = createInsertSchema(marketActualPurchasesTable).omit({ id: true });
 export const insertMarketCostSchema = createInsertSchema(marketCostsTable).omit({ id: true });
 export const insertBouquetPlanSchema = createInsertSchema(bouquetPlansTable);
@@ -167,6 +182,7 @@ export type InsertMarket = z.infer<typeof insertMarketSchema>;
 export type InsertMarketScheduleOverride = z.infer<typeof insertMarketScheduleOverrideSchema>;
 export type InsertBuyItem = z.infer<typeof insertBuyItemSchema>;
 export type InsertMarketBuyListState = z.infer<typeof insertMarketBuyListStateSchema>;
+export type InsertMarketBuyListEditLog = z.infer<typeof insertMarketBuyListEditLogSchema>;
 export type InsertMarketActualPurchase = z.infer<typeof insertMarketActualPurchaseSchema>;
 export type InsertMarketCost = z.infer<typeof insertMarketCostSchema>;
 export type InsertBouquetPlan = z.infer<typeof insertBouquetPlanSchema>;
@@ -175,6 +191,7 @@ export type Market = typeof marketsTable.$inferSelect;
 export type MarketScheduleOverride = typeof marketScheduleOverridesTable.$inferSelect;
 export type BuyItem = typeof buyItemsTable.$inferSelect;
 export type MarketBuyListState = typeof marketBuyListStatesTable.$inferSelect;
+export type MarketBuyListEditLog = typeof marketBuyListEditLogsTable.$inferSelect;
 export type MarketActualPurchase = typeof marketActualPurchasesTable.$inferSelect;
 export type MarketCost = typeof marketCostsTable.$inferSelect;
 export type BouquetPlan = typeof bouquetPlansTable.$inferSelect;

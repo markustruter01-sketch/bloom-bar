@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { MarketBuyListEditLog } from './marketBuyListEditLog';
 import type { ReceiptCandidate } from './receiptCandidate';
 
 export interface MarketBuyListState {
@@ -14,4 +15,5 @@ export interface MarketBuyListState {
   receiptFileName: string | null;
   receiptText: string | null;
   receiptCandidates: ReceiptCandidate[];
+  editLog: MarketBuyListEditLog[];
 }

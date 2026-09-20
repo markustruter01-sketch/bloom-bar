@@ -844,7 +844,7 @@ export const getReplaceMarketActualPurchasesUrl = (cycle: number,) => {
 }
 
 /**
- * @summary Save actual purchases and receipt analysis for a market cycle
+ * @summary Save actual purchases for a market cycle
  */
 export const replaceMarketActualPurchases = async (cycle: number,
     actualPurchasesUpdate: ActualPurchasesUpdate, options?: Parameters<typeof customFetch>[1]): Promise<ActualPurchasesResponse> => {
@@ -894,7 +894,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ReplaceMarketActualPurchasesMutationError = ErrorType<unknown>
 
     /**
- * @summary Save actual purchases and receipt analysis for a market cycle
+ * @summary Save actual purchases for a market cycle
  */
 export const useReplaceMarketActualPurchases = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceMarketActualPurchases>>, TError,{cycle: number;data: BodyType<ActualPurchasesUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}

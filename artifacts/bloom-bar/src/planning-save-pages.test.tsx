@@ -101,10 +101,11 @@ describe('planning save rejection states', () => {
           receiptFileName: null,
           receiptText: null,
           receiptCandidates: [],
+          editLog: [],
         }}
         nextMarket={nextMarket}
         toggleBuyItem={async () => true}
-        lockBuyList={async () => true}
+        setBuyListLock={async () => true}
         saveActualPurchases={saveActualPurchases}
         saveCosts={async () => true}
         reportPurchases={async () => true}
@@ -149,10 +150,11 @@ describe('planning save rejection states', () => {
           receiptFileName: null,
           receiptText: null,
           receiptCandidates: [],
+          editLog: [],
         }}
         nextMarket={nextMarket}
         toggleBuyItem={async () => true}
-        lockBuyList={async () => true}
+        setBuyListLock={async () => true}
         saveActualPurchases={async () => true}
         saveCosts={saveCosts}
         reportPurchases={async () => true}

@@ -6,6 +6,7 @@ import {
   bouquetPlansTable,
   closeMarketsTable,
   marketActualPurchasesTable,
+  marketBuyListEditLogsTable,
   marketBuyListStatesTable,
   marketCostsTable,
   marketsTable,
@@ -282,7 +283,7 @@ async function readMarketContext(cycle: number) {
   const overrides = await readScheduleOverrides();
   const [market] = await db.select().from(marketsTable).where(eq(marketsTable.cycle, cycle));
   const buyItems = await db.select().from(buyItemsTable).where(eq(buyItemsTable.marketCycle, cycle)).orderBy(buyItemsTable.id);
-  const [buyList] = await db.select().from(marketBuyListStatesTable).where(eq(marketBuyListStatesTable.marketCycle, cycle));
+  const buyList = await readBuyListState(cycle);
   const actualPurchaseRows = await db.select().from(marketActualPurchasesTable).where(eq(marketActualPurchasesTable.marketCycle, cycle)).orderBy(marketActualPurchasesTable.id);
   const actualPurchases = actualPurchaseRows.map(serializePurchase);
   const costs = await db.select().from(marketCostsTable).where(eq(marketCostsTable.marketCycle, cycle)).orderBy(marketCostsTable.id);
@@ -349,6 +350,25 @@ async function readMarketContext(cycle: number) {
     costs,
     bouquetPlan,
     closeMarket: { ...closeMarket, sellThrough },
+  };
+}
+
+async function readBuyListState(cycle: number) {
+  const [buyList] = await db.select().from(marketBuyListStatesTable).where(eq(marketBuyListStatesTable.marketCycle, cycle));
+  const editLog = await db
+    .select()
+    .from(marketBuyListEditLogsTable)
+    .where(eq(marketBuyListEditLogsTable.marketCycle, cycle))
+    .orderBy(marketBuyListEditLogsTable.createdAt, marketBuyListEditLogsTable.id);
+  return {
+    ...buyList,
+    editLog: editLog.map((entry) => ({
+      id: entry.id,
+      marketCycle: entry.marketCycle,
+      action: entry.action,
+      summary: entry.summary,
+      createdAt: entry.createdAt.toISOString(),
+    })),
   };
 }
 
@@ -593,12 +613,36 @@ router.patch("/markets/context/:cycle/buy-list", async (req, res): Promise<void>
     return;
   }
   await ensureMarketContext(params.data.cycle);
+  const [existing] = await db
+    .select()
+    .from(marketBuyListStatesTable)
+    .where(eq(marketBuyListStatesTable.marketCycle, params.data.cycle));
+  if (existing.locked && !body.data.locked) {
+    await db.insert(marketBuyListEditLogsTable).values({
+      marketCycle: params.data.cycle,
+      action: "unlocked",
+      summary: "Proposed list unlocked for editing.",
+    });
+  } else if (!existing.locked && body.data.locked) {
+    const [previousEdit] = await db
+      .select({ id: marketBuyListEditLogsTable.id })
+      .from(marketBuyListEditLogsTable)
+      .where(eq(marketBuyListEditLogsTable.marketCycle, params.data.cycle))
+      .limit(1);
+    if (previousEdit) {
+      await db.insert(marketBuyListEditLogsTable).values({
+        marketCycle: params.data.cycle,
+        action: "relocked",
+        summary: "Proposed list re-locked after edits.",
+      });
+    }
+  }
   const [buyList] = await db
     .update(marketBuyListStatesTable)
     .set({ locked: body.data.locked, reported: body.data.locked ? false : undefined })
     .where(eq(marketBuyListStatesTable.marketCycle, params.data.cycle))
     .returning();
-  res.json(UpdateMarketBuyListResponse.parse(buyList));
+  res.json(UpdateMarketBuyListResponse.parse(await readBuyListState(buyList.marketCycle)));
 });
 
 router.put("/markets/context/:cycle/actual-purchases", async (req, res): Promise<void> => {
@@ -659,7 +703,10 @@ router.put("/markets/context/:cycle/actual-purchases", async (req, res): Promise
     await recalculateMarketTotals(params.data.cycle, tx);
     return { buyList: updatedBuyList, purchases: purchases.map(serializePurchase) };
   });
-  res.json(ReplaceMarketActualPurchasesResponse.parse(saved));
+  res.json(ReplaceMarketActualPurchasesResponse.parse({
+    ...saved,
+    buyList: await readBuyListState(params.data.cycle),
+  }));
 });
 
 router.put("/markets/context/:cycle/costs", async (req, res): Promise<void> => {
@@ -727,7 +774,7 @@ router.post("/markets/context/:cycle/report-purchases", async (req, res): Promis
     .set({ reported: true })
     .where(eq(marketBuyListStatesTable.marketCycle, params.data.cycle))
     .returning();
-  res.json(ReportMarketPurchasesResponse.parse(updatedBuyList));
+  res.json(ReportMarketPurchasesResponse.parse(await readBuyListState(updatedBuyList.marketCycle)));
 });
 
 router.patch("/markets/context/:cycle/buy-items/:id", async (req, res): Promise<void> => {
@@ -737,6 +784,18 @@ router.patch("/markets/context/:cycle/buy-items/:id", async (req, res): Promise<
     res.status(400).json({ error: "Invalid market cycle, item ID, or checked value." });
     return;
   }
+  const [buyList] = await db
+    .select()
+    .from(marketBuyListStatesTable)
+    .where(eq(marketBuyListStatesTable.marketCycle, params.data.cycle));
+  if (buyList?.locked) {
+    res.status(409).json({ error: "Unlock the proposed buy list before editing it." });
+    return;
+  }
+  const [previousItem] = await db
+    .select()
+    .from(buyItemsTable)
+    .where(and(eq(buyItemsTable.id, params.data.id), eq(buyItemsTable.marketCycle, params.data.cycle)));
   const [item] = await db
     .update(buyItemsTable)
     .set({ checked: body.data.checked })
@@ -745,6 +804,18 @@ router.patch("/markets/context/:cycle/buy-items/:id", async (req, res): Promise<
   if (!item) {
     res.status(404).json({ error: "Buy-list item not found." });
     return;
+  }
+  const [previousEdit] = await db
+    .select({ id: marketBuyListEditLogsTable.id })
+    .from(marketBuyListEditLogsTable)
+    .where(eq(marketBuyListEditLogsTable.marketCycle, params.data.cycle))
+    .limit(1);
+  if (previousEdit && previousItem && previousItem.checked !== item.checked) {
+    await db.insert(marketBuyListEditLogsTable).values({
+      marketCycle: params.data.cycle,
+      action: "item_updated",
+      summary: `${item.flower}: ${previousItem.checked ? "ready" : "not ready"} → ${item.checked ? "ready" : "not ready"}.`,
+    });
   }
   const updatedContext = await readMarketContext(params.data.cycle);
   const updatedItem = updatedContext.buyItems.find((buyItem) => buyItem.id === item.id);
