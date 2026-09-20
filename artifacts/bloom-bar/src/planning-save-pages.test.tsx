@@ -182,4 +182,33 @@ describe('planning save rejection states', () => {
     await waitFor(() => assert.match(screen.getByTestId('save-status-saved').textContent ?? '', /market closed/));
     assert.equal(screen.getByTestId('text-leftover-lisianthus').textContent, '3');
   });
+
+  it('keeps finalized close-outs locked until the florist confirms reopening', async () => {
+    const saveCloseMarket = async (_counts: Record<string, number>, closed: boolean, reopen?: boolean) => {
+      assert.equal(closed, false);
+      assert.equal(reopen, true);
+      return true;
+    };
+    const originalConfirm = window.confirm;
+    window.confirm = () => false;
+
+    render(
+      <ClosePage
+        closeMarket={{ marketCycle: 0, counts: { Lisianthus: 2 }, sellThrough: [], closed: true }}
+        actualPurchases={[actualPurchase]}
+        nextMarket={nextMarket}
+        saveCloseMarket={saveCloseMarket}
+      />,
+    );
+
+    assert.match(screen.getByTestId('close-lock-status').textContent ?? '', /Finalized and locked/);
+    assert.equal((screen.getByTestId('button-increase-lisianthus') as HTMLButtonElement).disabled, true);
+    fireEvent.click(screen.getByTestId('button-save-close'));
+    await waitFor(() => assert.equal(screen.getByTestId('button-save-close').textContent?.includes('Reopen to edit'), true));
+
+    window.confirm = () => true;
+    fireEvent.click(screen.getByTestId('button-save-close'));
+    await waitFor(() => assert.match(screen.getByTestId('save-status-saved').textContent ?? '', /reopened/));
+    window.confirm = originalConfirm;
+  });
 });

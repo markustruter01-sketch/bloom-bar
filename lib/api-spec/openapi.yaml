@@ -222,7 +222,7 @@ paths:
     patch:
       operationId: updateMarketClose
       tags: [markets]
-      summary: Save close-market counts for a market cycle
+      summary: Save or intentionally reopen close-market counts for a market cycle
       parameters:
         - $ref: "#/components/parameters/MarketCycle"
       requestBody:
@@ -238,6 +238,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CloseMarket"
+        "409":
+          description: The close-market record is finalized and must be intentionally reopened before editing
 components:
   parameters:
     MarketCycle:
@@ -624,6 +626,9 @@ components:
             minimum: 0
         closed:
           type: boolean
+        reopen:
+          type: boolean
+          description: Explicitly authorize reopening a finalized close-market record for editing
     MarketContext:
       type: object
       required: [cycle, date, venue, spend, revenue, margin, buyItems, buyList, actualPurchases, costs, bouquetPlan, closeMarket]

@@ -198,6 +198,43 @@ describe("market context persistence", () => {
     assert.deepEqual(otherCycleReloaded, otherCycleInitial);
   });
 
+  it("rejects edits to a finalized close-out until it is explicitly reopened", async () => {
+    await getContext(testCycles[0]);
+
+    const finalized = await patch(`/markets/context/${testCycles[0]}/close`, {
+      counts: { Lisianthus: 2 },
+      closed: true,
+    });
+    assert.equal(finalized.status, 200);
+
+    const unauthorizedEdit = await patch(`/markets/context/${testCycles[0]}/close`, {
+      counts: { Lisianthus: 3 },
+      closed: true,
+    });
+    assert.equal(unauthorizedEdit.status, 409);
+    assert.equal(unauthorizedEdit.body.error, "This close-out is finalized. Reopen it before editing.");
+
+    const stillFinalized = await getContext(testCycles[0]);
+    assert.equal(stillFinalized.closeMarket.closed, true);
+    assert.deepEqual(stillFinalized.closeMarket.counts, { Lisianthus: 2 });
+
+    const reopened = await patch(`/markets/context/${testCycles[0]}/close`, {
+      counts: { Lisianthus: 2 },
+      closed: false,
+      reopen: true,
+    });
+    assert.equal(reopened.status, 200);
+    assert.equal(reopened.body.closed, false);
+
+    const editedAndFinalized = await patch(`/markets/context/${testCycles[0]}/close`, {
+      counts: { Lisianthus: 3 },
+      closed: true,
+    });
+    assert.equal(editedAndFinalized.status, 200);
+    assert.deepEqual(editedAndFinalized.body.counts, { Lisianthus: 3 });
+    assert.equal(editedAndFinalized.body.closed, true);
+  });
+
   it("compares actual purchases with leftovers for the same market cycle", async () => {
     const cycle = testCycles[2];
     await getContext(cycle);

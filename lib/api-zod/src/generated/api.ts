@@ -437,7 +437,7 @@ export const UpdateMarketBouquetPlanResponse = zod.object({
 
 
 /**
- * @summary Save close-market counts for a market cycle
+ * @summary Save or intentionally reopen close-market counts for a market cycle
  */
 export const UpdateMarketCloseParams = zod.object({
   "cycle": zod.coerce.number()
@@ -449,7 +449,8 @@ export const updateMarketCloseBodyCountsMinOne = 0;
 
 export const UpdateMarketCloseBody = zod.object({
   "counts": zod.record(zod.string(), zod.number().min(updateMarketCloseBodyCountsMinOne)),
-  "closed": zod.boolean()
+  "closed": zod.boolean(),
+  "reopen": zod.boolean().optional().describe('Explicitly authorize reopening a finalized close-market record for editing')
 })
 
 export const updateMarketCloseResponseCountsMinOne = 0;

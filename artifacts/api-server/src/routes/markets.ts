@@ -565,6 +565,18 @@ router.patch("/markets/context/:cycle/close", async (req, res): Promise<void> =>
     return;
   }
   await ensureMarketContext(params.data.cycle);
+  const [existingCloseMarket] = await db
+    .select()
+    .from(closeMarketsTable)
+    .where(eq(closeMarketsTable.marketCycle, params.data.cycle));
+  if (existingCloseMarket?.closed && !body.data.reopen) {
+    res.status(409).json({ error: "This close-out is finalized. Reopen it before editing." });
+    return;
+  }
+  if (body.data.reopen && body.data.closed) {
+    res.status(400).json({ error: "Reopening a finalized close-out must leave it open for editing." });
+    return;
+  }
   const purchases = await db
     .select({ flower: marketActualPurchasesTable.flower, stems: marketActualPurchasesTable.stems })
     .from(marketActualPurchasesTable)

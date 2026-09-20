@@ -10,4 +10,6 @@ import type { CloseMarketUpdateCounts } from './closeMarketUpdateCounts';
 export interface CloseMarketUpdate {
   counts: CloseMarketUpdateCounts;
   closed: boolean;
+  /** Explicitly authorize reopening a finalized close-market record for editing */
+  reopen?: boolean;
 }

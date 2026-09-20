@@ -909,7 +909,7 @@ export const getUpdateMarketCloseUrl = (cycle: number,) => {
 }
 
 /**
- * @summary Save close-market counts for a market cycle
+ * @summary Save or intentionally reopen close-market counts for a market cycle
  */
 export const updateMarketClose = async (cycle: number,
     closeMarketUpdate: CloseMarketUpdate, options?: Parameters<typeof customFetch>[1]): Promise<CloseMarket> => {
@@ -927,7 +927,7 @@ export const updateMarketClose = async (cycle: number,
 
 
 
-export const getUpdateMarketCloseMutationOptions = <TError = ErrorType<unknown>,
+export const getUpdateMarketCloseMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMarketClose>>, TError,{cycle: number;data: BodyType<CloseMarketUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateMarketClose>>, TError,{cycle: number;data: BodyType<CloseMarketUpdate>}, TContext> => {
 
@@ -956,12 +956,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateMarketCloseMutationResult = NonNullable<Awaited<ReturnType<typeof updateMarketClose>>>
     export type UpdateMarketCloseMutationBody = BodyType<CloseMarketUpdate>
-    export type UpdateMarketCloseMutationError = ErrorType<unknown>
+    export type UpdateMarketCloseMutationError = ErrorType<void>
 
     /**
- * @summary Save close-market counts for a market cycle
+ * @summary Save or intentionally reopen close-market counts for a market cycle
  */
-export const useUpdateMarketClose = <TError = ErrorType<unknown>,
+export const useUpdateMarketClose = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMarketClose>>, TError,{cycle: number;data: BodyType<CloseMarketUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateMarketClose>>,
