@@ -13,6 +13,23 @@ export interface ReceiptCandidate {
   stems: number;
   /** @minimum 0 */
   unitCost: number;
+  /**
+     * Best-effort stems per bunch used for the bunch purchase draft
+     * @minimum 1
+     */
+  bunchSize?: number;
+  /**
+     * Best-effort bunch count read from the receipt
+     * @minimum 1
+     */
+  bunchesPurchased?: number;
+  /**
+     * Best-effort AUD price for one bunch
+     * @minimum 0
+     */
+  pricePerBunch?: number;
+  /** Best-effort supplier or wholesaler name */
+  supplier?: string | null;
   confidence: ReceiptCandidateConfidence;
   rawLine: string;
 }

@@ -193,6 +193,10 @@ export const getMarketContextResponseBuyListReceiptCandidatesItemUnitCostMin = 0
 
 
 
+export const getMarketContextResponseBuyListReceiptCandidatesItemPricePerBunchMin = 0;
+
+
+
 export const getMarketContextResponseActualPurchasesItemPricePerBunchMin = 0;
 
 export const getMarketContextResponseActualPurchasesItemTotalStemQtyMin = 0;
@@ -251,6 +255,10 @@ export const GetMarketContextResponse = zod.object({
   "flower": zod.string(),
   "stems": zod.number().min(getMarketContextResponseBuyListReceiptCandidatesItemStemsMin),
   "unitCost": zod.number().min(getMarketContextResponseBuyListReceiptCandidatesItemUnitCostMin),
+  "bunchSize": zod.number().min(1).optional().describe('Best-effort stems per bunch used for the bunch purchase draft'),
+  "bunchesPurchased": zod.number().min(1).optional().describe('Best-effort bunch count read from the receipt'),
+  "pricePerBunch": zod.number().min(getMarketContextResponseBuyListReceiptCandidatesItemPricePerBunchMin).optional().describe('Best-effort AUD price for one bunch'),
+  "supplier": zod.string().nullish().describe('Best-effort supplier or wholesaler name'),
   "confidence": zod.enum(['high', 'medium', 'low']),
   "rawLine": zod.string()
 })),
@@ -351,6 +359,10 @@ export const updateMarketBuyListResponseReceiptCandidatesItemUnitCostMin = 0;
 
 
 
+export const updateMarketBuyListResponseReceiptCandidatesItemPricePerBunchMin = 0;
+
+
+
 export const UpdateMarketBuyListResponse = zod.object({
   "marketCycle": zod.number(),
   "locked": zod.boolean(),
@@ -361,6 +373,10 @@ export const UpdateMarketBuyListResponse = zod.object({
   "flower": zod.string(),
   "stems": zod.number().min(updateMarketBuyListResponseReceiptCandidatesItemStemsMin),
   "unitCost": zod.number().min(updateMarketBuyListResponseReceiptCandidatesItemUnitCostMin),
+  "bunchSize": zod.number().min(1).optional().describe('Best-effort stems per bunch used for the bunch purchase draft'),
+  "bunchesPurchased": zod.number().min(1).optional().describe('Best-effort bunch count read from the receipt'),
+  "pricePerBunch": zod.number().min(updateMarketBuyListResponseReceiptCandidatesItemPricePerBunchMin).optional().describe('Best-effort AUD price for one bunch'),
+  "supplier": zod.string().nullish().describe('Best-effort supplier or wholesaler name'),
   "confidence": zod.enum(['high', 'medium', 'low']),
   "rawLine": zod.string()
 })),
@@ -394,6 +410,10 @@ export const replaceMarketActualPurchasesBodyReceiptCandidatesItemUnitCostMin = 
 
 
 
+export const replaceMarketActualPurchasesBodyReceiptCandidatesItemPricePerBunchMin = 0;
+
+
+
 export const ReplaceMarketActualPurchasesBody = zod.object({
   "purchases": zod.array(zod.union([zod.object({
   "flower": zod.string(),
@@ -418,6 +438,10 @@ export const ReplaceMarketActualPurchasesBody = zod.object({
   "flower": zod.string(),
   "stems": zod.number().min(replaceMarketActualPurchasesBodyReceiptCandidatesItemStemsMin),
   "unitCost": zod.number().min(replaceMarketActualPurchasesBodyReceiptCandidatesItemUnitCostMin),
+  "bunchSize": zod.number().min(1).optional().describe('Best-effort stems per bunch used for the bunch purchase draft'),
+  "bunchesPurchased": zod.number().min(1).optional().describe('Best-effort bunch count read from the receipt'),
+  "pricePerBunch": zod.number().min(replaceMarketActualPurchasesBodyReceiptCandidatesItemPricePerBunchMin).optional().describe('Best-effort AUD price for one bunch'),
+  "supplier": zod.string().nullish().describe('Best-effort supplier or wholesaler name'),
   "confidence": zod.enum(['high', 'medium', 'low']),
   "rawLine": zod.string()
 })).optional()
@@ -426,6 +450,10 @@ export const ReplaceMarketActualPurchasesBody = zod.object({
 export const replaceMarketActualPurchasesResponseBuyListReceiptCandidatesItemStemsMin = 0;
 
 export const replaceMarketActualPurchasesResponseBuyListReceiptCandidatesItemUnitCostMin = 0;
+
+
+
+export const replaceMarketActualPurchasesResponseBuyListReceiptCandidatesItemPricePerBunchMin = 0;
 
 
 
@@ -452,6 +480,10 @@ export const ReplaceMarketActualPurchasesResponse = zod.object({
   "flower": zod.string(),
   "stems": zod.number().min(replaceMarketActualPurchasesResponseBuyListReceiptCandidatesItemStemsMin),
   "unitCost": zod.number().min(replaceMarketActualPurchasesResponseBuyListReceiptCandidatesItemUnitCostMin),
+  "bunchSize": zod.number().min(1).optional().describe('Best-effort stems per bunch used for the bunch purchase draft'),
+  "bunchesPurchased": zod.number().min(1).optional().describe('Best-effort bunch count read from the receipt'),
+  "pricePerBunch": zod.number().min(replaceMarketActualPurchasesResponseBuyListReceiptCandidatesItemPricePerBunchMin).optional().describe('Best-effort AUD price for one bunch'),
+  "supplier": zod.string().nullish().describe('Best-effort supplier or wholesaler name'),
   "confidence": zod.enum(['high', 'medium', 'low']),
   "rawLine": zod.string()
 })),
@@ -529,6 +561,10 @@ export const reportMarketPurchasesResponseReceiptCandidatesItemUnitCostMin = 0;
 
 
 
+export const reportMarketPurchasesResponseReceiptCandidatesItemPricePerBunchMin = 0;
+
+
+
 export const ReportMarketPurchasesResponse = zod.object({
   "marketCycle": zod.number(),
   "locked": zod.boolean(),
@@ -539,6 +575,10 @@ export const ReportMarketPurchasesResponse = zod.object({
   "flower": zod.string(),
   "stems": zod.number().min(reportMarketPurchasesResponseReceiptCandidatesItemStemsMin),
   "unitCost": zod.number().min(reportMarketPurchasesResponseReceiptCandidatesItemUnitCostMin),
+  "bunchSize": zod.number().min(1).optional().describe('Best-effort stems per bunch used for the bunch purchase draft'),
+  "bunchesPurchased": zod.number().min(1).optional().describe('Best-effort bunch count read from the receipt'),
+  "pricePerBunch": zod.number().min(reportMarketPurchasesResponseReceiptCandidatesItemPricePerBunchMin).optional().describe('Best-effort AUD price for one bunch'),
+  "supplier": zod.string().nullish().describe('Best-effort supplier or wholesaler name'),
   "confidence": zod.enum(['high', 'medium', 'low']),
   "rawLine": zod.string()
 })),

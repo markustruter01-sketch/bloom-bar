@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="900" viewBox="0 0 680 900">
+  <rect width="680" height="900" fill="#f7f3e9"/>
+  <rect x="38" y="30" width="604" height="840" rx="4" fill="#fffdf8" stroke="#d7d0c3" stroke-width="3"/>
+  <g fill="#262522" font-family="Courier New, monospace">
+    <text x="340" y="88" text-anchor="middle" font-size="30" font-weight="700">REDCLIFFE FLOWERS</text>
+    <text x="340" y="120" text-anchor="middle" font-size="17">WHOLESALE MARKET</text>
+    <text x="340" y="154" text-anchor="middle" font-size="15">Receipt 004821 · 06 SEP 2026</text>
+    <line x1="78" y1="180" x2="602" y2="180" stroke="#262522" stroke-width="2"/>
+    <text x="82" y="220" font-size="19">ITEM</text>
+    <text x="465" y="220" font-size="19">QTY</text>
+    <text x="548" y="220" font-size="19">PRICE</text>
+    <line x1="78" y1="238" x2="602" y2="238" stroke="#262522" stroke-width="1"/>
+    <text x="82" y="284" font-size="21">Lisianthus White</text>
+    <text x="476" y="284" font-size="21">2</text>
+    <text x="540" y="284" font-size="21">$18.50</text>
+    <text x="82" y="340" font-size="21">Disbud chrysanthemum</text>
+    <text x="476" y="340" font-size="21">1</text>
+    <text x="540" y="340" font-size="21">$22.00</text>
+    <text x="82" y="396" font-size="21">Snapdragon Blush</text>
+    <text x="476" y="396" font-size="21">3</text>
+    <text x="540" y="396" font-size="21">$16.00</text>
+    <text x="82" y="452" font-size="21">Daisy White</text>
+    <text x="476" y="452" font-size="21">3</text>
+    <text x="540" y="452" font-size="21">$12.50</text>
+    <line x1="78" y1="490" x2="602" y2="490" stroke="#262522" stroke-width="2"/>
+    <text x="82" y="538" font-size="20">Supplier: Redcliffe Flowers</text>
+    <text x="82" y="600" font-size="21">SUBTOTAL</text>
+    <text x="540" y="600" font-size="21">$119.50</text>
+    <text x="82" y="646" font-size="21">GST</text>
+    <text x="540" y="646" font-size="21">$0.00</text>
+    <line x1="78" y1="676" x2="602" y2="676" stroke="#262522" stroke-width="1"/>
+    <text x="82" y="728" font-size="25" font-weight="700">TOTAL</text>
+    <text x="530" y="728" font-size="25" font-weight="700">$119.50</text>
+    <text x="340" y="804" text-anchor="middle" font-size="16">Thank you · Keep this receipt for your records</text>
+  </g>
+</svg>
