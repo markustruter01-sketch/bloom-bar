@@ -29,6 +29,9 @@ import type {
   BuyListLockUpdate,
   CloseMarket,
   CloseMarketUpdate,
+  FlowerPriceBackfillInput,
+  FlowerPriceDashboardObservation,
+  FlowerPriceDashboardResponse,
   FlowerPriceHistory,
   FlowerPriceTrackerMarket,
   GetSellThroughComparisonParams,
@@ -690,6 +693,155 @@ export function useListFlowerPriceTracker<TData = Awaited<ReturnType<typeof list
 
 
 
+
+export const getListFlowerPriceDashboardUrl = () => {
+
+
+
+
+  return `/api/markets/flower-price-dashboard`
+}
+
+/**
+ * Returns reported market purchase observations and manually backfilled historical observations.
+ * @summary List flower price observations for the tracker dashboard
+ */
+export const listFlowerPriceDashboard = async ( options?: Parameters<typeof customFetch>[1]): Promise<FlowerPriceDashboardResponse> => {
+
+  return customFetch<FlowerPriceDashboardResponse>(getListFlowerPriceDashboardUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFlowerPriceDashboardQueryKey = () => {
+    return [
+    `/api/markets/flower-price-dashboard`
+    ] as const;
+    }
+
+
+export const getListFlowerPriceDashboardQueryOptions = <TData = Awaited<ReturnType<typeof listFlowerPriceDashboard>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFlowerPriceDashboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFlowerPriceDashboardQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFlowerPriceDashboard>>> = ({ signal }) => listFlowerPriceDashboard({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFlowerPriceDashboard>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListFlowerPriceDashboardQueryResult = NonNullable<Awaited<ReturnType<typeof listFlowerPriceDashboard>>>
+export type ListFlowerPriceDashboardQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List flower price observations for the tracker dashboard
+ */
+
+export function useListFlowerPriceDashboard<TData = Awaited<ReturnType<typeof listFlowerPriceDashboard>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFlowerPriceDashboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListFlowerPriceDashboardQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateFlowerPriceBackfillUrl = () => {
+
+
+
+
+  return `/api/markets/flower-price-backfills`
+}
+
+/**
+ * @summary Add a historical flower purchase record
+ */
+export const createFlowerPriceBackfill = async (flowerPriceBackfillInput: FlowerPriceBackfillInput, options?: Parameters<typeof customFetch>[1]): Promise<FlowerPriceDashboardObservation> => {
+
+  return customFetch<FlowerPriceDashboardObservation>(getCreateFlowerPriceBackfillUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(flowerPriceBackfillInput)
+  }
+);}
+
+
+
+
+
+export const getCreateFlowerPriceBackfillMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createFlowerPriceBackfill>>, TError,{data: BodyType<FlowerPriceBackfillInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createFlowerPriceBackfill>>, TError,{data: BodyType<FlowerPriceBackfillInput>}, TContext> => {
+
+const mutationKey = ['createFlowerPriceBackfill'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createFlowerPriceBackfill>>, {data: BodyType<FlowerPriceBackfillInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createFlowerPriceBackfill(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateFlowerPriceBackfillMutationResult = NonNullable<Awaited<ReturnType<typeof createFlowerPriceBackfill>>>
+    export type CreateFlowerPriceBackfillMutationBody = BodyType<FlowerPriceBackfillInput>
+    export type CreateFlowerPriceBackfillMutationError = ErrorType<void>
+
+    /**
+ * @summary Add a historical flower purchase record
+ */
+export const useCreateFlowerPriceBackfill = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createFlowerPriceBackfill>>, TError,{data: BodyType<FlowerPriceBackfillInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createFlowerPriceBackfill>>,
+        TError,
+        {data: BodyType<FlowerPriceBackfillInput>},
+        TContext
+      > => {
+      return useMutation(getCreateFlowerPriceBackfillMutationOptions(options));
+    }
 
 export const getGetMarketContextUrl = (cycle: number,) => {
 

@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   db,
   buyItemsTable,
   bouquetPlansTable,
   closeMarketsTable,
   marketActualPurchasesTable,
+  flowerPriceBackfillsTable,
   marketBuyListEditLogsTable,
   marketBuyListStatesTable,
   marketCostsTable,
@@ -18,6 +19,9 @@ import {
   GetMarketContextResponse,
   ListFlowerPricesResponse,
   ListFlowerPriceTrackerResponse,
+  ListFlowerPriceDashboardResponse,
+  CreateFlowerPriceBackfillBody,
+  CreateFlowerPriceBackfillResponse,
   ListMarketsResponse,
   GetSellThroughComparisonResponse,
   ReplaceMarketCostsBody,
@@ -541,6 +545,132 @@ router.get("/markets/flower-price-tracker", async (_req, res): Promise<void> => 
   res.json(ListFlowerPriceTrackerResponse.parse(
     [...grouped.values()].sort((a, b) => b.marketCycle - a.marketCycle),
   ));
+});
+
+router.get("/markets/flower-price-dashboard", async (_req, res): Promise<void> => {
+  const overrides = await readScheduleOverrides();
+  const [reportedRows, backfillRows] = await Promise.all([
+    db
+      .select({
+        id: marketActualPurchasesTable.id,
+        marketCycle: marketActualPurchasesTable.marketCycle,
+        flower: marketActualPurchasesTable.flower,
+        category: marketActualPurchasesTable.category,
+        supplier: marketActualPurchasesTable.supplier,
+        bunchSize: marketActualPurchasesTable.bunchSize,
+        bunchesPurchased: marketActualPurchasesTable.bunchesPurchased,
+        pricePerBunch: marketActualPurchasesTable.pricePerBunch,
+        totalStemQty: marketActualPurchasesTable.totalStemQty,
+        costPerStem: marketActualPurchasesTable.costPerStem,
+      })
+      .from(marketActualPurchasesTable)
+      .innerJoin(
+        marketBuyListStatesTable,
+        eq(marketBuyListStatesTable.marketCycle, marketActualPurchasesTable.marketCycle),
+      )
+      .where(eq(marketBuyListStatesTable.reported, true))
+      .orderBy(asc(marketActualPurchasesTable.marketCycle), asc(marketActualPurchasesTable.id)),
+    db
+      .select({
+        id: flowerPriceBackfillsTable.id,
+        purchaseDate: flowerPriceBackfillsTable.purchaseDate,
+        flower: flowerPriceBackfillsTable.flower,
+        category: flowerPriceBackfillsTable.category,
+        supplier: flowerPriceBackfillsTable.supplier,
+        bunchSize: flowerPriceBackfillsTable.bunchSize,
+        bunchesPurchased: flowerPriceBackfillsTable.bunchesPurchased,
+        pricePerBunch: flowerPriceBackfillsTable.pricePerBunch,
+        totalStemQty: flowerPriceBackfillsTable.totalStemQty,
+        costPerStem: flowerPriceBackfillsTable.costPerStem,
+      })
+      .from(flowerPriceBackfillsTable)
+      .orderBy(asc(flowerPriceBackfillsTable.purchaseDate), asc(flowerPriceBackfillsTable.id)),
+  ]);
+
+  const observations = [
+    ...reportedRows
+      .filter((row) => !isSkippedMarketCycle(row.marketCycle, overrides))
+      .map((row) => ({
+        id: row.id,
+        purchaseDate: getScheduledMarketDate(row.marketCycle, overrides),
+        flower: row.flower,
+        category: row.category,
+        supplier: row.supplier,
+        bunchSize: row.bunchSize,
+        bunchesPurchased: row.bunchesPurchased,
+        pricePerBunch: row.pricePerBunch,
+        totalStemQty: row.totalStemQty ?? row.bunchSize * row.bunchesPurchased,
+        costPerStem: row.costPerStem ?? row.pricePerBunch / row.bunchSize,
+        source: "reported" as const,
+      })),
+    ...backfillRows.map((row) => ({
+      id: row.id,
+      purchaseDate: row.purchaseDate,
+      flower: row.flower,
+      category: row.category,
+      supplier: row.supplier,
+      bunchSize: row.bunchSize,
+      bunchesPurchased: row.bunchesPurchased,
+      pricePerBunch: row.pricePerBunch,
+      totalStemQty: row.totalStemQty ?? row.bunchSize * row.bunchesPurchased,
+      costPerStem: row.costPerStem ?? row.pricePerBunch / row.bunchSize,
+      source: "backfill" as const,
+    })),
+  ].sort((a, b) => a.purchaseDate.localeCompare(b.purchaseDate) || a.id - b.id);
+
+  res.json(ListFlowerPriceDashboardResponse.parse({ observations }));
+});
+
+router.post("/markets/flower-price-backfills", async (req, res): Promise<void> => {
+  const body = CreateFlowerPriceBackfillBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid historical purchase data." });
+    return;
+  }
+  const purchaseDate = body.data.purchaseDate;
+  const parsedDate = new Date(`${purchaseDate}T00:00:00Z`);
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate)
+    || Number.isNaN(parsedDate.getTime())
+    || parsedDate.toISOString().slice(0, 10) !== purchaseDate
+    || !body.data.flower.trim()
+    || !Number.isInteger(body.data.bunchSize)
+    || body.data.bunchSize <= 0
+    || !Number.isInteger(body.data.bunchesPurchased)
+    || body.data.bunchesPurchased <= 0
+    || !Number.isFinite(body.data.pricePerBunch)
+    || body.data.pricePerBunch < 0
+  ) {
+    res.status(400).json({ error: "Enter a valid date, flower, positive bunch size/count, and non-negative cost." });
+    return;
+  }
+
+  const [created] = await db
+    .insert(flowerPriceBackfillsTable)
+    .values({
+      purchaseDate,
+      flower: body.data.flower.trim(),
+      category: body.data.category,
+      supplier: typeof body.data.supplier === "string" && body.data.supplier.trim() ? body.data.supplier.trim() : null,
+      bunchSize: body.data.bunchSize,
+      bunchesPurchased: body.data.bunchesPurchased,
+      pricePerBunch: body.data.pricePerBunch,
+    })
+    .returning();
+
+  res.status(201).json(CreateFlowerPriceBackfillResponse.parse({
+    id: created.id,
+    purchaseDate: created.purchaseDate,
+    flower: created.flower,
+    category: created.category,
+    supplier: created.supplier,
+    bunchSize: created.bunchSize,
+    bunchesPurchased: created.bunchesPurchased,
+    pricePerBunch: created.pricePerBunch,
+    totalStemQty: created.totalStemQty ?? created.bunchSize * created.bunchesPurchased,
+    costPerStem: created.costPerStem ?? created.pricePerBunch / created.bunchSize,
+    source: "backfill",
+  }));
 });
 
 router.get("/markets", async (_req, res): Promise<void> => {

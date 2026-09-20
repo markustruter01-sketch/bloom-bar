@@ -23,7 +23,7 @@ Object.defineProperty(globalThis, 'navigator', {
   value: dom.navigator,
 });
 
-const { cleanup, fireEvent, render, screen } = await import('@testing-library/react');
+const { act, cleanup, fireEvent, render, screen } = await import('@testing-library/react');
 const { FlowerPriceTracker, FlowerPriceTrackerPage } = await import('./App');
 
 const priceHistory = [{
@@ -146,5 +146,67 @@ describe('reported purchase line-item tracker', () => {
     assert.equal(screen.getByTestId('tab-flower-price-tracker-1').getAttribute('aria-selected'), 'true');
     assert.match(screen.getByTestId('report-flower-price-tracker-1').textContent ?? '', /Lisianthus/);
     assert.equal(screen.getAllByTestId(/tracker-line-item-/).length, 1);
+  });
+});
+
+describe('flower price dashboard states and backfill entry point', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('shows not enough data yet for a single market observation', () => {
+    render(<FlowerPriceTrackerPage reports={[]} isLoading={false} dashboardObservations={[{
+      id: 1,
+      purchaseDate: '2026-08-30',
+      flower: 'Waratah',
+      category: 'Premium Natives',
+      supplier: 'Supplier A',
+      bunchSize: 10,
+      bunchesPurchased: 1,
+      pricePerBunch: 30,
+      totalStemQty: 10,
+      costPerStem: 3,
+      source: 'reported',
+    }]} dashboardLoading={false} />);
+
+    assert.match(screen.getByTestId('trend-not-enough-waratah').textContent ?? '', /Not enough data yet/);
+    assert.match(screen.getByTestId('seasonal-row-waratah').textContent ?? '', /Not enough data yet/);
+    assert.match(screen.getByTestId('flower-price-dashboard').textContent ?? '', /Early days/);
+  });
+
+  it('opens the historical backfill form and submits a past purchase', async () => {
+    const saved: unknown[] = [];
+    render(<FlowerPriceTrackerPage reports={[]} isLoading={false} dashboardObservations={[]} dashboardLoading={false} saveBackfill={async (data) => {
+      saved.push(data);
+      return true;
+    }} />);
+
+    fireEvent.click(screen.getByTestId('button-toggle-backfill'));
+    assert.ok(screen.getByTestId('form-flower-price-backfill'));
+    fireEvent.change(screen.getByTestId('input-backfill-flower'), { target: { value: 'Waratah' } });
+    fireEvent.change(screen.getByTestId('input-backfill-date'), { target: { value: '2025-08-10' } });
+    fireEvent.change(screen.getByTestId('input-backfill-supplier'), { target: { value: 'Old Receipt Supplier' } });
+    fireEvent.change(screen.getByTestId('input-backfill-bunches'), { target: { value: '2' } });
+    fireEvent.change(screen.getByTestId('input-backfill-cost'), { target: { value: '24' } });
+    await act(async () => {
+      fireEvent.submit(screen.getByTestId('form-flower-price-backfill'));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    assert.equal(saved.length, 1);
+    assert.deepEqual(saved[0], {
+      purchaseDate: '2025-08-10',
+      flower: 'Waratah',
+      category: 'Classic Blooms',
+      supplier: 'Old Receipt Supplier',
+      bunchSize: 10,
+      bunchesPurchased: 2,
+      pricePerBunch: 24,
+    });
+    assert.match(screen.getByTestId('form-flower-price-backfill').textContent ?? '', /Historical purchase added/);
   });
 });

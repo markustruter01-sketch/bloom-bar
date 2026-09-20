@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  date,
   doublePrecision,
   index,
   integer,
@@ -146,6 +147,34 @@ export const marketActualPurchasesTable = pgTable(
   }),
 );
 
+export const flowerPriceBackfillsTable = pgTable(
+  "flower_price_backfills",
+  {
+    id: serial("id").primaryKey(),
+    purchaseDate: date("purchase_date", { mode: "string" }).notNull(),
+    flower: text("flower").notNull(),
+    category: text("category", { enum: flowerCategories }).notNull(),
+    supplier: text("supplier"),
+    bunchSize: integer("bunch_size").notNull(),
+    bunchesPurchased: integer("bunches_purchased").notNull(),
+    pricePerBunch: doublePrecision("price_per_bunch").notNull(),
+    totalStemQty: integer("total_stem_qty").generatedAlwaysAs(
+      sql`"bunch_size" * "bunches_purchased"`,
+    ),
+    costPerStem: doublePrecision("cost_per_stem").generatedAlwaysAs(
+      sql`CASE WHEN "bunch_size" > 0 THEN "price_per_bunch" / "bunch_size" ELSE 0 END`,
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    purchaseDateIndex: index("flower_price_backfills_purchase_date_idx").on(table.purchaseDate),
+    categoryAllowed: check("flower_price_backfills_category_allowed", flowerCategoryConstraint),
+    bunchSizePositive: check("flower_price_backfills_bunch_size_positive", sql`"bunch_size" > 0`),
+    bunchesPurchasedPositive: check("flower_price_backfills_bunches_positive", sql`"bunches_purchased" > 0`),
+    pricePerBunchNonNegative: check("flower_price_backfills_price_per_bunch_non_negative", sql`"price_per_bunch" >= 0`),
+  }),
+);
+
 export const marketCostsTable = pgTable("market_costs", {
   id: serial("id").primaryKey(),
   marketCycle: integer("market_cycle")
@@ -178,6 +207,7 @@ export const insertBuyItemSchema = createInsertSchema(buyItemsTable).omit({ id: 
 export const insertMarketBuyListStateSchema = createInsertSchema(marketBuyListStatesTable);
 export const insertMarketBuyListEditLogSchema = createInsertSchema(marketBuyListEditLogsTable).omit({ id: true });
 export const insertMarketActualPurchaseSchema = createInsertSchema(marketActualPurchasesTable).omit({ id: true });
+export const insertFlowerPriceBackfillSchema = createInsertSchema(flowerPriceBackfillsTable).omit({ id: true, createdAt: true });
 export const insertMarketCostSchema = createInsertSchema(marketCostsTable).omit({ id: true });
 export const insertBouquetPlanSchema = createInsertSchema(bouquetPlansTable);
 export const insertCloseMarketSchema = createInsertSchema(closeMarketsTable);
@@ -188,6 +218,7 @@ export type InsertBuyItem = z.infer<typeof insertBuyItemSchema>;
 export type InsertMarketBuyListState = z.infer<typeof insertMarketBuyListStateSchema>;
 export type InsertMarketBuyListEditLog = z.infer<typeof insertMarketBuyListEditLogSchema>;
 export type InsertMarketActualPurchase = z.infer<typeof insertMarketActualPurchaseSchema>;
+export type InsertFlowerPriceBackfill = z.infer<typeof insertFlowerPriceBackfillSchema>;
 export type InsertMarketCost = z.infer<typeof insertMarketCostSchema>;
 export type InsertBouquetPlan = z.infer<typeof insertBouquetPlanSchema>;
 export type InsertCloseMarket = z.infer<typeof insertCloseMarketSchema>;
@@ -197,6 +228,7 @@ export type BuyItem = typeof buyItemsTable.$inferSelect;
 export type MarketBuyListState = typeof marketBuyListStatesTable.$inferSelect;
 export type MarketBuyListEditLog = typeof marketBuyListEditLogsTable.$inferSelect;
 export type MarketActualPurchase = typeof marketActualPurchasesTable.$inferSelect;
+export type FlowerPriceBackfill = typeof flowerPriceBackfillsTable.$inferSelect;
 export type MarketCost = typeof marketCostsTable.$inferSelect;
 export type BouquetPlan = typeof bouquetPlansTable.$inferSelect;
 export type CloseMarket = typeof closeMarketsTable.$inferSelect;

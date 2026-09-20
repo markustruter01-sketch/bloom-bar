@@ -9,6 +9,7 @@ import {
   closeMarketsTable,
   db,
   marketActualPurchasesTable,
+  flowerPriceBackfillsTable,
   marketBuyListEditLogsTable,
   marketBuyListStatesTable,
   marketCostsTable,
@@ -45,6 +46,7 @@ async function request(path: string, init?: RequestInit): Promise<ApiResult> {
 async function resetTestCycles() {
   await db.transaction(async (tx) => {
     await tx.delete(marketActualPurchasesTable).where(inArray(marketActualPurchasesTable.marketCycle, testCycles));
+    await tx.delete(flowerPriceBackfillsTable);
     await tx.delete(marketBuyListEditLogsTable).where(inArray(marketBuyListEditLogsTable.marketCycle, testCycles));
     await tx.delete(marketCostsTable).where(inArray(marketCostsTable.marketCycle, testCycles));
     await tx.delete(marketBuyListStatesTable).where(inArray(marketBuyListStatesTable.marketCycle, testCycles));
@@ -270,7 +272,7 @@ describe("market context persistence", () => {
     const tracker = await request("/markets/flower-price-tracker");
     assert.equal(tracker.status, 200);
     assert.deepEqual(
-      tracker.body.map((report: any) => ({
+      tracker.body.filter((report: any) => report.marketCycle === cycle).map((report: any) => ({
         marketCycle: report.marketCycle,
         date: report.date,
         venue: report.venue,
@@ -310,6 +312,74 @@ describe("market context persistence", () => {
         ],
       }],
     );
+  });
+
+  it("updates dashboard observations after a report and accepts historical backfills", async () => {
+    const cycle = testCycles[0];
+    await getContext(cycle);
+    const lock = await patch(`/markets/context/${cycle}/buy-list`, { locked: true });
+    assert.equal(lock.status, 200);
+    const saved = await request(`/markets/context/${cycle}/actual-purchases`, {
+      method: "PUT",
+      body: JSON.stringify({
+        purchases: [{
+          flower: "Waratah",
+          detail: "Red · premium native",
+          category: "Premium Natives",
+          bunchSize: 10,
+          bunchesPurchased: 1,
+          pricePerBunch: 30,
+          supplier: "Current Supplier",
+          source: "manual",
+        }],
+      }),
+    });
+    assert.equal(saved.status, 200);
+
+    const beforeReport = await request("/markets/flower-price-dashboard");
+    assert.equal(beforeReport.status, 200);
+    assert.equal(beforeReport.body.observations.some((observation: any) => observation.flower === "Waratah"), false);
+
+    const report = await request(`/markets/context/${cycle}/report-purchases`, { method: "POST" });
+    assert.equal(report.status, 200);
+    const afterReport = await request("/markets/flower-price-dashboard");
+    assert.equal(afterReport.status, 200);
+    assert.deepEqual(afterReport.body.observations.filter((observation: any) => observation.flower === "Waratah").map((observation: any) => ({
+      flower: observation.flower,
+      category: observation.category,
+      supplier: observation.supplier,
+      purchaseDate: observation.purchaseDate,
+      costPerStem: observation.costPerStem,
+      source: observation.source,
+    })), [{
+      flower: "Waratah",
+      category: "Premium Natives",
+      supplier: "Current Supplier",
+      purchaseDate: "2371-09-05",
+      costPerStem: 3,
+      source: "reported",
+    }]);
+
+    const backfill = await request("/markets/flower-price-backfills", {
+      method: "POST",
+      body: JSON.stringify({
+        purchaseDate: "2025-08-10",
+        flower: "Waratah",
+        category: "Premium Natives",
+        supplier: "Old Receipt Supplier",
+        bunchSize: 10,
+        bunchesPurchased: 2,
+        pricePerBunch: 24,
+      }),
+    });
+    assert.equal(backfill.status, 201);
+    assert.equal(backfill.body.source, "backfill");
+    assert.equal(backfill.body.totalStemQty, 20);
+    assert.equal(backfill.body.costPerStem, 2.4);
+
+    const afterBackfill = await request("/markets/flower-price-dashboard");
+    assert.equal(afterBackfill.status, 200);
+    assert.deepEqual(afterBackfill.body.observations.filter((observation: any) => observation.flower === "Waratah").map((observation: any) => observation.source), ["backfill", "reported"]);
   });
 
   it("protects the proposed list, logs unlock edits, and preserves the full purchase flow", async () => {
@@ -561,12 +631,16 @@ describe("market context persistence", () => {
       const lock = await patch(`/markets/context/${cycle}/buy-list`, { locked: true });
       assert.equal(lock.status, 200);
       const initialLisianthus = context.buyItems.find((item: any) => item.flower === "Lisianthus");
-      assert.deepEqual(
-        initialLisianthus?.priceSource,
-        cycle === 9001
-          ? { kind: "fallback", marketCycle: null, date: null }
-          : { kind: "reported", marketCycle: 9001, date: "05 Sep 2371" },
-      );
+      if (cycle === 9001) {
+        assert.ok(initialLisianthus?.priceSource);
+        if (initialLisianthus.priceSource.kind === "reported") {
+          assert.ok(initialLisianthus.priceSource.marketCycle < cycle);
+        } else {
+          assert.deepEqual(initialLisianthus.priceSource, { kind: "fallback", marketCycle: null, date: null });
+        }
+      } else {
+        assert.deepEqual(initialLisianthus?.priceSource, { kind: "reported", marketCycle: 9001, date: "05 Sep 2371" });
+      }
 
       const saved = await request(`/markets/context/${cycle}/actual-purchases`, {
         method: "PUT",
@@ -603,7 +677,7 @@ describe("market context persistence", () => {
     assert.equal(lisianthus.previous.unitCost, 24);
     assert.equal(lisianthus.change, 1);
     assert.equal(lisianthus.changePercent, (1 / 24) * 100);
-    assert.deepEqual(lisianthus.history.map((point: any) => point.marketCycle), [9002, 9001]);
+    assert.deepEqual(lisianthus.history.map((point: any) => point.marketCycle).filter((cycle: number) => cycle === 9002 || cycle === 9001), [9002, 9001]);
 
     const futureContext = await getContext(9003);
     const futureLisianthus = futureContext.buyItems.find((item: any) => item.flower === "Lisianthus");

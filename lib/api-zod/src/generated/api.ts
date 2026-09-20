@@ -214,6 +214,81 @@ export const ListFlowerPriceTrackerResponse = zod.array(ListFlowerPriceTrackerRe
 
 
 /**
+ * Returns reported market purchase observations and manually backfilled historical observations.
+ * @summary List flower price observations for the tracker dashboard
+ */
+
+
+export const listFlowerPriceDashboardResponseObservationsItemPricePerBunchMin = 0;
+
+export const listFlowerPriceDashboardResponseObservationsItemTotalStemQtyMin = 0;
+
+export const listFlowerPriceDashboardResponseObservationsItemCostPerStemMin = 0;
+
+
+
+export const ListFlowerPriceDashboardResponse = zod.object({
+  "observations": zod.array(zod.object({
+  "id": zod.number(),
+  "purchaseDate": zod.string().describe('ISO calendar date of the purchase'),
+  "flower": zod.string(),
+  "category": zod.enum(['Gum', 'Textural Foliage', 'Classic Blooms', 'Statement Blooms', 'Premium Natives']),
+  "supplier": zod.string().nullable(),
+  "bunchSize": zod.number().min(1),
+  "bunchesPurchased": zod.number().min(1),
+  "pricePerBunch": zod.number().min(listFlowerPriceDashboardResponseObservationsItemPricePerBunchMin),
+  "totalStemQty": zod.number().min(listFlowerPriceDashboardResponseObservationsItemTotalStemQtyMin),
+  "costPerStem": zod.number().min(listFlowerPriceDashboardResponseObservationsItemCostPerStemMin),
+  "source": zod.enum(['reported', 'backfill'])
+}))
+})
+
+
+/**
+ * @summary Add a historical flower purchase record
+ */
+
+
+export const createFlowerPriceBackfillBodyPricePerBunchMin = 0;
+
+
+
+export const CreateFlowerPriceBackfillBody = zod.object({
+  "purchaseDate": zod.string().describe('ISO calendar date of the historical purchase'),
+  "flower": zod.string(),
+  "category": zod.enum(['Gum', 'Textural Foliage', 'Classic Blooms', 'Statement Blooms', 'Premium Natives']),
+  "supplier": zod.string().nullish(),
+  "bunchSize": zod.number().min(1).describe('Stems contained in one historical bunch'),
+  "bunchesPurchased": zod.number().min(1),
+  "pricePerBunch": zod.number().min(createFlowerPriceBackfillBodyPricePerBunchMin).describe('AUD price for one historical bunch')
+})
+
+
+
+export const createFlowerPriceBackfillResponsePricePerBunchMin = 0;
+
+export const createFlowerPriceBackfillResponseTotalStemQtyMin = 0;
+
+export const createFlowerPriceBackfillResponseCostPerStemMin = 0;
+
+
+
+export const CreateFlowerPriceBackfillResponse = zod.object({
+  "id": zod.number(),
+  "purchaseDate": zod.string().describe('ISO calendar date of the purchase'),
+  "flower": zod.string(),
+  "category": zod.enum(['Gum', 'Textural Foliage', 'Classic Blooms', 'Statement Blooms', 'Premium Natives']),
+  "supplier": zod.string().nullable(),
+  "bunchSize": zod.number().min(1),
+  "bunchesPurchased": zod.number().min(1),
+  "pricePerBunch": zod.number().min(createFlowerPriceBackfillResponsePricePerBunchMin),
+  "totalStemQty": zod.number().min(createFlowerPriceBackfillResponseTotalStemQtyMin),
+  "costPerStem": zod.number().min(createFlowerPriceBackfillResponseCostPerStemMin),
+  "source": zod.enum(['reported', 'backfill'])
+})
+
+
+/**
  * @summary Get the saved context for a scheduled market cycle
  */
 export const GetMarketContextParams = zod.object({

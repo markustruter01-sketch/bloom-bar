@@ -2,3 +2,4 @@
 - [Artifact API proxy](artifact-api-proxy.md) — the Bloom Bar Vite preview must proxy `/api` to the API workflow for direct artifact previews.
 - [Drizzle rename prompts](drizzle-dev-schema-push.md) — noninteractive schema pushes can still prompt on column renames; resolve development changes carefully and leave production to Publish.
 - [Tesseract OCR testing](tesseract-ocr-testing.md) — run direct OCR smoke tests outside the frontend workspace or clean up downloaded language data.
+- [Integration test isolation](integration-test-isolation.md) — dashboard tests must scope assertions because the development database can contain real reported market rows.

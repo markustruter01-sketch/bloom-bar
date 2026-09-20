@@ -3,9 +3,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   getGetMarketContextQueryKey,
   getGetSellThroughComparisonQueryKey,
+  getListFlowerPriceDashboardQueryKey,
+  getListFlowerPriceTrackerQueryKey,
   getListMarketsQueryKey,
   getListMarketScheduleOverridesQueryKey,
   useListFlowerPriceTracker,
+  useListFlowerPriceDashboard,
+  useCreateFlowerPriceBackfill,
   useGetSellThroughComparison,
   useListFlowerPrices,
   useListMarketScheduleOverrides,
@@ -30,6 +34,8 @@ import type {
   BuyItem as ApiBuyItem,
   CloseMarket,
   FlowerPriceHistory,
+  FlowerPriceBackfillInput,
+  FlowerPriceDashboardObservation,
   FlowerPriceTrackerMarket,
   Market,
   MarketContext,
@@ -413,7 +419,101 @@ export function FlowerPriceTracker({ prices, isLoading }: { prices: FlowerPriceH
   </section>;
 }
 
-export function FlowerPriceTrackerPage({ reports, isLoading }: { reports: FlowerPriceTrackerMarket[]; isLoading: boolean }) {
+type PriceDashboardSummary = {
+  flower: string;
+  category: FlowerCategory;
+  averageCostPerStem: number;
+  totalStems: number;
+  dataPoints: number;
+  suppliers: Array<{ name: string; averageCostPerStem: number; dataPoints: number }>;
+};
+
+const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function weightedCostPerStem(observations: FlowerPriceDashboardObservation[]) {
+  const totalStems = observations.reduce((sum, observation) => sum + observation.totalStemQty, 0);
+  return totalStems > 0
+    ? observations.reduce((sum, observation) => sum + observation.costPerStem * observation.totalStemQty, 0) / totalStems
+    : 0;
+}
+
+function buildPriceDashboardSummaries(observations: FlowerPriceDashboardObservation[]): PriceDashboardSummary[] {
+  const grouped = new Map<string, FlowerPriceDashboardObservation[]>();
+  observations.forEach((observation) => {
+    grouped.set(observation.flower, [...(grouped.get(observation.flower) ?? []), observation]);
+  });
+  return [...grouped.entries()].map(([flower, rows]) => {
+    const supplierGroups = new Map<string, FlowerPriceDashboardObservation[]>();
+    rows.forEach((row) => {
+      const supplier = row.supplier?.trim() || 'Supplier not recorded';
+      supplierGroups.set(supplier, [...(supplierGroups.get(supplier) ?? []), row]);
+    });
+    const supplierRows = [...supplierGroups.entries()];
+    return {
+      flower,
+      category: rows[0].category,
+      averageCostPerStem: weightedCostPerStem(rows),
+      totalStems: rows.reduce((sum, row) => sum + row.totalStemQty, 0),
+      dataPoints: rows.length,
+      suppliers: supplierRows.length > 1
+        ? supplierRows.map(([name, supplierObservations]) => ({
+            name,
+            averageCostPerStem: weightedCostPerStem(supplierObservations),
+            dataPoints: supplierObservations.length,
+          })).sort((a, b) => a.name.localeCompare(b.name))
+        : [],
+    };
+  }).sort((a, b) => (a.category === ApiFlowerCategory.Premium_Natives ? -1 : b.category === ApiFlowerCategory.Premium_Natives ? 1 : 0) || a.flower.localeCompare(b.flower));
+}
+
+function PriceTrendCard({ flower, observations }: { flower: string; observations: FlowerPriceDashboardObservation[] }) {
+  const ordered = [...observations].sort((a, b) => a.purchaseDate.localeCompare(b.purchaseDate));
+  if (ordered.length < 2) {
+    return <div className="rounded-lg border border-dashed border-foreground/15 bg-card p-5" data-testid={`trend-not-enough-${flower.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}><div className="flex items-center justify-between gap-3"><h3 className="font-serif text-xl">{flower}</h3><span className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">Not enough data yet</span></div><p className="mt-2 text-xs leading-relaxed text-muted-foreground">Add or report one more purchase record before a time trend is shown.</p></div>;
+  }
+  const max = Math.max(...ordered.map((row) => row.costPerStem), 0.01);
+  return <div className="rounded-lg border border-card-border bg-card p-5" data-testid={`trend-card-${flower.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}><div className="flex items-start justify-between gap-3"><div><h3 className="font-serif text-xl">{flower}</h3><p className="mt-1 text-xs text-muted-foreground">{ordered.length} purchase observations · chronological</p></div><span className="font-mono text-xs text-primary">{unitMoney(ordered[ordered.length - 1].costPerStem)} latest</span></div><div className="mt-5 flex h-28 items-end gap-2 border-b border-foreground/10">{ordered.map((row) => <div key={`${row.source}-${row.id}`} className="group flex min-w-0 flex-1 flex-col items-center justify-end gap-1" title={`${row.purchaseDate}: ${unitMoney(row.costPerStem)} / stem`}><div className="w-full max-w-9 rounded-t-sm bg-primary/70 transition-colors group-hover:bg-primary" style={{ height: `${Math.max(12, (row.costPerStem / max) * 100)}%` }} /><span className="w-full truncate text-center font-mono text-[9px] text-muted-foreground">{row.purchaseDate.slice(0, 7)}</span></div>)}</div></div>;
+}
+
+function SeasonalTrend({ observations }: { observations: FlowerPriceDashboardObservation[] }) {
+  const byFlower = new Map<string, FlowerPriceDashboardObservation[]>();
+  observations.forEach((observation) => byFlower.set(observation.flower, [...(byFlower.get(observation.flower) ?? []), observation]));
+  const flowerGroups = [...byFlower.entries()].sort(([a], [b]) => a.localeCompare(b));
+  if (flowerGroups.length === 0) return <div className="rounded-lg border border-dashed border-foreground/15 bg-card p-5 text-sm text-muted-foreground">Seasonal patterns will appear after purchase records are added.</div>;
+  return <div className="space-y-3">{flowerGroups.map(([flower, rows]) => {
+    const monthly = monthLabels.map((label, monthIndex) => {
+      const monthRows = rows.filter((row) => Number(row.purchaseDate.slice(5, 7)) === monthIndex + 1);
+      return { label, rows: monthRows, average: monthRows.length >= 2 ? weightedCostPerStem(monthRows) : null };
+    });
+    const usable = monthly.filter((month) => month.average !== null);
+    const cheapest = usable.length > 0 ? usable.reduce((lowest, month) => month.average! < lowest.average! ? month : lowest) : null;
+    const max = Math.max(...usable.map((month) => month.average ?? 0), 0.01);
+    return <div key={flower} className="rounded-lg border border-card-border bg-card p-5" data-testid={`seasonal-row-${flower.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}><div className="flex flex-wrap items-baseline justify-between gap-2"><div><h3 className="font-serif text-xl">{flower}</h3><p className="mt-1 text-xs text-muted-foreground">{rows[0].category}</p></div>{cheapest ? <span className="text-xs font-semibold text-primary">Cheapest so far: {cheapest.label} · {unitMoney(cheapest.average!)} / stem</span> : <span className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">Not enough data yet</span>}</div>{usable.length === 0 ? <p className="mt-4 rounded-md bg-muted px-3 py-3 text-xs text-muted-foreground">Each month needs at least 2 purchase observations before a seasonal average is shown.</p> : <div className="mt-5 grid grid-cols-6 gap-2 sm:grid-cols-12">{monthly.map((month) => <div key={month.label} className="text-center"><div className="flex h-20 items-end justify-center"><div className={`w-full max-w-6 rounded-t-sm ${month.average === null ? 'border border-dashed border-foreground/15' : month.label === cheapest?.label ? 'bg-accent' : 'bg-primary/55'}`} style={month.average === null ? undefined : { height: `${Math.max(12, (month.average / max) * 100)}%` }} title={month.average === null ? `${month.label}: not enough data yet` : `${month.label}: ${unitMoney(month.average)} / stem`} /></div><span className="mt-1 block font-mono text-[9px] text-muted-foreground">{month.label}</span></div>)}</div>}</div>;
+  })}</div>;
+}
+
+function BackfillForm({ onSave }: { onSave?: (data: FlowerPriceBackfillInput) => Promise<boolean> }) {
+  const [form, setForm] = useState<FlowerPriceBackfillInput>({ purchaseDate: '', flower: '', category: ApiFlowerCategory.Classic_Blooms, supplier: '', bunchSize: 10, bunchesPurchased: 1, pricePerBunch: 0 });
+  const [state, setState] = useState<SaveState>('idle');
+  const [message, setMessage] = useState('');
+  const update = <K extends keyof FlowerPriceBackfillInput>(key: K, value: FlowerPriceBackfillInput[K]) => setForm((current) => ({ ...current, [key]: value }));
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!onSave || !form.purchaseDate || !form.flower.trim() || form.bunchSize <= 0 || form.bunchesPurchased <= 0 || form.pricePerBunch < 0) {
+      setState('error');
+      setMessage('Enter a date, flower, positive bunch size/count, and a non-negative cost.');
+      return;
+    }
+    setState('saving');
+    const saved = await onSave({ ...form, flower: form.flower.trim(), supplier: form.supplier?.trim() || null });
+    setState(saved ? 'saved' : 'error');
+    setMessage(saved ? 'Historical purchase added to the dashboard.' : 'This historical purchase could not be saved. Try again.');
+    if (saved) setForm((current) => ({ ...current, purchaseDate: '', flower: '', supplier: '', bunchesPurchased: 1, pricePerBunch: 0 }));
+  };
+  return <form onSubmit={submit} className="rounded-lg border border-primary/15 bg-[#e8e4cd] p-5 md:p-6" data-testid="form-flower-price-backfill"><div className="flex items-start justify-between gap-4"><div><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Pencil size={13} /> Historical backfill</div><h2 className="mt-2 font-serif text-2xl text-primary">Add an old receipt</h2><p className="mt-1 max-w-2xl text-xs leading-relaxed text-primary/65">Use one row per flower and supplier. Bunch size lets the dashboard calculate a comparable cost per stem.</p></div></div><div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><label className="text-xs font-semibold text-primary">Flower type<input value={form.flower} onChange={(event) => update('flower', event.target.value)} placeholder="e.g. Waratah" data-testid="input-backfill-flower" className="mt-1 h-10 w-full rounded-md border border-primary/15 bg-background px-3 text-sm outline-none focus:border-primary" /></label><label className="text-xs font-semibold text-primary">Purchase date<input type="date" value={form.purchaseDate} onChange={(event) => update('purchaseDate', event.target.value)} data-testid="input-backfill-date" className="mt-1 h-10 w-full rounded-md border border-primary/15 bg-background px-3 text-sm outline-none focus:border-primary" /></label><label className="text-xs font-semibold text-primary">Supplier<input value={form.supplier ?? ''} onChange={(event) => update('supplier', event.target.value)} placeholder="Optional" data-testid="input-backfill-supplier" className="mt-1 h-10 w-full rounded-md border border-primary/15 bg-background px-3 text-sm outline-none focus:border-primary" /></label><label className="text-xs font-semibold text-primary">Category<select value={form.category} onChange={(event) => update('category', event.target.value as FlowerCategory)} data-testid="select-backfill-category" className="mt-1 h-10 w-full rounded-md border border-primary/15 bg-background px-3 text-sm outline-none focus:border-primary">{flowerCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select></label><label className="text-xs font-semibold text-primary">Stems per bunch<input type="number" min="1" value={form.bunchSize} onChange={(event) => update('bunchSize', Number(event.target.value))} data-testid="input-backfill-bunch-size" className="mt-1 h-10 w-full rounded-md border border-primary/15 bg-background px-3 text-sm outline-none focus:border-primary" /></label><label className="text-xs font-semibold text-primary">Bunches<input type="number" min="1" value={form.bunchesPurchased} onChange={(event) => update('bunchesPurchased', Number(event.target.value))} data-testid="input-backfill-bunches" className="mt-1 h-10 w-full rounded-md border border-primary/15 bg-background px-3 text-sm outline-none focus:border-primary" /></label><label className="text-xs font-semibold text-primary">Cost per bunch (AUD)<input type="number" min="0" step="0.01" value={form.pricePerBunch} onChange={(event) => update('pricePerBunch', Number(event.target.value))} data-testid="input-backfill-cost" className="mt-1 h-10 w-full rounded-md border border-primary/15 bg-background px-3 text-sm outline-none focus:border-primary" /></label><div className="flex items-end"><Button type="submit" disabled={state === 'saving'} className="h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90" testId="button-save-backfill">{state === 'saving' ? <LoaderCircle size={15} className="animate-spin" /> : <Plus size={15} />} {state === 'saving' ? 'Adding…' : 'Add historical record'}</Button></div></div>{state !== 'idle' && <p className={`mt-3 text-xs ${state === 'error' ? 'text-destructive' : 'text-primary'}`} role={state === 'error' ? 'alert' : 'status'}>{message}</p>}</form>;
+}
+
+export function FlowerPriceTrackerPage({ reports, isLoading, dashboardObservations = [], dashboardLoading = false, saveBackfill }: { reports: FlowerPriceTrackerMarket[]; isLoading: boolean; dashboardObservations?: FlowerPriceDashboardObservation[]; dashboardLoading?: boolean; saveBackfill?: (data: FlowerPriceBackfillInput) => Promise<boolean> }) {
   const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
   useEffect(() => {
     if (reports.length === 0) {
@@ -426,13 +526,26 @@ export function FlowerPriceTrackerPage({ reports, isLoading }: { reports: Flower
   }, [reports, selectedCycle]);
 
   const selectedReport = reports.find((report) => report.marketCycle === selectedCycle) ?? reports[0];
+  const summaries = buildPriceDashboardSummaries(dashboardObservations);
+  const observationsByFlower = new Map<string, FlowerPriceDashboardObservation[]>();
+  dashboardObservations.forEach((observation) => observationsByFlower.set(observation.flower, [...(observationsByFlower.get(observation.flower) ?? []), observation]));
+  const [backfillOpen, setBackfillOpen] = useState(false);
   return <div>
     <PageIntro
-      eyebrow="The studio / reported purchases"
+      eyebrow="The studio / cost intelligence"
       title="Flower Price Tracker"
-      description="Open a market date to see exactly what each bunch cost. Reports stay as line-items so supplier differences remain visible."
+      description="See your real cost per stem, learn which seasons are kindest to each flower, and keep older receipts in the same history."
+      action={<Button onClick={() => setBackfillOpen((open) => !open)} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-toggle-backfill"><Pencil size={15} /> {backfillOpen ? 'Close backfill' : 'Add historical record'}</Button>}
     />
-    {isLoading ? <p className="rounded-md bg-muted px-4 py-3 text-xs text-muted-foreground" role="status">Loading reported purchase lines…</p> : reports.length === 0 ? <div className="rounded-lg border border-dashed border-foreground/15 bg-card px-6 py-12 text-center"><TrendingUp className="mx-auto text-muted-foreground/50" size={28} /><p className="mt-3 font-serif text-xl">No market dates reported yet</p><p className="mt-1 text-sm text-muted-foreground">Save actual purchases on the Buy List, then press Report to add that market date here.</p></div> : <div className="space-y-5" data-testid="page-flower-price-tracker">
+    {backfillOpen && <div className="mb-6"><BackfillForm onSave={saveBackfill} /></div>}
+    {dashboardLoading ? <p className="rounded-md bg-muted px-4 py-3 text-xs text-muted-foreground" role="status">Loading price dashboard…</p> : <section className="space-y-6" data-testid="flower-price-dashboard">
+      <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-lg border border-card-border bg-card p-5"><span className="font-mono text-[9px] uppercase tracking-[.14em] text-muted-foreground">Purchase observations</span><div className="mt-3 font-serif text-3xl">{dashboardObservations.length}</div><p className="mt-1 text-xs text-muted-foreground">{dashboardObservations.filter((row) => row.source === 'backfill').length} historical backfill{dashboardObservations.filter((row) => row.source === 'backfill').length === 1 ? '' : 's'}</p></div><div className="rounded-lg border border-card-border bg-card p-5"><span className="font-mono text-[9px] uppercase tracking-[.14em] text-muted-foreground">Flower types</span><div className="mt-3 font-serif text-3xl">{summaries.length}</div><p className="mt-1 text-xs text-muted-foreground">Weighted by purchased stems</p></div><div className="rounded-lg border border-card-border bg-[#e8e4cd] p-5"><span className="font-mono text-[9px] uppercase tracking-[.14em] text-primary">Trend confidence</span><div className="mt-3 font-serif text-3xl text-primary">{dashboardObservations.length < 2 ? 'Early days' : 'Building'}</div><p className="mt-1 text-xs text-primary/65">{dashboardObservations.length < 2 ? 'Not enough data yet for a trend.' : 'More market dates will sharpen seasonal signals.'}</p></div></div>
+      <section><div className="mb-4 flex flex-wrap items-end justify-between gap-2"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Average cost per stem</p><h2 className="mt-1 font-serif text-2xl">What each flower is really costing.</h2></div><span className="text-xs text-muted-foreground">Across all reported and backfilled records</span></div>{summaries.length === 0 ? <div className="rounded-lg border border-dashed border-foreground/15 bg-card p-6 text-sm text-muted-foreground">Report a market or add an old receipt to start the dashboard.</div> : <div className="grid gap-3 md:grid-cols-2">{summaries.map((summary) => <div key={summary.flower} className="rounded-lg border border-card-border bg-card p-5" data-testid={`dashboard-average-${summary.flower.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}><div className="flex items-start justify-between gap-3"><div><h3 className="font-serif text-xl">{summary.flower}</h3><p className="mt-1 text-xs text-muted-foreground">{summary.category} · {summary.dataPoints} observation{summary.dataPoints === 1 ? '' : 's'}</p></div><span className="font-mono text-lg text-primary">{unitMoney(summary.averageCostPerStem)}<span className="ml-1 text-[10px] text-muted-foreground">/ stem</span></span></div>{summary.suppliers.length > 0 && <div className="mt-4 border-t border-foreground/10 pt-3"><p className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">By supplier</p><div className="mt-2 space-y-2">{summary.suppliers.map((supplier) => <div key={supplier.name} className="flex items-center justify-between gap-3 text-xs"><span>{supplier.name} <span className="text-muted-foreground">({supplier.dataPoints})</span></span><span className="font-mono text-primary">{unitMoney(supplier.averageCostPerStem)} / stem</span></div>)}</div></div>}</div>)}</div>}</section>
+      <section><div className="mb-4"><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Cost over time</p><h2 className="mt-1 font-serif text-2xl">The market is teaching us.</h2><p className="mt-1 text-xs text-muted-foreground">A time trend only appears after at least two observations for a flower.</p></div>{summaries.length === 0 ? <div className="rounded-lg border border-dashed border-foreground/15 bg-card p-6 text-sm text-muted-foreground">Not enough data yet.</div> : <div className="grid gap-3 md:grid-cols-2">{summaries.map((summary) => <PriceTrendCard key={summary.flower} flower={summary.flower} observations={observationsByFlower.get(summary.flower) ?? []} />)}</div>}</section>
+      <section><div className="mb-4"><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Seasonal view</p><h2 className="mt-1 font-serif text-2xl">When are stems kindest?</h2><p className="mt-1 text-xs text-muted-foreground">Each month needs at least two observations before it can influence a seasonal average.</p></div><SeasonalTrend observations={dashboardObservations} /></section>
+    </section>}
+    {isLoading ? <p className="mt-8 rounded-md bg-muted px-4 py-3 text-xs text-muted-foreground" role="status">Loading reported purchase lines…</p> : reports.length === 0 ? <div className="mt-8 rounded-lg border border-dashed border-foreground/15 bg-card px-6 py-10 text-center"><TrendingUp className="mx-auto text-muted-foreground/50" size={28} /><p className="mt-3 font-serif text-xl">No market dates reported yet</p><p className="mt-1 text-sm text-muted-foreground">Save actual purchases on the Buy List, then press Report to add that market date here.</p></div> : <div className="mt-8 space-y-5" data-testid="page-flower-price-tracker">
+      <div className="flex items-center justify-between gap-3"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Source records</p><h2 className="mt-1 font-serif text-2xl">Reported market lines</h2></div><span className="text-xs text-muted-foreground">Open a date to inspect each purchase</span></div>
       <div className="flex gap-2 overflow-x-auto border-b border-foreground/10 pb-px" role="tablist" aria-label="Reported market dates">
         {reports.map((report) => <button
           key={report.marketCycle}
@@ -993,8 +1106,8 @@ export function ClosePage({ closeMarket, actualPurchases, nextMarket, saveCloseM
   return <div><PageIntro eyebrow="Next market / pack-down" title="Leave the shed lighter." description="A quick count of what came home, what found a vase, and what to carry into the next Sunday." action={<div className={`rounded-md px-3 py-2 text-center ${closed ? 'bg-[#dce3c2]' : 'bg-muted'}`}><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">Market status</div><div className="flex items-center justify-center gap-1 text-sm font-semibold">{closed && <LockKeyhole size={13} />}{closed ? 'Finalized · Locked' : 'Open for edits'}</div></div>} /><MarketSubnav active="close" nextMarket={nextMarket} /><div className="grid gap-6 lg:grid-cols-[1fr_340px]"><div>{closed && <div className="mb-5 flex items-start gap-3 rounded-lg border border-primary/20 bg-[#e8e4cd] p-4 text-primary" role="status" data-testid="close-lock-status"><LockKeyhole size={18} className="mt-0.5 shrink-0" /><div><p className="text-sm font-semibold">Finalized and locked</p><p className="mt-1 text-xs leading-relaxed text-primary/70">This sell-through record is an operational report. Reopen it intentionally before changing leftover counts.</p></div></div>}<div className="mb-4 flex items-end justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Leftover stock</p><h2 className="mt-1 font-serif text-2xl">What came home?</h2></div><span className="font-mono text-xs text-muted-foreground">{totalLeft} stems counted</span></div>{stock.length ? <div className="overflow-hidden rounded-lg border border-card-border bg-card">{stock.map((item) => <div key={item.name} className="flex items-center gap-4 border-b border-foreground/10 p-4 last:border-0"><span className="h-9 w-9 rounded-full border border-foreground/10" style={{ background: `radial-gradient(circle at 40% 30%, ${flowers.find((flower) => flower.common === item.name)?.colour ?? '#b6a1c8'}, #eee5dc)` }} /><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.note} · {item.opening} purchased</span></span><div className="flex items-center gap-2"><Button onClick={() => { setCounts((current) => ({ ...current, [item.name]: Math.max(0, (current[item.name] ?? 0) - 1) })); setSaveState('idle'); }} disabled={closed || (counts[item.name] ?? 0) <= 0} className="h-8 w-8 rounded-full border border-foreground/15 bg-background p-0 text-lg font-normal" testId={`button-decrease-${item.name.toLowerCase().replaceAll(' ', '-')}`}>−</Button><span className="w-6 text-center font-mono text-sm" data-testid={`text-leftover-${item.name.toLowerCase().replaceAll(' ', '-')}`}>{counts[item.name] ?? 0}</span><Button onClick={() => { setCounts((current) => ({ ...current, [item.name]: Math.min(item.opening, (current[item.name] ?? 0) + 1) })); setSaveState('idle'); }} disabled={closed || (counts[item.name] ?? 0) >= item.opening} className="h-8 w-8 rounded-full border border-foreground/15 bg-background p-0 text-lg font-normal" testId={`button-increase-${item.name.toLowerCase().replaceAll(' ', '-')}`}><Plus size={14} /></Button></div></div>)}</div> : <div className="rounded-lg border border-dashed border-foreground/15 bg-card p-8 text-center text-sm text-muted-foreground">Save actual purchases on the Buy list first to compare purchased stems with what came home.</div>}<div className="mb-4 mt-6 flex items-end justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground">Sell-through</p><h2 className="mt-1 font-serif text-2xl">What moved?</h2></div><span className="font-mono text-xs text-muted-foreground">Cycle {closeMarket.marketCycle}</span></div><div className="overflow-hidden rounded-lg border border-card-border bg-card">{sellThrough.length ? sellThrough.map((item) => <div key={item.flower} className="flex items-center gap-4 border-b border-foreground/10 p-4 last:border-0"><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{item.flower}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.soldStems} sold · {item.leftoverStems} came home · {item.purchasedStems} purchased</span></span><span className="font-mono text-lg font-semibold text-primary" data-testid={`text-sell-through-${item.flower.toLowerCase().replaceAll(' ', '-')}`}>{item.sellThroughPercent}%</span></div>) : <div className="p-6 text-center text-sm text-muted-foreground">Sell-through appears here once purchases and leftovers are recorded.</div>}</div><Button onClick={closed ? requestReopen : () => void performSave()} disabled={saveState === 'saving'} className={`mt-4 w-full ${closed ? 'border border-primary bg-transparent text-primary' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`} testId="button-save-close">{saveState === 'saving' ? <LoaderCircle size={15} className="animate-spin" /> : closed ? <UnlockKeyhole size={15} /> : <ClipboardCheck size={15} />} {saveState === 'saving' ? 'Saving…' : closed ? 'Reopen to edit' : 'Save pack-down count'}</Button><div className="mt-3"><SaveFeedback state={saveState} onRetry={() => void performSave()} savedMessage={closed ? 'Pack-down count saved and market closed.' : 'Pack-down count saved and market reopened.'} /></div></div><aside className="h-fit space-y-3"><div className="rounded-lg border border-primary/10 bg-[#e8e4cd] p-5"><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Package size={13} /> Pack-down notes</div><p className="mt-4 font-serif text-xl leading-snug text-primary">Good flowers deserve<br />a second Sunday.</p><p className="mt-3 text-xs leading-relaxed text-primary/65">Record what is still fresh so it can guide your next buy list. Compost anything that has lost its lift.</p></div><div className="paper-card rounded-lg border border-card-border bg-card p-5"><div className="flex items-center gap-2 font-serif text-lg"><ClipboardList size={17} className="text-muted-foreground" /> Close checklist</div><div className="mt-4 space-y-3 text-xs text-muted-foreground"><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-buckets" className="accent-primary" /> Rinse buckets</label><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-tent" className="accent-primary" /> Pack umbrella sign</label><label className="flex items-center gap-2"><input type="checkbox" data-testid="checkbox-pack-till" className="accent-primary" /> Reconcile the till</label></div></div></aside></div></div>;
 }
 
-function Router({ nextMarket, scheduleOverrides, buyItems, actualPurchases, costs, buyList, markets, bouquetPlan, closeMarket, flowerPrices, flowerPricesLoading, flowerPriceTrackerReports, flowerPriceTrackerLoading, toggleBuyItem, setBuyListLock, saveActualPurchases, saveCosts, reportPurchases, saveBouquetPlan, saveCloseMarket, saveScheduleOverride, clearScheduleOverride }: { nextMarket: MarketCycleSummary; scheduleOverrides: MarketScheduleOverride[]; buyItems: BuyItem[]; actualPurchases: ActualPurchase[]; costs: MarketCost[]; buyList: MarketContext['buyList']; markets: Market[]; bouquetPlan: BouquetPlan; closeMarket: CloseMarket; flowerPrices: FlowerPriceHistory[]; flowerPricesLoading: boolean; flowerPriceTrackerReports: FlowerPriceTrackerMarket[]; flowerPriceTrackerLoading: boolean; toggleBuyItem: (id: number) => Promise<boolean>; setBuyListLock: (locked: boolean) => Promise<boolean>; saveActualPurchases: (purchases: BunchPurchaseInput[], receipt: ReceiptPayload) => Promise<boolean>; saveCosts: (costs: MarketCostInput[]) => Promise<boolean>; reportPurchases: () => Promise<boolean>; saveBouquetPlan: (selectedBand: string, count: number) => Promise<boolean>; saveCloseMarket: (counts: Record<string, number>, closed: boolean, reopen?: boolean) => Promise<boolean>; saveScheduleOverride: (cycle: number, data: MarketScheduleOverrideUpdate) => Promise<boolean>; clearScheduleOverride: (cycle: number) => Promise<boolean> }) {
-  return <AppShell nextMarket={nextMarket} remainingBuyItems={buyItems.filter((item) => !item.checked).length}><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} />} /><Route path="/flowers" component={() => <FlowersPage flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesLoading} />} /><Route path="/flower-price-tracker" component={() => <FlowerPriceTrackerPage reports={flowerPriceTrackerReports} isLoading={flowerPriceTrackerLoading} />} /><Route path="/markets" component={() => <div className="space-y-7"><MarketsPage markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /><SellThroughComparisonPanel markets={markets} scheduleOverrides={scheduleOverrides} /></div>} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} nextMarket={nextMarket} toggleBuyItem={toggleBuyItem} setBuyListLock={setBuyListLock} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} />} /><Route path="/markets/next/close" component={() => <ClosePage closeMarket={closeMarket} actualPurchases={actualPurchases} nextMarket={nextMarket} saveCloseMarket={saveCloseMarket} />} /><Route path="/markets/next/bouquets" component={() => <BouquetsPage bouquetPlan={bouquetPlan} nextMarket={nextMarket} saveBouquetPlan={saveBouquetPlan} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
+function Router({ nextMarket, scheduleOverrides, buyItems, actualPurchases, costs, buyList, markets, bouquetPlan, closeMarket, flowerPrices, flowerPricesLoading, flowerPriceTrackerReports, flowerPriceTrackerLoading, flowerPriceDashboardObservations, flowerPriceDashboardLoading, saveBackfill, toggleBuyItem, setBuyListLock, saveActualPurchases, saveCosts, reportPurchases, saveBouquetPlan, saveCloseMarket, saveScheduleOverride, clearScheduleOverride }: { nextMarket: MarketCycleSummary; scheduleOverrides: MarketScheduleOverride[]; buyItems: BuyItem[]; actualPurchases: ActualPurchase[]; costs: MarketCost[]; buyList: MarketContext['buyList']; markets: Market[]; bouquetPlan: BouquetPlan; closeMarket: CloseMarket; flowerPrices: FlowerPriceHistory[]; flowerPricesLoading: boolean; flowerPriceTrackerReports: FlowerPriceTrackerMarket[]; flowerPriceTrackerLoading: boolean; flowerPriceDashboardObservations: FlowerPriceDashboardObservation[]; flowerPriceDashboardLoading: boolean; saveBackfill: (data: FlowerPriceBackfillInput) => Promise<boolean>; toggleBuyItem: (id: number) => Promise<boolean>; setBuyListLock: (locked: boolean) => Promise<boolean>; saveActualPurchases: (purchases: BunchPurchaseInput[], receipt: ReceiptPayload) => Promise<boolean>; saveCosts: (costs: MarketCostInput[]) => Promise<boolean>; reportPurchases: () => Promise<boolean>; saveBouquetPlan: (selectedBand: string, count: number) => Promise<boolean>; saveCloseMarket: (counts: Record<string, number>, closed: boolean, reopen?: boolean) => Promise<boolean>; saveScheduleOverride: (cycle: number, data: MarketScheduleOverrideUpdate) => Promise<boolean>; clearScheduleOverride: (cycle: number) => Promise<boolean> }) {
+  return <AppShell nextMarket={nextMarket} remainingBuyItems={buyItems.filter((item) => !item.checked).length}><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} />} /><Route path="/flowers" component={() => <FlowersPage flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesLoading} />} /><Route path="/flower-price-tracker" component={() => <FlowerPriceTrackerPage reports={flowerPriceTrackerReports} isLoading={flowerPriceTrackerLoading} dashboardObservations={flowerPriceDashboardObservations} dashboardLoading={flowerPriceDashboardLoading} saveBackfill={saveBackfill} />} /><Route path="/markets" component={() => <div className="space-y-7"><MarketsPage markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /><SellThroughComparisonPanel markets={markets} scheduleOverrides={scheduleOverrides} /></div>} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} nextMarket={nextMarket} toggleBuyItem={toggleBuyItem} setBuyListLock={setBuyListLock} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} />} /><Route path="/markets/next/close" component={() => <ClosePage closeMarket={closeMarket} actualPurchases={actualPurchases} nextMarket={nextMarket} saveCloseMarket={saveCloseMarket} />} /><Route path="/markets/next/bouquets" component={() => <BouquetsPage bouquetPlan={bouquetPlan} nextMarket={nextMarket} saveBouquetPlan={saveBouquetPlan} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
 }
 
 export function useUtcDayRollover() {
@@ -1043,11 +1156,14 @@ function AppContent() {
   const marketsQuery = useListMarkets();
   const flowerPricesQuery = useListFlowerPrices();
   const flowerPriceTrackerQuery = useListFlowerPriceTracker();
+  const flowerPriceDashboardQuery = useListFlowerPriceDashboard();
   useEffect(() => {
     const refreshMarketData = () => {
       void Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetMarketContextQueryKey(nextMarketCycle) }),
         queryClient.invalidateQueries({ queryKey: getListMarketsQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getListFlowerPriceTrackerQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getListFlowerPriceDashboardQueryKey() }),
       ]);
     };
     const handleVisibilityChange = () => {
@@ -1069,6 +1185,7 @@ function AppContent() {
   const actualPurchasesMutation = useReplaceMarketActualPurchases();
   const costsMutation = useReplaceMarketCosts();
   const reportPurchasesMutation = useReportMarketPurchases();
+  const backfillMutation = useCreateFlowerPriceBackfill();
   const bouquetPlanMutation = useUpdateMarketBouquetPlan();
   const closeMarketMutation = useUpdateMarketClose();
   const scheduleOverrideMutation = useUpsertMarketScheduleOverride();
@@ -1077,6 +1194,7 @@ function AppContent() {
   const markets = marketsQuery.data ?? [];
   const flowerPrices = flowerPricesQuery.data ?? [];
   const flowerPriceTrackerReports = flowerPriceTrackerQuery.data ?? [];
+  const flowerPriceDashboardObservations = flowerPriceDashboardQuery.data?.observations ?? [];
   const buyItems = context?.buyItems ?? [];
   const buyList = context?.buyList ?? {
     marketCycle: context?.cycle ?? nextMarketCycle,
@@ -1126,6 +1244,10 @@ function AppContent() {
     try {
       const buyList = await reportPurchasesMutation.mutateAsync({ cycle: nextMarketCycle });
       updateContext({ buyList });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getListFlowerPriceTrackerQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getListFlowerPriceDashboardQueryKey() }),
+      ]);
       return true;
     } catch {
       return false;
@@ -1179,13 +1301,22 @@ function AppContent() {
       return false;
     }
   };
-  if (marketContextQuery.isError || marketsQuery.isError || scheduleOverridesQuery.isError || flowerPriceTrackerQuery.isError) {
+  const saveBackfill = async (data: FlowerPriceBackfillInput) => {
+    try {
+      await backfillMutation.mutateAsync({ data });
+      await queryClient.invalidateQueries({ queryKey: getListFlowerPriceDashboardQueryKey() });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (marketContextQuery.isError || marketsQuery.isError || scheduleOverridesQuery.isError || flowerPriceTrackerQuery.isError || flowerPriceDashboardQuery.isError) {
     return <TooltipProvider><div className="flex min-h-[100dvh] items-center justify-center bg-background px-6 text-center font-serif text-lg text-muted-foreground">Your market notes could not be loaded. Refresh to try again.</div></TooltipProvider>;
   }
-  if (marketContextQuery.isLoading || marketsQuery.isLoading || scheduleOverridesQuery.isLoading || flowerPriceTrackerQuery.isLoading || !context) {
+  if (marketContextQuery.isLoading || marketsQuery.isLoading || scheduleOverridesQuery.isLoading || flowerPriceTrackerQuery.isLoading || flowerPriceDashboardQuery.isLoading || !context) {
     return <TooltipProvider><div className="flex min-h-[100dvh] items-center justify-center bg-background font-serif text-lg text-muted-foreground">Loading your market notes…</div></TooltipProvider>;
   }
-  return <TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} markets={markets} bouquetPlan={context.bouquetPlan} closeMarket={context.closeMarket} flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesQuery.isLoading} flowerPriceTrackerReports={flowerPriceTrackerReports} flowerPriceTrackerLoading={flowerPriceTrackerQuery.isLoading} toggleBuyItem={toggleBuyItem} setBuyListLock={setBuyListLock} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} saveBouquetPlan={saveBouquetPlan} saveCloseMarket={saveCloseMarket} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /></WouterRouter><Toaster /></TooltipProvider>;
+  return <TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} markets={markets} bouquetPlan={context.bouquetPlan} closeMarket={context.closeMarket} flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesQuery.isLoading} flowerPriceTrackerReports={flowerPriceTrackerReports} flowerPriceTrackerLoading={flowerPriceTrackerQuery.isLoading} flowerPriceDashboardObservations={flowerPriceDashboardObservations} flowerPriceDashboardLoading={flowerPriceDashboardQuery.isLoading} saveBackfill={saveBackfill} toggleBuyItem={toggleBuyItem} setBuyListLock={setBuyListLock} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} saveBouquetPlan={saveBouquetPlan} saveCloseMarket={saveCloseMarket} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /></WouterRouter><Toaster /></TooltipProvider>;
 }
 
 function App() {

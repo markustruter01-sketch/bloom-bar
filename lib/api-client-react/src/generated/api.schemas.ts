@@ -362,6 +362,58 @@ export interface FlowerPriceTrackerMarket {
   lineItems: FlowerPriceTrackerLineItem[];
 }
 
+export type FlowerPriceDashboardObservationSource = typeof FlowerPriceDashboardObservationSource[keyof typeof FlowerPriceDashboardObservationSource];
+
+
+export const FlowerPriceDashboardObservationSource = {
+  reported: 'reported',
+  backfill: 'backfill',
+} as const;
+
+export interface FlowerPriceDashboardObservation {
+  id: number;
+  /** ISO calendar date of the purchase */
+  purchaseDate: string;
+  flower: string;
+  category: FlowerCategory;
+  supplier: string | null;
+  /** @minimum 1 */
+  bunchSize: number;
+  /** @minimum 1 */
+  bunchesPurchased: number;
+  /** @minimum 0 */
+  pricePerBunch: number;
+  /** @minimum 0 */
+  totalStemQty: number;
+  /** @minimum 0 */
+  costPerStem: number;
+  source: FlowerPriceDashboardObservationSource;
+}
+
+export interface FlowerPriceDashboardResponse {
+  observations: FlowerPriceDashboardObservation[];
+}
+
+export interface FlowerPriceBackfillInput {
+  /** ISO calendar date of the historical purchase */
+  purchaseDate: string;
+  flower: string;
+  category: FlowerCategory;
+  supplier?: string | null;
+  /**
+     * Stems contained in one historical bunch
+     * @minimum 1
+     */
+  bunchSize: number;
+  /** @minimum 1 */
+  bunchesPurchased: number;
+  /**
+     * AUD price for one historical bunch
+     * @minimum 0
+     */
+  pricePerBunch: number;
+}
+
 export interface BouquetPlan {
   marketCycle: number;
   selectedBand: string;

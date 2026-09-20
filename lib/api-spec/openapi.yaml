@@ -141,6 +141,39 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/FlowerPriceTrackerMarket"
+  /markets/flower-price-dashboard:
+    get:
+      operationId: listFlowerPriceDashboard
+      tags: [markets]
+      summary: List flower price observations for the tracker dashboard
+      description: Returns reported market purchase observations and manually backfilled historical observations.
+      responses:
+        "200":
+          description: Flower price dashboard observations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlowerPriceDashboardResponse"
+  /markets/flower-price-backfills:
+    post:
+      operationId: createFlowerPriceBackfill
+      tags: [markets]
+      summary: Add a historical flower purchase record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlowerPriceBackfillInput"
+      responses:
+        "201":
+          description: Historical flower purchase record created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlowerPriceDashboardObservation"
+        "400":
+          description: Invalid historical purchase data
   /markets/context/{cycle}:
     get:
       operationId: getMarketContext
@@ -756,6 +789,73 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FlowerPriceTrackerLineItem"
+    FlowerPriceDashboardObservation:
+      type: object
+      required: [id, purchaseDate, flower, category, supplier, bunchSize, bunchesPurchased, pricePerBunch, totalStemQty, costPerStem, source]
+      properties:
+        id:
+          type: number
+        purchaseDate:
+          type: string
+          description: ISO calendar date of the purchase
+        flower:
+          type: string
+        category:
+          $ref: "#/components/schemas/FlowerCategory"
+        supplier:
+          type: string
+          nullable: true
+        bunchSize:
+          type: number
+          minimum: 1
+        bunchesPurchased:
+          type: number
+          minimum: 1
+        pricePerBunch:
+          type: number
+          minimum: 0
+        totalStemQty:
+          type: number
+          minimum: 0
+        costPerStem:
+          type: number
+          minimum: 0
+        source:
+          type: string
+          enum: [reported, backfill]
+    FlowerPriceDashboardResponse:
+      type: object
+      required: [observations]
+      properties:
+        observations:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowerPriceDashboardObservation"
+    FlowerPriceBackfillInput:
+      type: object
+      required: [purchaseDate, flower, category, bunchSize, bunchesPurchased, pricePerBunch]
+      properties:
+        purchaseDate:
+          type: string
+          description: ISO calendar date of the historical purchase
+        flower:
+          type: string
+        category:
+          $ref: "#/components/schemas/FlowerCategory"
+        supplier:
+          type: string
+          nullable: true
+        bunchSize:
+          type: number
+          minimum: 1
+          description: Stems contained in one historical bunch
+        bunchesPurchased:
+          type: number
+          minimum: 1
+        pricePerBunch:
+          type: number
+          minimum: 0
+          description: AUD price for one historical bunch
     BouquetPlan:
       type: object
       required: [marketCycle, selectedBand, count]
