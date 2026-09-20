@@ -27,6 +27,8 @@ export * from './closeMarketUpdateCounts';
 export * from './flowerCategory';
 export * from './flowerPriceHistory';
 export * from './flowerPricePoint';
+export * from './flowerPriceTrackerLineItem';
+export * from './flowerPriceTrackerMarket';
 export * from './getSellThroughComparisonParams';
 export * from './healthStatus';
 export * from './legacyActualPurchaseInput';

@@ -126,6 +126,21 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/FlowerPriceHistory"
+  /markets/flower-price-tracker:
+    get:
+      operationId: listFlowerPriceTracker
+      tags: [markets]
+      summary: List reported purchase line-items by market date
+      description: Returns the finalized bunch-based purchase rows grouped by reported market date.
+      responses:
+        "200":
+          description: Reported purchase line-items grouped by market date
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlowerPriceTrackerMarket"
   /markets/context/{cycle}:
     get:
       operationId: getMarketContext
@@ -699,6 +714,48 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FlowerPricePoint"
+    FlowerPriceTrackerLineItem:
+      type: object
+      required: [id, marketCycle, flower, supplier, bunchSize, bunchesPurchased, pricePerBunch, totalStemQty, costPerStem]
+      properties:
+        id:
+          type: number
+        marketCycle:
+          type: number
+        flower:
+          type: string
+        supplier:
+          type: string
+          nullable: true
+        bunchSize:
+          type: number
+          minimum: 1
+        bunchesPurchased:
+          type: number
+          minimum: 1
+        pricePerBunch:
+          type: number
+          minimum: 0
+        totalStemQty:
+          type: number
+          minimum: 0
+        costPerStem:
+          type: number
+          minimum: 0
+    FlowerPriceTrackerMarket:
+      type: object
+      required: [marketCycle, date, venue, lineItems]
+      properties:
+        marketCycle:
+          type: number
+        date:
+          type: string
+        venue:
+          type: string
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowerPriceTrackerLineItem"
     BouquetPlan:
       type: object
       required: [marketCycle, selectedBand, count]

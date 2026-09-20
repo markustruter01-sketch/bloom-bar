@@ -30,6 +30,7 @@ import type {
   CloseMarket,
   CloseMarketUpdate,
   FlowerPriceHistory,
+  FlowerPriceTrackerMarket,
   GetSellThroughComparisonParams,
   HealthStatus,
   Market,
@@ -600,6 +601,84 @@ export function useListFlowerPrices<TData = Awaited<ReturnType<typeof listFlower
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListFlowerPricesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListFlowerPriceTrackerUrl = () => {
+
+
+
+
+  return `/api/markets/flower-price-tracker`
+}
+
+/**
+ * Returns the finalized bunch-based purchase rows grouped by reported market date.
+ * @summary List reported purchase line-items by market date
+ */
+export const listFlowerPriceTracker = async ( options?: Parameters<typeof customFetch>[1]): Promise<FlowerPriceTrackerMarket[]> => {
+
+  return customFetch<FlowerPriceTrackerMarket[]>(getListFlowerPriceTrackerUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFlowerPriceTrackerQueryKey = () => {
+    return [
+    `/api/markets/flower-price-tracker`
+    ] as const;
+    }
+
+
+export const getListFlowerPriceTrackerQueryOptions = <TData = Awaited<ReturnType<typeof listFlowerPriceTracker>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFlowerPriceTracker>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFlowerPriceTrackerQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFlowerPriceTracker>>> = ({ signal }) => listFlowerPriceTracker({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFlowerPriceTracker>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListFlowerPriceTrackerQueryResult = NonNullable<Awaited<ReturnType<typeof listFlowerPriceTracker>>>
+export type ListFlowerPriceTrackerQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List reported purchase line-items by market date
+ */
+
+export function useListFlowerPriceTracker<TData = Awaited<ReturnType<typeof listFlowerPriceTracker>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFlowerPriceTracker>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListFlowerPriceTrackerQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

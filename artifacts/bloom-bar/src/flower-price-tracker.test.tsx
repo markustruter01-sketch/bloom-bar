@@ -24,7 +24,7 @@ Object.defineProperty(globalThis, 'navigator', {
 });
 
 const { cleanup, fireEvent, render, screen } = await import('@testing-library/react');
-const { FlowerPriceTracker } = await import('./App');
+const { FlowerPriceTracker, FlowerPriceTrackerPage } = await import('./App');
 
 const priceHistory = [{
   flower: 'Lisianthus',
@@ -70,5 +70,81 @@ describe('flower price history disclosure', () => {
     fireEvent.click(toggle);
     assert.equal(toggle.getAttribute('aria-expanded'), 'false');
     assert.equal(screen.queryByTestId('panel-flower-history-lisianthus'), null);
+  });
+});
+
+describe('reported purchase line-item tracker', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('keeps each supplier line visible under its market-date tab', () => {
+    render(<FlowerPriceTrackerPage reports={[
+      {
+        marketCycle: 2,
+        date: '03 Oct 2371',
+        venue: 'Redcliffe Markets',
+        lineItems: [
+          {
+            id: 101,
+            marketCycle: 2,
+            flower: 'David Austin roses',
+            supplier: 'Supplier A',
+            bunchSize: 10,
+            bunchesPurchased: 2,
+            pricePerBunch: 18,
+            totalStemQty: 20,
+            costPerStem: 1.8,
+          },
+          {
+            id: 102,
+            marketCycle: 2,
+            flower: 'David Austin roses',
+            supplier: 'Supplier B',
+            bunchSize: 10,
+            bunchesPurchased: 3,
+            pricePerBunch: 20,
+            totalStemQty: 30,
+            costPerStem: 2,
+          },
+        ],
+      },
+      {
+        marketCycle: 1,
+        date: '19 Sep 2371',
+        venue: 'Redcliffe Markets',
+        lineItems: [{
+          id: 103,
+          marketCycle: 1,
+          flower: 'Lisianthus',
+          supplier: null,
+          bunchSize: 5,
+          bunchesPurchased: 1,
+          pricePerBunch: 12,
+          totalStemQty: 5,
+          costPerStem: 2.4,
+        }],
+      },
+    ]} isLoading={false} />);
+
+    assert.equal(screen.getByTestId('tab-flower-price-tracker-2').getAttribute('aria-selected'), 'true');
+    const firstReport = screen.getByTestId('report-flower-price-tracker-2');
+    assert.match(firstReport.textContent ?? '', /Supplier A/);
+    assert.match(firstReport.textContent ?? '', /Supplier B/);
+    assert.match(firstReport.textContent ?? '', /\$18\.00/);
+    assert.match(firstReport.textContent ?? '', /\$1\.80/);
+    assert.match(firstReport.textContent ?? '', /20/);
+    assert.match(firstReport.textContent ?? '', /30/);
+    assert.equal(screen.getAllByTestId(/tracker-line-item-/).length, 2);
+
+    fireEvent.click(screen.getByTestId('tab-flower-price-tracker-1'));
+
+    assert.equal(screen.getByTestId('tab-flower-price-tracker-1').getAttribute('aria-selected'), 'true');
+    assert.match(screen.getByTestId('report-flower-price-tracker-1').textContent ?? '', /Lisianthus/);
+    assert.equal(screen.getAllByTestId(/tracker-line-item-/).length, 1);
   });
 });

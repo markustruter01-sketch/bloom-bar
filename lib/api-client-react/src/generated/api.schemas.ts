@@ -338,6 +338,30 @@ export interface FlowerPriceHistory {
   history: FlowerPricePoint[];
 }
 
+export interface FlowerPriceTrackerLineItem {
+  id: number;
+  marketCycle: number;
+  flower: string;
+  supplier: string | null;
+  /** @minimum 1 */
+  bunchSize: number;
+  /** @minimum 1 */
+  bunchesPurchased: number;
+  /** @minimum 0 */
+  pricePerBunch: number;
+  /** @minimum 0 */
+  totalStemQty: number;
+  /** @minimum 0 */
+  costPerStem: number;
+}
+
+export interface FlowerPriceTrackerMarket {
+  marketCycle: number;
+  date: string;
+  venue: string;
+  lineItems: FlowerPriceTrackerLineItem[];
+}
+
 export interface BouquetPlan {
   marketCycle: number;
   selectedBand: string;

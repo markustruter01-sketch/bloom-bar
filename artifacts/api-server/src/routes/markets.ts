@@ -17,6 +17,7 @@ import {
   GetMarketContextParams,
   GetMarketContextResponse,
   ListFlowerPricesResponse,
+  ListFlowerPriceTrackerResponse,
   ListMarketsResponse,
   GetSellThroughComparisonResponse,
   ReplaceMarketCostsBody,
@@ -472,6 +473,74 @@ router.get("/markets/flower-prices", async (_req, res): Promise<void> => {
   }).sort((a, b) => a.flower.localeCompare(b.flower));
 
   res.json(ListFlowerPricesResponse.parse(history));
+});
+
+router.get("/markets/flower-price-tracker", async (_req, res): Promise<void> => {
+  const overrides = await readScheduleOverrides();
+  const rows = await db
+    .select({
+      id: marketActualPurchasesTable.id,
+      marketCycle: marketActualPurchasesTable.marketCycle,
+      flower: marketActualPurchasesTable.flower,
+      supplier: marketActualPurchasesTable.supplier,
+      bunchSize: marketActualPurchasesTable.bunchSize,
+      bunchesPurchased: marketActualPurchasesTable.bunchesPurchased,
+      pricePerBunch: marketActualPurchasesTable.pricePerBunch,
+      totalStemQty: marketActualPurchasesTable.totalStemQty,
+      costPerStem: marketActualPurchasesTable.costPerStem,
+      venue: marketsTable.venue,
+    })
+    .from(marketActualPurchasesTable)
+    .innerJoin(
+      marketBuyListStatesTable,
+      eq(marketBuyListStatesTable.marketCycle, marketActualPurchasesTable.marketCycle),
+    )
+    .innerJoin(marketsTable, eq(marketsTable.cycle, marketActualPurchasesTable.marketCycle))
+    .where(eq(marketBuyListStatesTable.reported, true))
+    .orderBy(marketActualPurchasesTable.marketCycle, marketActualPurchasesTable.id);
+
+  const grouped = new Map<number, {
+    marketCycle: number;
+    date: string;
+    venue: string;
+    lineItems: Array<{
+      id: number;
+      marketCycle: number;
+      flower: string;
+      supplier: string | null;
+      bunchSize: number;
+      bunchesPurchased: number;
+      pricePerBunch: number;
+      totalStemQty: number;
+      costPerStem: number;
+    }>;
+  }>();
+
+  for (const row of rows) {
+    if (isSkippedMarketCycle(row.marketCycle, overrides)) continue;
+    const report = grouped.get(row.marketCycle) ?? {
+      marketCycle: row.marketCycle,
+      date: formatScheduledMarketDate(row.marketCycle, overrides),
+      venue: row.venue,
+      lineItems: [],
+    };
+    report.lineItems.push({
+      id: row.id,
+      marketCycle: row.marketCycle,
+      flower: row.flower,
+      supplier: row.supplier,
+      bunchSize: row.bunchSize,
+      bunchesPurchased: row.bunchesPurchased,
+      pricePerBunch: row.pricePerBunch,
+      totalStemQty: row.totalStemQty ?? row.bunchSize * row.bunchesPurchased,
+      costPerStem: row.costPerStem ?? row.pricePerBunch / row.bunchSize,
+    });
+    grouped.set(row.marketCycle, report);
+  }
+
+  res.json(ListFlowerPriceTrackerResponse.parse(
+    [...grouped.values()].sort((a, b) => b.marketCycle - a.marketCycle),
+  ));
 });
 
 router.get("/markets", async (_req, res): Promise<void> => {

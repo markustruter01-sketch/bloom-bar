@@ -225,6 +225,93 @@ describe("market context persistence", () => {
     assert.equal(market.flowerSpend, 96);
   });
 
+  it("reports the complete line-item set once and keeps a second report idempotent", async () => {
+    const cycle = testCycles[2];
+    await getContext(cycle);
+    const lock = await patch(`/markets/context/${cycle}/buy-list`, { locked: true });
+    assert.equal(lock.status, 200);
+
+    const saved = await request(`/markets/context/${cycle}/actual-purchases`, {
+      method: "PUT",
+      body: JSON.stringify({
+        purchases: [
+          {
+            flower: "David Austin roses",
+            detail: "Blush · premium blooms",
+            category: "Statement Blooms",
+            bunchSize: 10,
+            bunchesPurchased: 2,
+            pricePerBunch: 18,
+            supplier: "Supplier A",
+            source: "manual",
+          },
+          {
+            flower: "David Austin roses",
+            detail: "Blush · premium blooms",
+            category: "Statement Blooms",
+            bunchSize: 10,
+            bunchesPurchased: 3,
+            pricePerBunch: 20,
+            supplier: "Supplier B",
+            source: "manual",
+          },
+        ],
+      }),
+    });
+    assert.equal(saved.status, 200);
+
+    const firstReport = await request(`/markets/context/${cycle}/report-purchases`, { method: "POST" });
+    const secondReport = await request(`/markets/context/${cycle}/report-purchases`, { method: "POST" });
+    assert.equal(firstReport.status, 200);
+    assert.equal(secondReport.status, 200);
+    assert.equal(firstReport.body.reported, true);
+    assert.equal(secondReport.body.reported, true);
+
+    const tracker = await request("/markets/flower-price-tracker");
+    assert.equal(tracker.status, 200);
+    assert.deepEqual(
+      tracker.body.map((report: any) => ({
+        marketCycle: report.marketCycle,
+        date: report.date,
+        venue: report.venue,
+        lineItems: report.lineItems.map((item: any) => ({
+          flower: item.flower,
+          supplier: item.supplier,
+          bunchSize: item.bunchSize,
+          bunchesPurchased: item.bunchesPurchased,
+          pricePerBunch: item.pricePerBunch,
+          totalStemQty: item.totalStemQty,
+          costPerStem: item.costPerStem,
+        })),
+      })),
+      [{
+        marketCycle: cycle,
+        date: "03 Oct 2371",
+        venue: "Redcliffe Markets",
+        lineItems: [
+          {
+            flower: "David Austin roses",
+            supplier: "Supplier A",
+            bunchSize: 10,
+            bunchesPurchased: 2,
+            pricePerBunch: 18,
+            totalStemQty: 20,
+            costPerStem: 1.8,
+          },
+          {
+            flower: "David Austin roses",
+            supplier: "Supplier B",
+            bunchSize: 10,
+            bunchesPurchased: 3,
+            pricePerBunch: 20,
+            totalStemQty: 30,
+            costPerStem: 2,
+          },
+        ],
+      }],
+    );
+  });
+
   it("protects the proposed list, logs unlock edits, and preserves the full purchase flow", async () => {
     const cycle = testCycles[1];
     const initial = await getContext(cycle);

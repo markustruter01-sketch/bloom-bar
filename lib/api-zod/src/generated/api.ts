@@ -181,6 +181,39 @@ export const ListFlowerPricesResponse = zod.array(ListFlowerPricesResponseItem)
 
 
 /**
+ * Returns the finalized bunch-based purchase rows grouped by reported market date.
+ * @summary List reported purchase line-items by market date
+ */
+
+
+export const listFlowerPriceTrackerResponseLineItemsItemPricePerBunchMin = 0;
+
+export const listFlowerPriceTrackerResponseLineItemsItemTotalStemQtyMin = 0;
+
+export const listFlowerPriceTrackerResponseLineItemsItemCostPerStemMin = 0;
+
+
+
+export const ListFlowerPriceTrackerResponseItem = zod.object({
+  "marketCycle": zod.number(),
+  "date": zod.string(),
+  "venue": zod.string(),
+  "lineItems": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "flower": zod.string(),
+  "supplier": zod.string().nullable(),
+  "bunchSize": zod.number().min(1),
+  "bunchesPurchased": zod.number().min(1),
+  "pricePerBunch": zod.number().min(listFlowerPriceTrackerResponseLineItemsItemPricePerBunchMin),
+  "totalStemQty": zod.number().min(listFlowerPriceTrackerResponseLineItemsItemTotalStemQtyMin),
+  "costPerStem": zod.number().min(listFlowerPriceTrackerResponseLineItemsItemCostPerStemMin)
+}))
+})
+export const ListFlowerPriceTrackerResponse = zod.array(ListFlowerPriceTrackerResponseItem)
+
+
+/**
  * @summary Get the saved context for a scheduled market cycle
  */
 export const GetMarketContextParams = zod.object({
