@@ -46,7 +46,7 @@ const buyItems = [{
   unit: 'stems',
   lastPrice: 3.2,
   checked: false,
-  category: 'Classic Blooms',
+  category: 'Classic Blooms' as const,
   priceSource: {
     kind: 'fallback' as const,
     marketCycle: null,
@@ -59,7 +59,7 @@ const actualPurchase = {
   marketCycle: 0,
   flower: 'Lisianthus',
   detail: 'Soft bloom',
-  category: 'Classic Blooms',
+  category: 'Classic Blooms' as const,
   bunchSize: 1,
   bunchesPurchased: 10,
   pricePerBunch: 3.2,

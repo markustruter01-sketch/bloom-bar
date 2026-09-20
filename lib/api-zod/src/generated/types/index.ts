@@ -24,6 +24,7 @@ export * from './closeMarket';
 export * from './closeMarketCounts';
 export * from './closeMarketUpdate';
 export * from './closeMarketUpdateCounts';
+export * from './flowerCategory';
 export * from './flowerPriceHistory';
 export * from './flowerPricePoint';
 export * from './getSellThroughComparisonParams';

@@ -28,7 +28,7 @@ const { FlowerPriceTracker } = await import('./App');
 
 const priceHistory = [{
   flower: 'Lisianthus',
-  category: 'Classic Blooms',
+  category: 'Classic Blooms' as const,
   latest: { marketCycle: 0, date: '13 Sep 2026', pricePerBunch: 3.2, costPerStem: 3.2, unitCost: 3.2 },
   previous: { marketCycle: -1, date: '30 Aug 2026', pricePerBunch: 2.8, costPerStem: 2.8, unitCost: 2.8 },
   change: 0.4,

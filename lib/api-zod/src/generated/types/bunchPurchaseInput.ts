@@ -6,11 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BunchPurchaseInputSource } from './bunchPurchaseInputSource';
+import type { FlowerCategory } from './flowerCategory';
 
 export interface BunchPurchaseInput {
   flower: string;
   detail: string;
-  category: string;
+  category: FlowerCategory;
   /**
      * Stems contained in one purchased bunch
      * @minimum 1

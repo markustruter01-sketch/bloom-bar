@@ -6,13 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ActualPurchaseSource } from './actualPurchaseSource';
+import type { FlowerCategory } from './flowerCategory';
 
 export interface ActualPurchase {
   id: number;
   marketCycle: number;
   flower: string;
   detail: string;
-  category: string;
+  category: FlowerCategory;
   /**
      * Stems contained in one purchased bunch
      * @minimum 1

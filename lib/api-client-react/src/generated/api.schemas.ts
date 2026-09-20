@@ -5,6 +5,17 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type FlowerCategory = typeof FlowerCategory[keyof typeof FlowerCategory];
+
+
+export const FlowerCategory = {
+  Gum: 'Gum',
+  Textural_Foliage: 'Textural Foliage',
+  Classic_Blooms: 'Classic Blooms',
+  Statement_Blooms: 'Statement Blooms',
+  Premium_Natives: 'Premium Natives',
+} as const;
+
 export interface HealthStatus {
   status: string;
 }
@@ -54,7 +65,7 @@ export interface BuyItem {
   unit: string;
   lastPrice: number;
   checked: boolean;
-  category: string;
+  category: FlowerCategory;
   priceSource: BuyItemPriceSource;
 }
 
@@ -107,7 +118,7 @@ export interface ActualPurchase {
   marketCycle: number;
   flower: string;
   detail: string;
-  category: string;
+  category: FlowerCategory;
   /**
      * Stems contained in one purchased bunch
      * @minimum 1
@@ -161,7 +172,7 @@ export const BunchPurchaseInputSource = {
 export interface BunchPurchaseInput {
   flower: string;
   detail: string;
-  category: string;
+  category: FlowerCategory;
   /**
      * Stems contained in one purchased bunch
      * @minimum 1
@@ -196,7 +207,7 @@ export const LegacyActualPurchaseInputSource = {
 export interface LegacyActualPurchaseInput {
   flower: string;
   detail: string;
-  category: string;
+  category: FlowerCategory;
   /** @minimum 1 */
   stems: number;
   /** @minimum 0 */
@@ -257,7 +268,7 @@ export interface FlowerPricePoint {
 
 export interface FlowerPriceHistory {
   flower: string;
-  category: string;
+  category: FlowerCategory;
   latest: FlowerPricePoint;
   previous: FlowerPricePoint | null;
   change: number | null;

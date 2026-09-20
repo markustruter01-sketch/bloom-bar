@@ -112,7 +112,7 @@ export const listFlowerPricesResponseHistoryItemUnitCostMin = 0;
 
 export const ListFlowerPricesResponseItem = zod.object({
   "flower": zod.string(),
-  "category": zod.string(),
+  "category": zod.enum(['Gum', 'Textural Foliage', 'Classic Blooms', 'Statement Blooms', 'Premium Natives']),
   "latest": zod.object({
   "marketCycle": zod.number(),
   "date": zod.string(),
@@ -194,7 +194,7 @@ export const GetMarketContextResponse = zod.object({
   "unit": zod.string(),
   "lastPrice": zod.number(),
   "checked": zod.boolean(),
-  "category": zod.string(),
+  "category": zod.enum(['Gum', 'Textural Foliage', 'Classic Blooms', 'Statement Blooms', 'Premium Natives']),
   "priceSource": zod.object({
   "kind": zod.enum(['reported', 'fallback']),
   "marketCycle": zod.number().nullable(),
@@ -220,7 +220,7 @@ export const GetMarketContextResponse = zod.object({
   "marketCycle": zod.number(),
   "flower": zod.string(),
   "detail": zod.string(),
-  "category": zod.string(),
+  "category": zod.enum(['Gum', 'Textural Foliage', 'Classic Blooms', 'Statement Blooms', 'Premium Natives']),
   "bunchSize": zod.number().min(1).describe('Stems contained in one purchased bunch'),
   "bunchesPurchased": zod.number().min(1).describe('Number of bunches purchased on this line'),
   "pricePerBunch": zod.number().min(getMarketContextResponseActualPurchasesItemPricePerBunchMin).describe('AUD price for one bunch'),
@@ -278,7 +278,7 @@ export const UpdateMarketBuyItemResponse = zod.object({
   "unit": zod.string(),
   "lastPrice": zod.number(),
   "checked": zod.boolean(),
-  "category": zod.string(),
+  "category": zod.enum(['Gum', 'Textural Foliage', 'Classic Blooms', 'Statement Blooms', 'Premium Natives']),
   "priceSource": zod.object({
   "kind": zod.enum(['reported', 'fallback']),
   "marketCycle": zod.number().nullable(),
@@ -344,7 +344,7 @@ export const ReplaceMarketActualPurchasesBody = zod.object({
   "purchases": zod.array(zod.union([zod.object({
   "flower": zod.string(),
   "detail": zod.string(),
-  "category": zod.string(),
+  "category": zod.enum(['Gum', 'Textural Foliage', 'Classic Blooms', 'Statement Blooms', 'Premium Natives']),
   "bunchSize": zod.number().min(1).describe('Stems contained in one purchased bunch'),
   "bunchesPurchased": zod.number().min(1).describe('Number of bunches purchased on this line'),
   "pricePerBunch": zod.number().min(replaceMarketActualPurchasesBodyPurchasesItemOnePricePerBunchMin).describe('AUD price for one bunch'),
@@ -353,7 +353,7 @@ export const ReplaceMarketActualPurchasesBody = zod.object({
 }),zod.object({
   "flower": zod.string(),
   "detail": zod.string(),
-  "category": zod.string(),
+  "category": zod.enum(['Gum', 'Textural Foliage', 'Classic Blooms', 'Statement Blooms', 'Premium Natives']),
   "stems": zod.number().min(1),
   "unitCost": zod.number().min(replaceMarketActualPurchasesBodyPurchasesItemTwoUnitCostMin),
   "source": zod.enum(['manual', 'receipt'])
@@ -407,7 +407,7 @@ export const ReplaceMarketActualPurchasesResponse = zod.object({
   "marketCycle": zod.number(),
   "flower": zod.string(),
   "detail": zod.string(),
-  "category": zod.string(),
+  "category": zod.enum(['Gum', 'Textural Foliage', 'Classic Blooms', 'Statement Blooms', 'Premium Natives']),
   "bunchSize": zod.number().min(1).describe('Stems contained in one purchased bunch'),
   "bunchesPurchased": zod.number().min(1).describe('Number of bunches purchased on this line'),
   "pricePerBunch": zod.number().min(replaceMarketActualPurchasesResponsePurchasesItemPricePerBunchMin).describe('AUD price for one bunch'),

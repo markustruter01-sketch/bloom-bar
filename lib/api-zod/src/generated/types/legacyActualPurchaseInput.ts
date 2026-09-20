@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { FlowerCategory } from './flowerCategory';
 import type { LegacyActualPurchaseInputSource } from './legacyActualPurchaseInputSource';
 
 /**
@@ -13,7 +14,7 @@ import type { LegacyActualPurchaseInputSource } from './legacyActualPurchaseInpu
 export interface LegacyActualPurchaseInput {
   flower: string;
   detail: string;
-  category: string;
+  category: FlowerCategory;
   /** @minimum 1 */
   stems: number;
   /** @minimum 0 */

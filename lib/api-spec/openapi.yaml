@@ -249,6 +249,14 @@ components:
       schema:
         type: number
   schemas:
+    FlowerCategory:
+      type: string
+      enum:
+        - Gum
+        - Textural Foliage
+        - Classic Blooms
+        - Statement Blooms
+        - Premium Natives
     HealthStatus:
       type: object
       properties:
@@ -317,7 +325,7 @@ components:
         checked:
           type: boolean
         category:
-          type: string
+          $ref: "#/components/schemas/FlowerCategory"
         priceSource:
           $ref: "#/components/schemas/BuyItemPriceSource"
     BuyItemUpdate:
@@ -382,7 +390,7 @@ components:
         detail:
           type: string
         category:
-          type: string
+          $ref: "#/components/schemas/FlowerCategory"
         bunchSize:
           type: number
           minimum: 1
@@ -429,7 +437,7 @@ components:
         detail:
           type: string
         category:
-          type: string
+          $ref: "#/components/schemas/FlowerCategory"
         bunchSize:
           type: number
           minimum: 1
@@ -459,7 +467,7 @@ components:
         detail:
           type: string
         category:
-          type: string
+          $ref: "#/components/schemas/FlowerCategory"
         stems:
           type: number
           minimum: 1
@@ -571,7 +579,7 @@ components:
         flower:
           type: string
         category:
-          type: string
+          $ref: "#/components/schemas/FlowerCategory"
         latest:
           $ref: "#/components/schemas/FlowerPricePoint"
         previous:

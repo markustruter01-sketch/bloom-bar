@@ -15,6 +15,7 @@ import {
   useUpdateMarketBuyItem,
   useUpdateMarketBuyList,
   useUpdateMarketClose,
+  FlowerCategory as ApiFlowerCategory,
 } from '@workspace/api-client-react';
 import type {
   ActualPurchase,
@@ -94,11 +95,11 @@ const logoImage = `${assetBase}/bloom-bar-logo.png`;
 const posterImage = `${assetBase}/umbrella-bouquet-poster.png`;
 
 const flowerCategories = [
-  'Gum',
-  'Textural Foliage',
-  'Classic Blooms',
-  'Statement Blooms',
-  'Premium Natives',
+  ApiFlowerCategory.Gum,
+  ApiFlowerCategory.Textural_Foliage,
+  ApiFlowerCategory.Classic_Blooms,
+  ApiFlowerCategory.Statement_Blooms,
+  ApiFlowerCategory.Premium_Natives,
 ] as const;
 
 type FlowerCategory = (typeof flowerCategories)[number];
@@ -120,16 +121,16 @@ type Flower = {
 type BuyItem = ApiBuyItem;
 
 const flowers: Flower[] = [
-  { id: 1, common: 'Lisianthus', botanical: 'Eustoma grandiflorum', category: 'Classic Blooms', retail: 8.5, wholesale: 3.2, margin: 62, role: 'Soft bloom', seasonality: 'Autumn · Winter', enrichment: 'Ready', colour: '#b6a1c8' },
-  { id: 2, common: 'Disbud chrysanthemum', botanical: 'Chrysanthemum morifolium', category: 'Statement Blooms', retail: 9, wholesale: 3.7, margin: 59, role: 'Hero bloom', seasonality: 'All year', enrichment: 'Ready', colour: '#e3a38e' },
-  { id: 3, common: 'Snapdragon', botanical: 'Antirrhinum majus', category: 'Classic Blooms', retail: 7.5, wholesale: 2.4, margin: 68, role: 'Line + height', seasonality: 'Winter · Spring', enrichment: 'Needs notes', colour: '#cfb9d4' },
-  { id: 4, common: 'Daisy', botanical: 'Argyranthemum frutescens', category: 'Classic Blooms', retail: 4.5, wholesale: 1.3, margin: 71, role: 'Cheerful bloom', seasonality: 'Spring · Summer', enrichment: 'Ready', colour: '#e6c26c' },
-  { id: 5, common: 'Queen Anne’s lace', botanical: 'Daucus carota', category: 'Textural Foliage', retail: 5, wholesale: 1.8, margin: 64, role: 'Air + texture', seasonality: 'Late spring', enrichment: 'Missing', colour: '#d9d5c8' },
-  { id: 6, common: 'Stock', botanical: 'Matthiola incana', category: 'Classic Blooms', retail: 6.5, wholesale: 2.1, margin: 68, role: 'Scent + body', seasonality: 'Winter · Spring', enrichment: 'Ready', colour: '#9ca7c7' },
-  { id: 7, common: 'Billy buttons', botanical: 'Craspedia globosa', category: 'Textural Foliage', retail: 5.5, wholesale: 1.4, margin: 75, role: 'Graphic accent', seasonality: 'All year', enrichment: 'Needs notes', colour: '#d6ae4e' },
-  { id: 8, common: 'Anemone', botanical: 'Anemone coronaria', category: 'Statement Blooms', retail: 8, wholesale: 3.1, margin: 61, role: 'Statement colour', seasonality: 'Winter · Spring', enrichment: 'Ready', colour: '#9d7ba4' },
-  { id: 9, common: 'Eucalyptus foliage', botanical: 'Eucalyptus cinerea', category: 'Gum', retail: 3.5, wholesale: 0.9, margin: 74, role: 'Scent + structure', seasonality: 'All year', enrichment: 'Ready', colour: '#9aa58b' },
-  { id: 10, common: 'Coral peony', botanical: 'Paeonia lactiflora', category: 'Statement Blooms', retail: 12, wholesale: 5.9, margin: 51, role: 'Premium hero', seasonality: 'Late spring', enrichment: 'Missing', colour: '#df8e80' },
+  { id: 1, common: 'Lisianthus', botanical: 'Eustoma grandiflorum', category: ApiFlowerCategory.Classic_Blooms, retail: 8.5, wholesale: 3.2, margin: 62, role: 'Soft bloom', seasonality: 'Autumn · Winter', enrichment: 'Ready', colour: '#b6a1c8' },
+  { id: 2, common: 'Disbud chrysanthemum', botanical: 'Chrysanthemum morifolium', category: ApiFlowerCategory.Statement_Blooms, retail: 9, wholesale: 3.7, margin: 59, role: 'Hero bloom', seasonality: 'All year', enrichment: 'Ready', colour: '#e3a38e' },
+  { id: 3, common: 'Snapdragon', botanical: 'Antirrhinum majus', category: ApiFlowerCategory.Classic_Blooms, retail: 7.5, wholesale: 2.4, margin: 68, role: 'Line + height', seasonality: 'Winter · Spring', enrichment: 'Needs notes', colour: '#cfb9d4' },
+  { id: 4, common: 'Daisy', botanical: 'Argyranthemum frutescens', category: ApiFlowerCategory.Classic_Blooms, retail: 4.5, wholesale: 1.3, margin: 71, role: 'Cheerful bloom', seasonality: 'Spring · Summer', enrichment: 'Ready', colour: '#e6c26c' },
+  { id: 5, common: 'Queen Anne’s lace', botanical: 'Daucus carota', category: ApiFlowerCategory.Textural_Foliage, retail: 5, wholesale: 1.8, margin: 64, role: 'Air + texture', seasonality: 'Late spring', enrichment: 'Missing', colour: '#d9d5c8' },
+  { id: 6, common: 'Stock', botanical: 'Matthiola incana', category: ApiFlowerCategory.Classic_Blooms, retail: 6.5, wholesale: 2.1, margin: 68, role: 'Scent + body', seasonality: 'Winter · Spring', enrichment: 'Ready', colour: '#9ca7c7' },
+  { id: 7, common: 'Billy buttons', botanical: 'Craspedia globosa', category: ApiFlowerCategory.Textural_Foliage, retail: 5.5, wholesale: 1.4, margin: 75, role: 'Graphic accent', seasonality: 'All year', enrichment: 'Needs notes', colour: '#d6ae4e' },
+  { id: 8, common: 'Anemone', botanical: 'Anemone coronaria', category: ApiFlowerCategory.Statement_Blooms, retail: 8, wholesale: 3.1, margin: 61, role: 'Statement colour', seasonality: 'Winter · Spring', enrichment: 'Ready', colour: '#9d7ba4' },
+  { id: 9, common: 'Eucalyptus foliage', botanical: 'Eucalyptus cinerea', category: ApiFlowerCategory.Gum, retail: 3.5, wholesale: 0.9, margin: 74, role: 'Scent + structure', seasonality: 'All year', enrichment: 'Ready', colour: '#9aa58b' },
+  { id: 10, common: 'Coral peony', botanical: 'Paeonia lactiflora', category: ApiFlowerCategory.Statement_Blooms, retail: 12, wholesale: 5.9, margin: 51, role: 'Premium hero', seasonality: 'Late spring', enrichment: 'Missing', colour: '#df8e80' },
 ];
 
 const priceBands = [
@@ -610,7 +611,7 @@ export function BuyPage({
 
   const addDraft = () => {
     setSaveState('idle');
-    setDrafts((current) => [...current, { flower: '', detail: 'Added after purchase', category: 'Classic Blooms', stems: 1, unitCost: 0, source: 'manual' }]);
+    setDrafts((current) => [...current, { flower: '', detail: 'Added after purchase', category: ApiFlowerCategory.Classic_Blooms, stems: 1, unitCost: 0, source: 'manual' }]);
   };
 
   const addCost = () => {

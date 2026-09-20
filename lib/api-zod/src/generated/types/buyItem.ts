@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BuyItemPriceSource } from './buyItemPriceSource';
+import type { FlowerCategory } from './flowerCategory';
 
 export interface BuyItem {
   id: number;
@@ -16,6 +17,6 @@ export interface BuyItem {
   unit: string;
   lastPrice: number;
   checked: boolean;
-  category: string;
+  category: FlowerCategory;
   priceSource: BuyItemPriceSource;
 }

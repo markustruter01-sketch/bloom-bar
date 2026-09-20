@@ -9,6 +9,7 @@ import {
   marketBuyListStatesTable,
   marketCostsTable,
   marketsTable,
+  flowerCategories,
 } from "@workspace/db";
 import {
   GetMarketContextParams,
@@ -37,7 +38,7 @@ import {
   UpdateMarketCloseParams,
   UpdateMarketCloseResponse,
 } from "@workspace/api-zod";
-import type { SellThroughRecord } from "@workspace/db";
+import type { FlowerCategory, SellThroughRecord } from "@workspace/db";
 import { formatScheduledMarketDate, getScheduledMarketDate } from "../lib/market-schedule";
 
 const router: IRouter = Router();
@@ -49,7 +50,15 @@ const seededMarkets = [
   { cycle: -42, venue: "Redcliffe Markets", spend: 560.5, revenue: 1587, margin: 64.7 },
 ];
 
-const defaultBuyItems = [
+const defaultBuyItems: Array<{
+  flower: string;
+  detail: string;
+  qty: number;
+  unit: string;
+  lastPrice: number;
+  checked: boolean;
+  category: FlowerCategory;
+}> = [
   { flower: "Lisianthus", detail: "White · classic blooms", qty: 4, unit: "bunches", lastPrice: 18.5, checked: true, category: "Classic Blooms" },
   { flower: "Disbud chrysanthemum", detail: "Apricot · statement blooms", qty: 3, unit: "bunches", lastPrice: 22, checked: false, category: "Statement Blooms" },
   { flower: "Snapdragon", detail: "Blush · classic blooms", qty: 4, unit: "bunches", lastPrice: 16, checked: false, category: "Classic Blooms" },
@@ -64,7 +73,7 @@ const defaultCloseCounts = { Lisianthus: 2, Daisy: 7, Snapdragon: 3, "Eucalyptus
 type CanonicalPurchaseInput = {
   flower: string;
   detail: string;
-  category: string;
+  category: FlowerCategory;
   bunchSize: number;
   bunchesPurchased: number;
   pricePerBunch: number;
@@ -73,11 +82,16 @@ type CanonicalPurchaseInput = {
 };
 
 function normalizePurchaseInput(purchase: Record<string, unknown>): CanonicalPurchaseInput {
+  const category = String(purchase.category) as FlowerCategory;
+  if (!flowerCategories.includes(category)) {
+    throw new Error("Invalid flower category.");
+  }
+
   if ("bunchSize" in purchase) {
     return {
       flower: String(purchase.flower),
       detail: String(purchase.detail),
-      category: String(purchase.category),
+      category,
       bunchSize: Number(purchase.bunchSize),
       bunchesPurchased: Number(purchase.bunchesPurchased),
       pricePerBunch: Number(purchase.pricePerBunch),
@@ -91,7 +105,7 @@ function normalizePurchaseInput(purchase: Record<string, unknown>): CanonicalPur
   return {
     flower: String(purchase.flower),
     detail: String(purchase.detail),
-    category: String(purchase.category),
+    category,
     bunchSize: 1,
     bunchesPurchased: Number(purchase.stems),
     pricePerBunch: Number(purchase.unitCost),

@@ -5,11 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { FlowerCategory } from './flowerCategory';
 import type { FlowerPricePoint } from './flowerPricePoint';
 
 export interface FlowerPriceHistory {
   flower: string;
-  category: string;
+  category: FlowerCategory;
   latest: FlowerPricePoint;
   previous: FlowerPricePoint | null;
   change: number | null;
