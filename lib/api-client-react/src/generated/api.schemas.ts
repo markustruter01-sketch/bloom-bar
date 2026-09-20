@@ -19,6 +19,20 @@ export interface Market {
   margin: number;
 }
 
+export type BuyItemPriceSourceKind = typeof BuyItemPriceSourceKind[keyof typeof BuyItemPriceSourceKind];
+
+
+export const BuyItemPriceSourceKind = {
+  reported: 'reported',
+  fallback: 'fallback',
+} as const;
+
+export interface BuyItemPriceSource {
+  kind: BuyItemPriceSourceKind;
+  marketCycle: number | null;
+  date: string | null;
+}
+
 export interface BuyItem {
   id: number;
   marketCycle: number;
@@ -29,6 +43,7 @@ export interface BuyItem {
   lastPrice: number;
   checked: boolean;
   category: string;
+  priceSource: BuyItemPriceSource;
 }
 
 export interface BuyItemUpdate {

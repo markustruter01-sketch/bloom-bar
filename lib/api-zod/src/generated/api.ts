@@ -114,7 +114,12 @@ export const GetMarketContextResponse = zod.object({
   "unit": zod.string(),
   "lastPrice": zod.number(),
   "checked": zod.boolean(),
-  "category": zod.string()
+  "category": zod.string(),
+  "priceSource": zod.object({
+  "kind": zod.enum(['reported', 'fallback']),
+  "marketCycle": zod.number().nullable(),
+  "date": zod.string().nullable()
+})
 })),
   "buyList": zod.object({
   "marketCycle": zod.number(),
@@ -187,7 +192,12 @@ export const UpdateMarketBuyItemResponse = zod.object({
   "unit": zod.string(),
   "lastPrice": zod.number(),
   "checked": zod.boolean(),
-  "category": zod.string()
+  "category": zod.string(),
+  "priceSource": zod.object({
+  "kind": zod.enum(['reported', 'fallback']),
+  "marketCycle": zod.number().nullable(),
+  "date": zod.string().nullable()
+})
 })
 
 

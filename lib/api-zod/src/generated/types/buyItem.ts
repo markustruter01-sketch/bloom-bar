@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BuyItemPriceSource } from './buyItemPriceSource';
 
 export interface BuyItem {
   id: number;
@@ -16,4 +17,5 @@ export interface BuyItem {
   lastPrice: number;
   checked: boolean;
   category: string;
+  priceSource: BuyItemPriceSource;
 }

@@ -201,7 +201,21 @@ async function readMarketContext(cycle: number) {
   }
   const estimatedBuyItems = buyItems.map((item) => {
     const latest = latestReportedPrice.get(item.flower);
-    return latest ? { ...item, lastPrice: latest.unitCost } : item;
+    return {
+      ...item,
+      ...(latest ? { lastPrice: latest.unitCost } : {}),
+      priceSource: latest
+        ? {
+            kind: "reported" as const,
+            marketCycle: latest.marketCycle,
+            date: formatScheduledMarketDate(latest.marketCycle),
+          }
+        : {
+            kind: "fallback" as const,
+            marketCycle: null,
+            date: null,
+          },
+    };
   });
 
   return {
@@ -443,7 +457,9 @@ router.patch("/markets/context/:cycle/buy-items/:id", async (req, res): Promise<
     res.status(404).json({ error: "Buy-list item not found." });
     return;
   }
-  res.json(UpdateMarketBuyItemResponse.parse(item));
+  const updatedContext = await readMarketContext(params.data.cycle);
+  const updatedItem = updatedContext.buyItems.find((buyItem) => buyItem.id === item.id);
+  res.json(UpdateMarketBuyItemResponse.parse(updatedItem));
 });
 
 router.patch("/markets/context/:cycle/bouquet-plan", async (req, res): Promise<void> => {

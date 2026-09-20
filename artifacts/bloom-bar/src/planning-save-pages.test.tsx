@@ -47,6 +47,11 @@ const buyItems = [{
   lastPrice: 3.2,
   checked: false,
   category: 'Classic Blooms',
+  priceSource: {
+    kind: 'fallback' as const,
+    marketCycle: null,
+    date: null,
+  },
 }];
 
 const actualPurchase = {

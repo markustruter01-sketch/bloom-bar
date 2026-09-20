@@ -246,9 +246,22 @@ components:
           type: number
         margin:
           type: number
+    BuyItemPriceSource:
+      type: object
+      required: [kind, marketCycle, date]
+      properties:
+        kind:
+          type: string
+          enum: [reported, fallback]
+        marketCycle:
+          type: number
+          nullable: true
+        date:
+          type: string
+          nullable: true
     BuyItem:
       type: object
-      required: [id, marketCycle, flower, detail, qty, unit, lastPrice, checked, category]
+      required: [id, marketCycle, flower, detail, qty, unit, lastPrice, checked, category, priceSource]
       properties:
         id:
           type: number
@@ -268,6 +281,8 @@ components:
           type: boolean
         category:
           type: string
+        priceSource:
+          $ref: "#/components/schemas/BuyItemPriceSource"
     BuyItemUpdate:
       type: object
       required: [checked]

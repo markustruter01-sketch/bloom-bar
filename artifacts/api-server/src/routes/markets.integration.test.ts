@@ -190,6 +190,13 @@ describe("market context persistence", () => {
       const context = await getContext(cycle);
       const lock = await patch(`/markets/context/${cycle}/buy-list`, { locked: true });
       assert.equal(lock.status, 200);
+      const initialLisianthus = context.buyItems.find((item: any) => item.flower === "Lisianthus");
+      assert.deepEqual(
+        initialLisianthus?.priceSource,
+        cycle === 9001
+          ? { kind: "fallback", marketCycle: null, date: null }
+          : { kind: "reported", marketCycle: 9001, date: "19 Sep 2371" },
+      );
 
       const saved = await request(`/markets/context/${cycle}/actual-purchases`, {
         method: "PUT",
@@ -229,10 +236,13 @@ describe("market context persistence", () => {
     assert.deepEqual(lisianthus.history.map((point: any) => point.marketCycle), [9002, 9001]);
 
     const futureContext = await getContext(9003);
-    assert.equal(
-      futureContext.buyItems.find((item: any) => item.flower === "Lisianthus")?.lastPrice,
-      25,
-    );
+    const futureLisianthus = futureContext.buyItems.find((item: any) => item.flower === "Lisianthus");
+    assert.equal(futureLisianthus?.lastPrice, 25);
+    assert.deepEqual(futureLisianthus?.priceSource, {
+      kind: "reported",
+      marketCycle: 9002,
+      date: "03 Oct 2371",
+    });
   });
 
   it("saves editable non-flower costs and includes them in market totals", async () => {

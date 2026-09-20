@@ -15,6 +15,8 @@ export * from './actualPurchasesUpdate';
 export * from './bouquetPlan';
 export * from './bouquetPlanUpdate';
 export * from './buyItem';
+export * from './buyItemPriceSource';
+export * from './buyItemPriceSourceKind';
 export * from './buyItemUpdate';
 export * from './buyListLockUpdate';
 export * from './closeMarket';
