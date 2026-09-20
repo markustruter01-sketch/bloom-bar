@@ -19,6 +19,10 @@ export type ReceiptCandidate = {
   flower: string;
   stems: number;
   unitCost: number;
+  bunchSize?: number;
+  bunchesPurchased?: number;
+  pricePerBunch?: number;
+  supplier?: string | null;
   confidence: "high" | "medium" | "low";
   rawLine: string;
 };

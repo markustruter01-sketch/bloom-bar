@@ -419,6 +419,22 @@ components:
         unitCost:
           type: number
           minimum: 0
+        bunchSize:
+          type: number
+          minimum: 1
+          description: Best-effort stems per bunch used for the bunch purchase draft
+        bunchesPurchased:
+          type: number
+          minimum: 1
+          description: Best-effort bunch count read from the receipt
+        pricePerBunch:
+          type: number
+          minimum: 0
+          description: Best-effort AUD price for one bunch
+        supplier:
+          type: string
+          nullable: true
+          description: Best-effort supplier or wholesaler name
         confidence:
           type: string
           enum: [high, medium, low]
