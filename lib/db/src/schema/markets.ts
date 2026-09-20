@@ -22,6 +22,18 @@ export type ReceiptCandidate = {
   rawLine: string;
 };
 
+export const flowerCategories = [
+  "Gum",
+  "Textural Foliage",
+  "Classic Blooms",
+  "Statement Blooms",
+  "Premium Natives",
+] as const;
+
+export type FlowerCategory = (typeof flowerCategories)[number];
+
+const flowerCategoryConstraint = sql`"category" IN ('Gum', 'Textural Foliage', 'Classic Blooms', 'Statement Blooms', 'Premium Natives')`;
+
 export type SellThroughRecord = {
   flower: string;
   purchasedStems: number;
@@ -54,8 +66,10 @@ export const buyItemsTable = pgTable("market_buy_items", {
   unit: text("unit").notNull(),
   lastPrice: doublePrecision("last_price").notNull(),
   checked: boolean("checked").notNull().default(false),
-  category: text("category").notNull(),
-});
+  category: text("category", { enum: flowerCategories }).notNull(),
+}, (table) => ({
+  categoryAllowed: check("market_buy_items_category_allowed", flowerCategoryConstraint),
+}));
 
 export const marketBuyListStatesTable = pgTable("market_buy_list_states", {
   marketCycle: integer("market_cycle")
@@ -77,7 +91,7 @@ export const marketActualPurchasesTable = pgTable(
       .references(() => marketsTable.cycle, { onDelete: "cascade" }),
     flower: text("flower").notNull(),
     detail: text("detail").notNull(),
-    category: text("category").notNull(),
+    category: text("category", { enum: flowerCategories }).notNull(),
     bunchSize: integer("bunch_size").notNull(),
     bunchesPurchased: integer("bunches_purchased").notNull(),
     pricePerBunch: doublePrecision("price_per_bunch").notNull(),
@@ -92,6 +106,7 @@ export const marketActualPurchasesTable = pgTable(
   },
   (table) => ({
     marketFlowerIndex: index("market_actual_purchases_cycle_flower_idx").on(table.marketCycle, table.flower),
+    categoryAllowed: check("market_actual_purchases_category_allowed", flowerCategoryConstraint),
     bunchSizePositive: check("market_actual_purchases_bunch_size_positive", sql`"bunch_size" > 0`),
     bunchesPurchasedPositive: check("market_actual_purchases_bunches_positive", sql`"bunches_purchased" > 0`),
     pricePerBunchNonNegative: check("market_actual_purchases_price_per_bunch_non_negative", sql`"price_per_bunch" >= 0`),
