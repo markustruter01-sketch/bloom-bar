@@ -656,6 +656,8 @@ export interface CloseMarket {
   marketCycle: number;
   counts: CloseMarketCounts;
   sellThrough: SellThroughRecord[];
+  notes: string | null;
+  closed: boolean;
 }
 
 export interface MarketDayTodoItem {
@@ -690,8 +692,6 @@ export interface MarketDayTodoPeriod {
 
 export interface MarketDayTodosUpdate {
   items: MarketDayTodoItemInput[];
-  notes?: string | null;
-  closed?: boolean;
 }
 
 export interface SellThroughComparisonCycle {

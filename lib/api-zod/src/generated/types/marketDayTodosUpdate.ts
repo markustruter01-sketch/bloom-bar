@@ -9,6 +9,4 @@ import type { MarketDayTodoItemInput } from './marketDayTodoItemInput';
 
 export interface MarketDayTodosUpdate {
   items: MarketDayTodoItemInput[];
-  notes?: string | null;
-  closed?: boolean;
 }

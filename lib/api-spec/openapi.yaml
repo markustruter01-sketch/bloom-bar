@@ -1317,6 +1317,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SellThroughRecord"
+        notes:
+          type: string
+          nullable: true
+        closed:
+          type: boolean
     MarketDayTodoItem:
       type: object
       required: [id, marketCycle, description, completed, position]
@@ -1381,11 +1386,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/MarketDayTodoItemInput"
-        notes:
-          type: string
-          nullable: true
-        closed:
-          type: boolean
     SellThroughRecord:
       type: object
       required: [flower, purchasedStems, leftoverStems, soldStems, sellThroughPercent]

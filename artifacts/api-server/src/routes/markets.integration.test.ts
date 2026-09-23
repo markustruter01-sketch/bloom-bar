@@ -9,6 +9,8 @@ import {
   closeMarketsTable,
   db,
   marketActualPurchasesTable,
+  marketDayTodoItemsTable,
+  marketDayTodoSnapshotsTable,
   flowerPriceBackfillsTable,
   marketBuyListEditLogsTable,
   marketBuyListStatesTable,
@@ -48,6 +50,8 @@ async function request(path: string, init?: RequestInit): Promise<ApiResult> {
 async function resetTestCycles() {
   await db.transaction(async (tx) => {
     await tx.delete(marketActualPurchasesTable).where(inArray(marketActualPurchasesTable.marketCycle, testCycles));
+    await tx.delete(marketDayTodoSnapshotsTable).where(inArray(marketDayTodoSnapshotsTable.marketCycle, testCycles));
+    await tx.delete(marketDayTodoItemsTable).where(inArray(marketDayTodoItemsTable.marketCycle, testCycles));
     await tx.delete(flowerPriceBackfillsTable);
     await tx.delete(marketBuyListEditLogsTable).where(inArray(marketBuyListEditLogsTable.marketCycle, testCycles));
     await tx.delete(marketCostsTable).where(inArray(marketCostsTable.marketCycle, testCycles));
@@ -1010,5 +1014,59 @@ describe("non-flower price tracking", () => {
     const period = listed.body.find((entry: any) => entry.marketCycle === cycle);
     assert.equal(period.imports.length, 1);
     assert.equal(period.imports[0].lines.length, 2);
+  });
+
+  it("carries a closed market-day list into the next cycle without sharing records", async () => {
+    const cycle = testCycles[0];
+    const nextCycle = cycle + 1;
+    const saved = await request(`/markets/day-todos/${cycle}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        items: [
+          { description: "Rinse buckets", completed: true, position: 0 },
+          { description: "Pack umbrella sign", completed: false, position: 1 },
+        ],
+      }),
+    });
+    assert.equal(saved.status, 200);
+
+    const closed = await patch(`/markets/context/${cycle}/close`, {
+      counts: {},
+      closed: true,
+    });
+    assert.equal(closed.status, 200);
+
+    const afterClose = await request("/markets/day-todos");
+    assert.equal(afterClose.status, 200);
+    const current = afterClose.body.find((period: any) => period.marketCycle === cycle);
+    const next = afterClose.body.find((period: any) => period.marketCycle === nextCycle);
+    assert.deepEqual(current.closedSnapshot, [
+      { description: "Rinse buckets", completed: true, position: 0 },
+      { description: "Pack umbrella sign", completed: false, position: 1 },
+    ]);
+    assert.deepEqual(next.items.map((item: any) => [item.description, item.completed]), [
+      ["Rinse buckets", false],
+      ["Pack umbrella sign", false],
+    ]);
+
+    const editedOldList = await request(`/markets/day-todos/${cycle}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        items: [{ description: "Rinse buckets", completed: false, position: 0 }],
+      }),
+    });
+    assert.equal(editedOldList.status, 200);
+    const afterEdit = await request("/markets/day-todos");
+    const currentAfterEdit = afterEdit.body.find((period: any) => period.marketCycle === cycle);
+    const nextAfterEdit = afterEdit.body.find((period: any) => period.marketCycle === nextCycle);
+    assert.deepEqual(currentAfterEdit.items.map((item: any) => item.description), ["Rinse buckets"]);
+    assert.deepEqual(currentAfterEdit.closedSnapshot.map((item: any) => [item.description, item.completed]), [
+      ["Rinse buckets", true],
+      ["Pack umbrella sign", false],
+    ]);
+    assert.deepEqual(nextAfterEdit.items.map((item: any) => [item.description, item.completed]), [
+      ["Rinse buckets", false],
+      ["Pack umbrella sign", false],
+    ]);
   });
 });

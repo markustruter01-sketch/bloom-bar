@@ -6,6 +6,8 @@ import {
   bouquetPlansTable,
   closeMarketsTable,
   marketActualPurchasesTable,
+  marketDayTodoItemsTable,
+  marketDayTodoSnapshotsTable,
   flowerPriceBackfillsTable,
   marketBuyListEditLogsTable,
   marketBuyListStatesTable,
@@ -54,6 +56,10 @@ import {
   UpsertMarketScheduleOverrideParams,
   UpsertMarketScheduleOverrideResponse,
   DeleteMarketScheduleOverrideParams,
+  ListMarketDayTodosResponse,
+  ReplaceMarketDayTodosBody,
+  ReplaceMarketDayTodosParams,
+  ReplaceMarketDayTodosResponse,
   ListNonFlowerPurchasesResponse,
   ImportNonFlowerBankFileBody,
   ImportNonFlowerBankFileParams,
@@ -261,6 +267,83 @@ async function ensureMarketContext(cycle: number) {
       await tx.insert(closeMarketsTable).values({ marketCycle: cycle, counts: defaultCloseCounts, sellThrough: [], closed: false });
     }
   });
+}
+
+function formatMarketDayTodoPeriod(
+  cycle: number,
+  closed: boolean,
+  items: Array<typeof marketDayTodoItemsTable.$inferSelect>,
+  snapshot: typeof marketDayTodoSnapshotsTable.$inferSelect | undefined,
+  overrides: ScheduleOverride[],
+) {
+  return {
+    marketCycle: cycle,
+    startDate: getScheduledMarketDate(cycle - 1, overrides),
+    endDate: getScheduledMarketDate(cycle, overrides),
+    closed,
+    items: [...items]
+      .sort((a, b) => a.position - b.position || a.id - b.id)
+      .map((item) => ({
+        id: item.id,
+        marketCycle: item.marketCycle,
+        description: item.description,
+        completed: item.completed,
+        position: item.position,
+      })),
+    closedSnapshot: snapshot?.items ?? null,
+  };
+}
+
+async function readMarketDayTodoPeriod(cycle: number, overrides: ScheduleOverride[]) {
+  const [closeMarket] = await db
+    .select({ closed: closeMarketsTable.closed })
+    .from(closeMarketsTable)
+    .where(eq(closeMarketsTable.marketCycle, cycle));
+  const items = await db
+    .select()
+    .from(marketDayTodoItemsTable)
+    .where(eq(marketDayTodoItemsTable.marketCycle, cycle))
+    .orderBy(asc(marketDayTodoItemsTable.position), asc(marketDayTodoItemsTable.id));
+  const [snapshot] = await db
+    .select()
+    .from(marketDayTodoSnapshotsTable)
+    .where(eq(marketDayTodoSnapshotsTable.marketCycle, cycle));
+  return formatMarketDayTodoPeriod(cycle, closeMarket?.closed ?? false, items, snapshot, overrides);
+}
+
+async function captureClosedMarketTodoAndGenerateNext(cycle: number, tx: any) {
+  const [existingSnapshot] = await tx
+    .select()
+    .from(marketDayTodoSnapshotsTable)
+    .where(eq(marketDayTodoSnapshotsTable.marketCycle, cycle));
+  if (!existingSnapshot) {
+    const previousItems = await tx
+      .select()
+      .from(marketDayTodoItemsTable)
+      .where(eq(marketDayTodoItemsTable.marketCycle, cycle))
+      .orderBy(asc(marketDayTodoItemsTable.position), asc(marketDayTodoItemsTable.id));
+    await tx.insert(marketDayTodoSnapshotsTable).values({
+      marketCycle: cycle,
+      items: previousItems.map((item: typeof marketDayTodoItemsTable.$inferSelect) => ({
+        description: item.description,
+        completed: item.completed,
+        position: item.position,
+      })),
+    });
+    const nextCycle = cycle + 1;
+    const nextItems = await tx
+      .select({ id: marketDayTodoItemsTable.id })
+      .from(marketDayTodoItemsTable)
+      .where(eq(marketDayTodoItemsTable.marketCycle, nextCycle));
+    if (nextItems.length === 0 && previousItems.length > 0) {
+      await tx.insert(marketDayTodoItemsTable).values(previousItems.map((item: typeof marketDayTodoItemsTable.$inferSelect, index: number) => ({
+        marketCycle: nextCycle,
+        description: item.description,
+        completed: false,
+        position: index,
+      })));
+    }
+  }
 }
 
 async function recalculateMarketTotals(cycle: number, tx: any, previousCostTotal?: number) {
@@ -1516,6 +1599,60 @@ router.patch("/markets/context/:cycle/bouquet-plan", async (req, res): Promise<v
   res.json(UpdateMarketBouquetPlanResponse.parse(plan));
 });
 
+router.get("/markets/day-todos", async (_req, res): Promise<void> => {
+  const [markets, overrides, items, snapshots, closeMarkets] = await Promise.all([
+    db.select({ cycle: marketsTable.cycle }).from(marketsTable).orderBy(asc(marketsTable.cycle)),
+    readScheduleOverrides(),
+    db.select().from(marketDayTodoItemsTable).orderBy(asc(marketDayTodoItemsTable.marketCycle), asc(marketDayTodoItemsTable.position), asc(marketDayTodoItemsTable.id)),
+    db.select().from(marketDayTodoSnapshotsTable),
+    db.select({ marketCycle: closeMarketsTable.marketCycle, closed: closeMarketsTable.closed }).from(closeMarketsTable),
+  ]);
+  const itemsByCycle = new Map<number, Array<typeof marketDayTodoItemsTable.$inferSelect>>();
+  for (const item of items) {
+    const cycleItems = itemsByCycle.get(item.marketCycle) ?? [];
+    cycleItems.push(item);
+    itemsByCycle.set(item.marketCycle, cycleItems);
+  }
+  const snapshotsByCycle = new Map(snapshots.map((snapshot) => [snapshot.marketCycle, snapshot]));
+  const closesByCycle = new Map(closeMarkets.map((closeMarket) => [closeMarket.marketCycle, closeMarket.closed]));
+  res.json(ListMarketDayTodosResponse.parse(markets.map(({ cycle }) => formatMarketDayTodoPeriod(
+    cycle,
+    closesByCycle.get(cycle) ?? false,
+    itemsByCycle.get(cycle) ?? [],
+    snapshotsByCycle.get(cycle),
+    overrides,
+  ))));
+});
+
+router.put("/markets/day-todos/:cycle", async (req, res): Promise<void> => {
+  const params = ReplaceMarketDayTodosParams.safeParse(req.params);
+  const body = ReplaceMarketDayTodosBody.safeParse(req.body);
+  if (!params.success || !body.success || !Number.isInteger(params.data.cycle)) {
+    res.status(400).json({ error: "Invalid market cycle or Market Day To Do items." });
+    return;
+  }
+  const items = body.data.items
+    .map((item, index) => ({
+      description: item.description.trim(),
+      completed: item.completed,
+      position: index,
+    }))
+    .filter((item) => item.description.length > 0);
+  if (items.some((item) => item.description.length > 240)) {
+    res.status(400).json({ error: "Market Day To Do items must be 240 characters or fewer." });
+    return;
+  }
+  await ensureMarketContext(params.data.cycle);
+  await db.transaction(async (tx) => {
+    await tx.delete(marketDayTodoItemsTable).where(eq(marketDayTodoItemsTable.marketCycle, params.data.cycle));
+    if (items.length > 0) {
+      await tx.insert(marketDayTodoItemsTable).values(items.map((item) => ({ ...item, marketCycle: params.data.cycle })));
+    }
+  });
+  const overrides = await readScheduleOverrides();
+  res.json(ReplaceMarketDayTodosResponse.parse(await readMarketDayTodoPeriod(params.data.cycle, overrides)));
+});
+
 router.patch("/markets/context/:cycle/close", async (req, res): Promise<void> => {
   const params = UpdateMarketCloseParams.safeParse(req.params);
   const body = UpdateMarketCloseBody.safeParse(req.body);
@@ -1547,11 +1684,20 @@ router.patch("/markets/context/:cycle/close", async (req, res): Promise<void> =>
   const notes = Object.prototype.hasOwnProperty.call(body.data, "notes")
     ? (typeof body.data.notes === "string" && body.data.notes.trim() ? body.data.notes.trim() : null)
     : existingCloseMarket?.notes ?? null;
-  const [closeMarket] = await db
-    .update(closeMarketsTable)
-    .set({ counts: body.data.counts, sellThrough, notes, closed: body.data.closed })
-    .where(eq(closeMarketsTable.marketCycle, params.data.cycle))
-    .returning();
+  if (body.data.closed && !existingCloseMarket?.closed) {
+    await ensureMarketContext(params.data.cycle + 1);
+  }
+  const [closeMarket] = await db.transaction(async (tx) => {
+    const [updatedCloseMarket] = await tx
+      .update(closeMarketsTable)
+      .set({ counts: body.data.counts, sellThrough, notes, closed: body.data.closed })
+      .where(eq(closeMarketsTable.marketCycle, params.data.cycle))
+      .returning();
+    if (body.data.closed && !existingCloseMarket?.closed) {
+      await captureClosedMarketTodoAndGenerateNext(params.data.cycle, tx);
+    }
+    return [updatedCloseMarket];
+  });
   res.json(UpdateMarketCloseResponse.parse(closeMarket));
 });
 

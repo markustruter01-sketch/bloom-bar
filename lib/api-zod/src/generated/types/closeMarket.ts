@@ -12,4 +12,6 @@ export interface CloseMarket {
   marketCycle: number;
   counts: CloseMarketCounts;
   sellThrough: SellThroughRecord[];
+  notes: string | null;
+  closed: boolean;
 }

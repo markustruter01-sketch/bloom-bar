@@ -787,7 +787,9 @@ export const GetMarketContextResponse = zod.object({
   "leftoverStems": zod.number().min(getMarketContextResponseCloseMarketSellThroughItemLeftoverStemsMin),
   "soldStems": zod.number().min(getMarketContextResponseCloseMarketSellThroughItemSoldStemsMin),
   "sellThroughPercent": zod.number().min(getMarketContextResponseCloseMarketSellThroughItemSellThroughPercentMin).max(getMarketContextResponseCloseMarketSellThroughItemSellThroughPercentMax)
-}))
+})),
+  "notes": zod.string().nullable(),
+  "closed": zod.boolean()
 })
 })
 
@@ -1135,7 +1137,9 @@ export const UpdateMarketCloseResponse = zod.object({
   "leftoverStems": zod.number().min(updateMarketCloseResponseSellThroughItemLeftoverStemsMin),
   "soldStems": zod.number().min(updateMarketCloseResponseSellThroughItemSoldStemsMin),
   "sellThroughPercent": zod.number().min(updateMarketCloseResponseSellThroughItemSellThroughPercentMin).max(updateMarketCloseResponseSellThroughItemSellThroughPercentMax)
-}))
+})),
+  "notes": zod.string().nullable(),
+  "closed": zod.boolean()
 })
 
 
@@ -1179,9 +1183,7 @@ export const ReplaceMarketDayTodosBody = zod.object({
   "description": zod.string(),
   "completed": zod.boolean(),
   "position": zod.number().min(replaceMarketDayTodosBodyItemsItemPositionMin)
-})),
-  "notes": zod.string().nullish(),
-  "closed": zod.boolean().optional()
+}))
 })
 
 export const ReplaceMarketDayTodosResponse = zod.object({
