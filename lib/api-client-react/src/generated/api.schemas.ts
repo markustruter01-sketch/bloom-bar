@@ -307,6 +307,23 @@ export interface MarketCostsResponse {
   margin: number;
 }
 
+export interface NonFlowerPurchaseAllocation {
+  id: number;
+  purchaseId: number;
+  productType: string;
+  /**
+     * Number of purchase items allocated to this product type
+     * @minimum 1
+     */
+  allocationQuantity: number | null;
+  /**
+     * Percentage of the purchase total allocated to this product type
+     * @minimum 0
+     * @maximum 100
+     */
+  allocationPercentage: number | null;
+}
+
 export interface NonFlowerPurchase {
   id: number;
   marketCycle: number;
@@ -321,7 +338,23 @@ export interface NonFlowerPurchase {
      * @minimum 0
      */
   costPerPiece: number;
+  /**
+     * Compatibility field for older single-product assignments
+     * @deprecated
+     */
   productType: string | null;
+  allocations: NonFlowerPurchaseAllocation[];
+}
+
+export interface NonFlowerPurchaseAllocationInput {
+  productType: string;
+  /** @minimum 1 */
+  allocationQuantity: number | null;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  allocationPercentage: number | null;
 }
 
 export interface NonFlowerPurchaseInput {
@@ -331,7 +364,9 @@ export interface NonFlowerPurchaseInput {
   totalPrice: number;
   /** @minimum 1 */
   quantity: number;
-  productType: string | null;
+  /** @deprecated */
+  productType?: string | null;
+  allocations?: NonFlowerPurchaseAllocationInput[];
 }
 
 export interface NonFlowerPurchasesUpdate {

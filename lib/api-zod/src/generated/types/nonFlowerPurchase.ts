@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { NonFlowerPurchaseAllocation } from './nonFlowerPurchaseAllocation';
 
 export interface NonFlowerPurchase {
   id: number;
@@ -20,5 +21,10 @@ export interface NonFlowerPurchase {
      * @minimum 0
      */
   costPerPiece: number;
+  /**
+     * Compatibility field for older single-product assignments
+     * @deprecated
+     */
   productType: string | null;
+  allocations: NonFlowerPurchaseAllocation[];
 }

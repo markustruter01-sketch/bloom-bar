@@ -741,7 +741,7 @@ components:
           type: number
     NonFlowerPurchase:
       type: object
-      required: [id, marketCycle, category, description, totalPrice, quantity, costPerPiece, productType]
+      required: [id, marketCycle, category, description, totalPrice, quantity, costPerPiece, productType, allocations]
       properties:
         id:
           type: number
@@ -764,9 +764,36 @@ components:
         productType:
           type: string
           nullable: true
+          deprecated: true
+          description: Compatibility field for older single-product assignments
+        allocations:
+          type: array
+          items:
+            $ref: "#/components/schemas/NonFlowerPurchaseAllocation"
+    NonFlowerPurchaseAllocation:
+      type: object
+      required: [id, purchaseId, productType, allocationQuantity, allocationPercentage]
+      properties:
+        id:
+          type: number
+        purchaseId:
+          type: number
+        productType:
+          type: string
+        allocationQuantity:
+          type: number
+          minimum: 1
+          nullable: true
+          description: Number of purchase items allocated to this product type
+        allocationPercentage:
+          type: number
+          minimum: 0
+          maximum: 100
+          nullable: true
+          description: Percentage of the purchase total allocated to this product type
     NonFlowerPurchaseInput:
       type: object
-      required: [category, description, totalPrice, quantity, productType]
+      required: [category, description, totalPrice, quantity]
       properties:
         category:
           type: string
@@ -780,6 +807,26 @@ components:
           minimum: 1
         productType:
           type: string
+          nullable: true
+          deprecated: true
+        allocations:
+          type: array
+          items:
+            $ref: "#/components/schemas/NonFlowerPurchaseAllocationInput"
+    NonFlowerPurchaseAllocationInput:
+      type: object
+      required: [productType, allocationQuantity, allocationPercentage]
+      properties:
+        productType:
+          type: string
+        allocationQuantity:
+          type: number
+          minimum: 1
+          nullable: true
+        allocationPercentage:
+          type: number
+          minimum: 0
+          maximum: 100
           nullable: true
     NonFlowerPurchasesUpdate:
       type: object

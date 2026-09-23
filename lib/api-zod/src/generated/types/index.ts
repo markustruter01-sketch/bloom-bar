@@ -53,6 +53,8 @@ export * from './marketScheduleOverrideStatus';
 export * from './marketScheduleOverrideUpdate';
 export * from './marketScheduleOverrideUpdateStatus';
 export * from './nonFlowerPurchase';
+export * from './nonFlowerPurchaseAllocation';
+export * from './nonFlowerPurchaseAllocationInput';
 export * from './nonFlowerPurchaseInput';
 export * from './nonFlowerPurchasePeriod';
 export * from './nonFlowerPurchasesUpdate';

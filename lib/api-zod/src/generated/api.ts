@@ -361,6 +361,10 @@ export const listNonFlowerPurchasesResponsePurchasesItemTotalPriceMin = 0;
 export const listNonFlowerPurchasesResponsePurchasesItemCostPerPieceMin = 0;
 
 
+export const listNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMin = 0;
+export const listNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMax = 100;
+
+
 
 export const ListNonFlowerPurchasesResponseItem = zod.object({
   "marketCycle": zod.number(),
@@ -374,7 +378,14 @@ export const ListNonFlowerPurchasesResponseItem = zod.object({
   "totalPrice": zod.number().min(listNonFlowerPurchasesResponsePurchasesItemTotalPriceMin),
   "quantity": zod.number().min(1),
   "costPerPiece": zod.number().min(listNonFlowerPurchasesResponsePurchasesItemCostPerPieceMin).describe('Calculated as totalPrice divided by quantity'),
-  "productType": zod.string().nullable()
+  "productType": zod.string().nullable().describe('Compatibility field for older single-product assignments'),
+  "allocations": zod.array(zod.object({
+  "id": zod.number(),
+  "purchaseId": zod.number(),
+  "productType": zod.string(),
+  "allocationQuantity": zod.number().min(1).nullable().describe('Number of purchase items allocated to this product type'),
+  "allocationPercentage": zod.number().min(listNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMin).max(listNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMax).nullable().describe('Percentage of the purchase total allocated to this product type')
+}))
 }))
 })
 export const ListNonFlowerPurchasesResponse = zod.array(ListNonFlowerPurchasesResponseItem)
@@ -391,6 +402,10 @@ export const replaceNonFlowerPurchasesBodyPurchasesItemTotalPriceMin = 0;
 
 
 
+export const replaceNonFlowerPurchasesBodyPurchasesItemAllocationsItemAllocationPercentageMin = 0;
+export const replaceNonFlowerPurchasesBodyPurchasesItemAllocationsItemAllocationPercentageMax = 100;
+
+
 
 export const ReplaceNonFlowerPurchasesBody = zod.object({
   "purchases": zod.array(zod.object({
@@ -398,7 +413,12 @@ export const ReplaceNonFlowerPurchasesBody = zod.object({
   "description": zod.string(),
   "totalPrice": zod.number().min(replaceNonFlowerPurchasesBodyPurchasesItemTotalPriceMin),
   "quantity": zod.number().min(1),
-  "productType": zod.string().nullable()
+  "productType": zod.string().nullish(),
+  "allocations": zod.array(zod.object({
+  "productType": zod.string(),
+  "allocationQuantity": zod.number().min(1).nullable(),
+  "allocationPercentage": zod.number().min(replaceNonFlowerPurchasesBodyPurchasesItemAllocationsItemAllocationPercentageMin).max(replaceNonFlowerPurchasesBodyPurchasesItemAllocationsItemAllocationPercentageMax).nullable()
+})).optional()
 }))
 })
 
@@ -406,6 +426,10 @@ export const replaceNonFlowerPurchasesResponsePurchasesItemTotalPriceMin = 0;
 
 
 export const replaceNonFlowerPurchasesResponsePurchasesItemCostPerPieceMin = 0;
+
+
+export const replaceNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMin = 0;
+export const replaceNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMax = 100;
 
 
 
@@ -421,7 +445,14 @@ export const ReplaceNonFlowerPurchasesResponse = zod.object({
   "totalPrice": zod.number().min(replaceNonFlowerPurchasesResponsePurchasesItemTotalPriceMin),
   "quantity": zod.number().min(1),
   "costPerPiece": zod.number().min(replaceNonFlowerPurchasesResponsePurchasesItemCostPerPieceMin).describe('Calculated as totalPrice divided by quantity'),
-  "productType": zod.string().nullable()
+  "productType": zod.string().nullable().describe('Compatibility field for older single-product assignments'),
+  "allocations": zod.array(zod.object({
+  "id": zod.number(),
+  "purchaseId": zod.number(),
+  "productType": zod.string(),
+  "allocationQuantity": zod.number().min(1).nullable().describe('Number of purchase items allocated to this product type'),
+  "allocationPercentage": zod.number().min(replaceNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMin).max(replaceNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMax).nullable().describe('Percentage of the purchase total allocated to this product type')
+}))
 }))
 })
 

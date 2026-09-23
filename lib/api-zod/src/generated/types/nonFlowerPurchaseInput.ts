@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { NonFlowerPurchaseAllocationInput } from './nonFlowerPurchaseAllocationInput';
 
 export interface NonFlowerPurchaseInput {
   category: string;
@@ -13,5 +14,7 @@ export interface NonFlowerPurchaseInput {
   totalPrice: number;
   /** @minimum 1 */
   quantity: number;
-  productType: string | null;
+  /** @deprecated */
+  productType?: string | null;
+  allocations?: NonFlowerPurchaseAllocationInput[];
 }

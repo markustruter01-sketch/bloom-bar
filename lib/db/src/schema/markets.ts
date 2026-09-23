@@ -203,6 +203,37 @@ export const nonFlowerPurchasesTable = pgTable(
   }),
 );
 
+export const nonFlowerPurchaseAllocationsTable = pgTable(
+  "non_flower_purchase_allocations",
+  {
+    id: serial("id").primaryKey(),
+    purchaseId: integer("purchase_id")
+      .notNull()
+      .references(() => nonFlowerPurchasesTable.id, { onDelete: "cascade" }),
+    productType: text("product_type").notNull(),
+    allocationQuantity: integer("allocation_quantity"),
+    allocationPercentage: doublePrecision("allocation_percentage"),
+  },
+  (table) => ({
+    allocationBasis: check(
+      "non_flower_purchase_allocations_one_basis",
+      sql`(("allocation_quantity" IS NOT NULL AND "allocation_percentage" IS NULL) OR ("allocation_quantity" IS NULL AND "allocation_percentage" IS NOT NULL))`,
+    ),
+    allocationQuantityPositive: check(
+      "non_flower_purchase_allocations_quantity_positive",
+      sql`${table.allocationQuantity} IS NULL OR ${table.allocationQuantity} > 0`,
+    ),
+    allocationPercentagePositive: check(
+      "non_flower_purchase_allocations_percentage_positive",
+      sql`${table.allocationPercentage} IS NULL OR ${table.allocationPercentage} > 0`,
+    ),
+    allocationPercentageMaximum: check(
+      "non_flower_purchase_allocations_percentage_maximum",
+      sql`${table.allocationPercentage} IS NULL OR ${table.allocationPercentage} <= 100`,
+    ),
+  }),
+);
+
 export const bouquetPlansTable = pgTable("market_bouquet_plans", {
   marketCycle: integer("market_cycle")
     .primaryKey()
@@ -230,6 +261,7 @@ export const insertMarketActualPurchaseSchema = createInsertSchema(marketActualP
 export const insertFlowerPriceBackfillSchema = createInsertSchema(flowerPriceBackfillsTable).omit({ id: true, createdAt: true });
 export const insertMarketCostSchema = createInsertSchema(marketCostsTable).omit({ id: true });
 export const insertNonFlowerPurchaseSchema = createInsertSchema(nonFlowerPurchasesTable).omit({ id: true });
+export const insertNonFlowerPurchaseAllocationSchema = createInsertSchema(nonFlowerPurchaseAllocationsTable).omit({ id: true });
 export const insertBouquetPlanSchema = createInsertSchema(bouquetPlansTable);
 export const insertCloseMarketSchema = createInsertSchema(closeMarketsTable);
 
@@ -242,6 +274,7 @@ export type InsertMarketActualPurchase = z.infer<typeof insertMarketActualPurcha
 export type InsertFlowerPriceBackfill = z.infer<typeof insertFlowerPriceBackfillSchema>;
 export type InsertMarketCost = z.infer<typeof insertMarketCostSchema>;
 export type InsertNonFlowerPurchase = z.infer<typeof insertNonFlowerPurchaseSchema>;
+export type InsertNonFlowerPurchaseAllocation = z.infer<typeof insertNonFlowerPurchaseAllocationSchema>;
 export type InsertBouquetPlan = z.infer<typeof insertBouquetPlanSchema>;
 export type InsertCloseMarket = z.infer<typeof insertCloseMarketSchema>;
 export type Market = typeof marketsTable.$inferSelect;
@@ -253,5 +286,6 @@ export type MarketActualPurchase = typeof marketActualPurchasesTable.$inferSelec
 export type FlowerPriceBackfill = typeof flowerPriceBackfillsTable.$inferSelect;
 export type MarketCost = typeof marketCostsTable.$inferSelect;
 export type NonFlowerPurchase = typeof nonFlowerPurchasesTable.$inferSelect;
+export type NonFlowerPurchaseAllocation = typeof nonFlowerPurchaseAllocationsTable.$inferSelect;
 export type BouquetPlan = typeof bouquetPlansTable.$inferSelect;
 export type CloseMarket = typeof closeMarketsTable.$inferSelect;
