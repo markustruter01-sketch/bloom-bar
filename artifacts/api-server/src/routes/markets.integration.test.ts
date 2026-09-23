@@ -866,6 +866,33 @@ describe("market context persistence", () => {
 });
 
 describe("non-flower price tracking", () => {
+  it("splits one purchase across product types by quantity and percentage", async () => {
+    const cycle = testCycles[2];
+    const saved = await request(`/markets/non-flower-purchases/${cycle}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        purchases: [
+          {
+            category: "Packaging",
+            description: "Mixed wrap pack",
+            totalPrice: 40,
+            quantity: 10,
+            allocations: [
+              { productType: "Bouquet", allocationQuantity: 3, allocationPercentage: null },
+              { productType: "Bookmark", allocationQuantity: null, allocationPercentage: 25 },
+            ],
+          },
+        ],
+      }),
+    });
+    assert.equal(saved.status, 200);
+    assert.equal(saved.body.purchases[0].allocations.length, 2);
+    assert.equal(saved.body.purchases[0].allocations[0].productType, "Bouquet");
+    assert.equal(saved.body.purchases[0].allocations[0].allocationQuantity, 3);
+    assert.equal(saved.body.purchases[0].allocations[1].productType, "Bookmark");
+    assert.equal(saved.body.purchases[0].allocations[1].allocationPercentage, 25);
+  });
+
   it("supports adding, editing, recalculating, and deleting fortnight purchase lines", async () => {
     const cycle = testCycles[2];
     const added = await request(`/markets/non-flower-purchases/${cycle}`, {

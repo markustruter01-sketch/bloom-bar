@@ -10,6 +10,7 @@ import {
   marketBuyListEditLogsTable,
   marketBuyListStatesTable,
   marketCostsTable,
+  nonFlowerPurchaseAllocationsTable,
   nonFlowerPurchasesTable,
   marketsTable,
   marketScheduleOverridesTable,
@@ -363,17 +364,41 @@ async function readMarketContext(cycle: number) {
   };
 }
 
-function formatNonFlowerPeriod(cycle: number, purchases: Array<typeof nonFlowerPurchasesTable.$inferSelect>, overrides: ScheduleOverride[]) {
+function serializeNonFlowerPurchase(
+  purchase: typeof nonFlowerPurchasesTable.$inferSelect,
+  allocations: Array<typeof nonFlowerPurchaseAllocationsTable.$inferSelect>,
+) {
+  const compatibilityAllocations = allocations.length > 0
+    ? allocations
+    : purchase.productType
+      ? [{
+        id: 0,
+        purchaseId: purchase.id,
+        productType: purchase.productType,
+        allocationQuantity: purchase.quantity,
+        allocationPercentage: null,
+      }]
+      : [];
+  return {
+    ...purchase,
+    costPerPiece: purchase.totalPrice / purchase.quantity,
+    allocations: compatibilityAllocations,
+  };
+}
+
+function formatNonFlowerPeriod(
+  cycle: number,
+  purchases: Array<typeof nonFlowerPurchasesTable.$inferSelect>,
+  allocationsByPurchase: Map<number, Array<typeof nonFlowerPurchaseAllocationsTable.$inferSelect>>,
+  overrides: ScheduleOverride[],
+) {
   const endDate = getScheduledMarketDate(cycle, overrides);
   const startDate = getScheduledMarketDate(cycle - 1, overrides);
   return {
     marketCycle: cycle,
     startDate,
     endDate,
-    purchases: purchases.map((purchase) => ({
-      ...purchase,
-      costPerPiece: purchase.totalPrice / purchase.quantity,
-    })),
+    purchases: purchases.map((purchase) => serializeNonFlowerPurchase(purchase, allocationsByPurchase.get(purchase.id) ?? [])),
   };
 }
 
@@ -416,8 +441,22 @@ router.get("/markets/non-flower-purchases", async (_req, res): Promise<void> => 
     current.push(purchase);
     purchasesByCycle.set(purchase.marketCycle, current);
   }
+  const purchaseIds = purchases.map((purchase) => purchase.id);
+  const allocations = purchaseIds.length
+    ? await db
+      .select()
+      .from(nonFlowerPurchaseAllocationsTable)
+      .where(inArray(nonFlowerPurchaseAllocationsTable.purchaseId, purchaseIds))
+      .orderBy(asc(nonFlowerPurchaseAllocationsTable.id))
+    : [];
+  const allocationsByPurchase = new Map<number, Array<typeof nonFlowerPurchaseAllocationsTable.$inferSelect>>();
+  for (const allocation of allocations) {
+    const current = allocationsByPurchase.get(allocation.purchaseId) ?? [];
+    current.push(allocation);
+    allocationsByPurchase.set(allocation.purchaseId, current);
+  }
   res.json(ListNonFlowerPurchasesResponse.parse(
-    cycles.map((cycle) => formatNonFlowerPeriod(cycle, purchasesByCycle.get(cycle) ?? [], overrides)),
+    cycles.map((cycle) => formatNonFlowerPeriod(cycle, purchasesByCycle.get(cycle) ?? [], allocationsByPurchase, overrides)),
   ));
 });
 
@@ -428,37 +467,90 @@ router.put("/markets/non-flower-purchases/:cycle", async (req, res): Promise<voi
     res.status(400).json({ error: "Invalid market cycle or non-flower purchase data." });
     return;
   }
-  if (body.data.purchases.some((purchase) =>
-    !purchase.category.trim()
-    || !purchase.description.trim()
+  const normalizedPurchases = body.data.purchases.map((purchase) => {
+    const allocations = purchase.allocations ?? (purchase.productType?.trim()
+      ? [{ productType: purchase.productType.trim(), allocationQuantity: purchase.quantity, allocationPercentage: null }]
+      : []);
+    return {
+      ...purchase,
+      category: purchase.category.trim(),
+      description: purchase.description.trim(),
+      allocations: allocations.map((allocation) => ({
+        productType: allocation.productType.trim(),
+        allocationQuantity: allocation.allocationQuantity,
+        allocationPercentage: allocation.allocationPercentage,
+      })),
+    };
+  });
+  if (normalizedPurchases.some((purchase) =>
+    !purchase.category
+    || !purchase.description
     || !Number.isFinite(purchase.totalPrice)
     || purchase.totalPrice < 0
     || !Number.isInteger(purchase.quantity)
     || purchase.quantity <= 0
+    || purchase.allocations.some((allocation) =>
+      !allocation.productType
+      || (allocation.allocationQuantity !== null && allocation.allocationPercentage !== null)
+      || (allocation.allocationQuantity === null && allocation.allocationPercentage === null)
+      || (allocation.allocationQuantity !== null && (!Number.isInteger(allocation.allocationQuantity) || allocation.allocationQuantity <= 0 || allocation.allocationQuantity > purchase.quantity))
+      || (allocation.allocationPercentage !== null && (!Number.isFinite(allocation.allocationPercentage) || allocation.allocationPercentage <= 0 || allocation.allocationPercentage > 100))
+    )
+    || purchase.allocations.reduce((sum, allocation) =>
+      sum + (allocation.allocationQuantity !== null
+        ? (allocation.allocationQuantity / purchase.quantity) * 100
+        : allocation.allocationPercentage ?? 0), 0) > 100.000001
   )) {
     res.status(400).json({ error: "Each purchase needs a category, description, non-negative total price, and positive item quantity." });
     return;
   }
 
+  const overrides = await readScheduleOverrides();
   await ensureMarketContext(params.data.cycle);
   const saved = await db.transaction(async (tx) => {
     await tx.delete(nonFlowerPurchasesTable).where(eq(nonFlowerPurchasesTable.marketCycle, params.data.cycle));
-    if (body.data.purchases.length > 0) {
-      await tx.insert(nonFlowerPurchasesTable).values(body.data.purchases.map((purchase) => ({
+    for (const purchase of normalizedPurchases) {
+      const [created] = await tx.insert(nonFlowerPurchasesTable).values({
         marketCycle: params.data.cycle,
-        category: purchase.category.trim(),
-        description: purchase.description.trim(),
+        category: purchase.category,
+        description: purchase.description,
         totalPrice: purchase.totalPrice,
         quantity: purchase.quantity,
-        productType: purchase.productType?.trim() || null,
-      })));
+        productType: purchase.allocations.length === 1
+          && purchase.allocations[0].allocationQuantity === purchase.quantity
+          && purchase.allocations[0].allocationPercentage === null
+          ? purchase.allocations[0].productType
+          : null,
+      }).returning();
+      if (purchase.allocations.length > 0) {
+        await tx.insert(nonFlowerPurchaseAllocationsTable).values(purchase.allocations.map((allocation) => ({
+          purchaseId: created.id,
+          productType: allocation.productType,
+          allocationQuantity: allocation.allocationQuantity,
+          allocationPercentage: allocation.allocationPercentage,
+        })));
+      }
     }
     const purchases = await tx
       .select()
       .from(nonFlowerPurchasesTable)
       .where(eq(nonFlowerPurchasesTable.marketCycle, params.data.cycle))
       .orderBy(asc(nonFlowerPurchasesTable.id));
-    return formatNonFlowerPeriod(params.data.cycle, purchases, await readScheduleOverrides());
+    const purchaseIds = purchases.map((purchase) => purchase.id);
+    const allocations = purchaseIds.length
+      ? await tx
+        .select()
+        .from(nonFlowerPurchaseAllocationsTable)
+        .where(inArray(nonFlowerPurchaseAllocationsTable.purchaseId, purchaseIds))
+        .orderBy(asc(nonFlowerPurchaseAllocationsTable.id))
+      : [];
+    const allocationsByPurchase = new Map<number, Array<typeof nonFlowerPurchaseAllocationsTable.$inferSelect>>();
+    for (const allocation of allocations) {
+      const current = allocationsByPurchase.get(allocation.purchaseId) ?? [];
+      current.push(allocation);
+      allocationsByPurchase.set(allocation.purchaseId, current);
+    }
+    return formatNonFlowerPeriod(params.data.cycle, purchases, allocationsByPurchase, overrides);
   });
   res.json(ReplaceNonFlowerPurchasesResponse.parse(saved));
 });
