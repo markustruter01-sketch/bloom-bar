@@ -41,6 +41,8 @@ import type {
   MarketContext,
   MarketCostsResponse,
   MarketCostsUpdate,
+  MarketDayTodoPeriod,
+  MarketDayTodosUpdate,
   MarketScheduleOverride,
   MarketScheduleOverrideUpdate,
   NonFlowerBankImport,
@@ -1725,5 +1727,154 @@ export const useUpdateMarketClose = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getUpdateMarketCloseMutationOptions(options));
+    }
+
+export const getListMarketDayTodosUrl = () => {
+
+
+
+
+  return `/api/markets/day-todos`
+}
+
+/**
+ * @summary List Market Day To Do items by market cycle
+ */
+export const listMarketDayTodos = async ( options?: Parameters<typeof customFetch>[1]): Promise<MarketDayTodoPeriod[]> => {
+
+  return customFetch<MarketDayTodoPeriod[]>(getListMarketDayTodosUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMarketDayTodosQueryKey = () => {
+    return [
+    `/api/markets/day-todos`
+    ] as const;
+    }
+
+
+export const getListMarketDayTodosQueryOptions = <TData = Awaited<ReturnType<typeof listMarketDayTodos>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMarketDayTodos>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMarketDayTodosQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMarketDayTodos>>> = ({ signal }) => listMarketDayTodos({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMarketDayTodos>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMarketDayTodosQueryResult = NonNullable<Awaited<ReturnType<typeof listMarketDayTodos>>>
+export type ListMarketDayTodosQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List Market Day To Do items by market cycle
+ */
+
+export function useListMarketDayTodos<TData = Awaited<ReturnType<typeof listMarketDayTodos>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMarketDayTodos>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMarketDayTodosQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReplaceMarketDayTodosUrl = (cycle: number,) => {
+
+
+
+
+  return `/api/markets/day-todos/${cycle}`
+}
+
+/**
+ * @summary Replace Market Day To Do items for a market cycle
+ */
+export const replaceMarketDayTodos = async (cycle: number,
+    marketDayTodosUpdate: MarketDayTodosUpdate, options?: Parameters<typeof customFetch>[1]): Promise<MarketDayTodoPeriod> => {
+
+  return customFetch<MarketDayTodoPeriod>(getReplaceMarketDayTodosUrl(cycle),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(marketDayTodosUpdate)
+  }
+);}
+
+
+
+
+
+export const getReplaceMarketDayTodosMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceMarketDayTodos>>, TError,{cycle: number;data: BodyType<MarketDayTodosUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof replaceMarketDayTodos>>, TError,{cycle: number;data: BodyType<MarketDayTodosUpdate>}, TContext> => {
+
+const mutationKey = ['replaceMarketDayTodos'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof replaceMarketDayTodos>>, {cycle: number;data: BodyType<MarketDayTodosUpdate>}> = (props) => {
+          const {cycle,data} = props ?? {};
+
+          return  replaceMarketDayTodos(cycle,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReplaceMarketDayTodosMutationResult = NonNullable<Awaited<ReturnType<typeof replaceMarketDayTodos>>>
+    export type ReplaceMarketDayTodosMutationBody = BodyType<MarketDayTodosUpdate>
+    export type ReplaceMarketDayTodosMutationError = ErrorType<void>
+
+    /**
+ * @summary Replace Market Day To Do items for a market cycle
+ */
+export const useReplaceMarketDayTodos = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceMarketDayTodos>>, TError,{cycle: number;data: BodyType<MarketDayTodosUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof replaceMarketDayTodos>>,
+        TError,
+        {cycle: number;data: BodyType<MarketDayTodosUpdate>},
+        TContext
+      > => {
+      return useMutation(getReplaceMarketDayTodosMutationOptions(options));
     }
 

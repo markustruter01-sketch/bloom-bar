@@ -48,6 +48,12 @@ export type SellThroughRecord = {
   sellThroughPercent: number;
 };
 
+export type MarketDayTodoSnapshotItem = {
+  description: string;
+  completed: boolean;
+  position: number;
+};
+
 export const marketsTable = pgTable(
   "markets",
   {
@@ -307,6 +313,30 @@ export const closeMarketsTable = pgTable("market_close_records", {
   closed: boolean("closed").notNull().default(false),
 });
 
+export const marketDayTodoItemsTable = pgTable(
+  "market_day_todo_items",
+  {
+    id: serial("id").primaryKey(),
+    marketCycle: integer("market_cycle")
+      .notNull()
+      .references(() => marketsTable.cycle, { onDelete: "cascade" }),
+    description: text("description").notNull(),
+    completed: boolean("completed").notNull().default(false),
+    position: integer("position").notNull().default(0),
+  },
+  (table) => ({
+    cyclePositionIndex: index("market_day_todo_items_cycle_position_idx").on(table.marketCycle, table.position, table.id),
+  }),
+);
+
+export const marketDayTodoSnapshotsTable = pgTable("market_day_todo_snapshots", {
+  marketCycle: integer("market_cycle")
+    .primaryKey()
+    .references(() => marketsTable.cycle, { onDelete: "cascade" }),
+  items: jsonb("items").$type<MarketDayTodoSnapshotItem[]>().notNull().default([]),
+  capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const insertMarketSchema = createInsertSchema(marketsTable).omit({ id: true });
 export const insertMarketScheduleOverrideSchema = createInsertSchema(marketScheduleOverridesTable);
 export const insertBuyItemSchema = createInsertSchema(buyItemsTable).omit({ id: true });
@@ -322,6 +352,8 @@ export const insertNonFlowerBankImportLineSchema = createInsertSchema(nonFlowerB
 export const insertNonFlowerBankImportDetailSchema = createInsertSchema(nonFlowerBankImportDetailsTable).omit({ id: true });
 export const insertBouquetPlanSchema = createInsertSchema(bouquetPlansTable);
 export const insertCloseMarketSchema = createInsertSchema(closeMarketsTable);
+export const insertMarketDayTodoItemSchema = createInsertSchema(marketDayTodoItemsTable).omit({ id: true });
+export const insertMarketDayTodoSnapshotSchema = createInsertSchema(marketDayTodoSnapshotsTable);
 
 export type InsertMarket = z.infer<typeof insertMarketSchema>;
 export type InsertMarketScheduleOverride = z.infer<typeof insertMarketScheduleOverrideSchema>;
@@ -338,6 +370,8 @@ export type InsertNonFlowerBankImportLine = z.infer<typeof insertNonFlowerBankIm
 export type InsertNonFlowerBankImportDetail = z.infer<typeof insertNonFlowerBankImportDetailSchema>;
 export type InsertBouquetPlan = z.infer<typeof insertBouquetPlanSchema>;
 export type InsertCloseMarket = z.infer<typeof insertCloseMarketSchema>;
+export type InsertMarketDayTodoItem = z.infer<typeof insertMarketDayTodoItemSchema>;
+export type InsertMarketDayTodoSnapshot = z.infer<typeof insertMarketDayTodoSnapshotSchema>;
 export type Market = typeof marketsTable.$inferSelect;
 export type MarketScheduleOverride = typeof marketScheduleOverridesTable.$inferSelect;
 export type BuyItem = typeof buyItemsTable.$inferSelect;
@@ -353,3 +387,5 @@ export type NonFlowerBankImportLine = typeof nonFlowerBankImportLinesTable.$infe
 export type NonFlowerBankImportDetail = typeof nonFlowerBankImportDetailsTable.$inferSelect;
 export type BouquetPlan = typeof bouquetPlansTable.$inferSelect;
 export type CloseMarket = typeof closeMarketsTable.$inferSelect;
+export type MarketDayTodoItem = typeof marketDayTodoItemsTable.$inferSelect;
+export type MarketDayTodoSnapshot = typeof marketDayTodoSnapshotsTable.$inferSelect;

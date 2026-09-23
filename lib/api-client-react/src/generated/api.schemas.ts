@@ -656,8 +656,42 @@ export interface CloseMarket {
   marketCycle: number;
   counts: CloseMarketCounts;
   sellThrough: SellThroughRecord[];
-  notes: string | null;
+}
+
+export interface MarketDayTodoItem {
+  id: number;
+  marketCycle: number;
+  description: string;
+  completed: boolean;
+  position: number;
+}
+
+export interface MarketDayTodoItemInput {
+  description: string;
+  completed: boolean;
+  /** @minimum 0 */
+  position: number;
+}
+
+export interface MarketDayTodoSnapshotItem {
+  description: string;
+  completed: boolean;
+  position: number;
+}
+
+export interface MarketDayTodoPeriod {
+  marketCycle: number;
+  startDate: string;
+  endDate: string;
   closed: boolean;
+  items: MarketDayTodoItem[];
+  closedSnapshot: MarketDayTodoSnapshotItem[] | null;
+}
+
+export interface MarketDayTodosUpdate {
+  items: MarketDayTodoItemInput[];
+  notes?: string | null;
+  closed?: boolean;
 }
 
 export interface SellThroughComparisonCycle {

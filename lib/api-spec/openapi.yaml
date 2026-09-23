@@ -420,6 +420,42 @@ paths:
                 $ref: "#/components/schemas/CloseMarket"
         "409":
           description: The close-market record is finalized and must be intentionally reopened before editing
+  /markets/day-todos:
+    get:
+      operationId: listMarketDayTodos
+      tags: [markets]
+      summary: List Market Day To Do items by market cycle
+      responses:
+        "200":
+          description: To-do lists and immutable close snapshots grouped by market cycle
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MarketDayTodoPeriod"
+  /markets/day-todos/{cycle}:
+    put:
+      operationId: replaceMarketDayTodos
+      tags: [markets]
+      summary: Replace Market Day To Do items for a market cycle
+      parameters:
+        - $ref: "#/components/parameters/MarketCycle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarketDayTodosUpdate"
+      responses:
+        "200":
+          description: Saved Market Day To Do list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketDayTodoPeriod"
+        "400":
+          description: Invalid Market Day To Do data
 components:
   parameters:
     MarketCycle:
@@ -1281,6 +1317,70 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SellThroughRecord"
+    MarketDayTodoItem:
+      type: object
+      required: [id, marketCycle, description, completed, position]
+      properties:
+        id:
+          type: number
+        marketCycle:
+          type: number
+        description:
+          type: string
+        completed:
+          type: boolean
+        position:
+          type: number
+    MarketDayTodoItemInput:
+      type: object
+      required: [description, completed, position]
+      properties:
+        description:
+          type: string
+        completed:
+          type: boolean
+        position:
+          type: number
+          minimum: 0
+    MarketDayTodoSnapshotItem:
+      type: object
+      required: [description, completed, position]
+      properties:
+        description:
+          type: string
+        completed:
+          type: boolean
+        position:
+          type: number
+    MarketDayTodoPeriod:
+      type: object
+      required: [marketCycle, startDate, endDate, closed, items, closedSnapshot]
+      properties:
+        marketCycle:
+          type: number
+        startDate:
+          type: string
+        endDate:
+          type: string
+        closed:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarketDayTodoItem"
+        closedSnapshot:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/MarketDayTodoSnapshotItem"
+    MarketDayTodosUpdate:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarketDayTodoItemInput"
         notes:
           type: string
           nullable: true

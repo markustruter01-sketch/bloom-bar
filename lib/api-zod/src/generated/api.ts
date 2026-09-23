@@ -787,9 +787,7 @@ export const GetMarketContextResponse = zod.object({
   "leftoverStems": zod.number().min(getMarketContextResponseCloseMarketSellThroughItemLeftoverStemsMin),
   "soldStems": zod.number().min(getMarketContextResponseCloseMarketSellThroughItemSoldStemsMin),
   "sellThroughPercent": zod.number().min(getMarketContextResponseCloseMarketSellThroughItemSellThroughPercentMin).max(getMarketContextResponseCloseMarketSellThroughItemSellThroughPercentMax)
-})),
-  "notes": zod.string().nullable(),
-  "closed": zod.boolean()
+}))
 })
 })
 
@@ -1137,9 +1135,72 @@ export const UpdateMarketCloseResponse = zod.object({
   "leftoverStems": zod.number().min(updateMarketCloseResponseSellThroughItemLeftoverStemsMin),
   "soldStems": zod.number().min(updateMarketCloseResponseSellThroughItemSoldStemsMin),
   "sellThroughPercent": zod.number().min(updateMarketCloseResponseSellThroughItemSellThroughPercentMin).max(updateMarketCloseResponseSellThroughItemSellThroughPercentMax)
+}))
+})
+
+
+/**
+ * @summary List Market Day To Do items by market cycle
+ */
+export const ListMarketDayTodosResponseItem = zod.object({
+  "marketCycle": zod.number(),
+  "startDate": zod.string(),
+  "endDate": zod.string(),
+  "closed": zod.boolean(),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "description": zod.string(),
+  "completed": zod.boolean(),
+  "position": zod.number()
 })),
-  "notes": zod.string().nullable(),
-  "closed": zod.boolean()
+  "closedSnapshot": zod.array(zod.object({
+  "description": zod.string(),
+  "completed": zod.boolean(),
+  "position": zod.number()
+})).nullable()
+})
+export const ListMarketDayTodosResponse = zod.array(ListMarketDayTodosResponseItem)
+
+
+/**
+ * @summary Replace Market Day To Do items for a market cycle
+ */
+export const ReplaceMarketDayTodosParams = zod.object({
+  "cycle": zod.coerce.number()
+})
+
+export const replaceMarketDayTodosBodyItemsItemPositionMin = 0;
+
+
+
+export const ReplaceMarketDayTodosBody = zod.object({
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "completed": zod.boolean(),
+  "position": zod.number().min(replaceMarketDayTodosBodyItemsItemPositionMin)
+})),
+  "notes": zod.string().nullish(),
+  "closed": zod.boolean().optional()
+})
+
+export const ReplaceMarketDayTodosResponse = zod.object({
+  "marketCycle": zod.number(),
+  "startDate": zod.string(),
+  "endDate": zod.string(),
+  "closed": zod.boolean(),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "description": zod.string(),
+  "completed": zod.boolean(),
+  "position": zod.number()
+})),
+  "closedSnapshot": zod.array(zod.object({
+  "description": zod.string(),
+  "completed": zod.boolean(),
+  "position": zod.number()
+})).nullable()
 })
 
 
