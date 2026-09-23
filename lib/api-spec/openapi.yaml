@@ -174,6 +174,43 @@ paths:
                 $ref: "#/components/schemas/FlowerPriceDashboardObservation"
         "400":
           description: Invalid historical purchase data
+  /markets/non-flower-purchases:
+    get:
+      operationId: listNonFlowerPurchases
+      tags: [markets]
+      summary: List non-flower purchases by market fortnight
+      description: Returns manually entered non-flower business purchases grouped by the canonical market schedule.
+      responses:
+        "200":
+          description: Non-flower purchases grouped by market fortnight
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NonFlowerPurchasePeriod"
+  /markets/non-flower-purchases/{cycle}:
+    put:
+      operationId: replaceNonFlowerPurchases
+      tags: [markets]
+      summary: Replace non-flower purchases for a market fortnight
+      parameters:
+        - $ref: "#/components/parameters/MarketCycle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NonFlowerPurchasesUpdate"
+      responses:
+        "200":
+          description: Saved non-flower purchases for the fortnight
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NonFlowerPurchasePeriod"
+        "400":
+          description: Invalid non-flower purchase data
   /markets/context/{cycle}:
     get:
       operationId: getMarketContext
@@ -702,6 +739,72 @@ components:
           type: number
         margin:
           type: number
+    NonFlowerPurchase:
+      type: object
+      required: [id, marketCycle, category, description, totalPrice, quantity, costPerPiece, productType]
+      properties:
+        id:
+          type: number
+        marketCycle:
+          type: number
+        category:
+          type: string
+        description:
+          type: string
+        totalPrice:
+          type: number
+          minimum: 0
+        quantity:
+          type: number
+          minimum: 1
+        costPerPiece:
+          type: number
+          minimum: 0
+          description: Calculated as totalPrice divided by quantity
+        productType:
+          type: string
+          nullable: true
+    NonFlowerPurchaseInput:
+      type: object
+      required: [category, description, totalPrice, quantity, productType]
+      properties:
+        category:
+          type: string
+        description:
+          type: string
+        totalPrice:
+          type: number
+          minimum: 0
+        quantity:
+          type: number
+          minimum: 1
+        productType:
+          type: string
+          nullable: true
+    NonFlowerPurchasesUpdate:
+      type: object
+      required: [purchases]
+      properties:
+        purchases:
+          type: array
+          items:
+            $ref: "#/components/schemas/NonFlowerPurchaseInput"
+    NonFlowerPurchasePeriod:
+      type: object
+      required: [marketCycle, startDate, endDate, purchases]
+      properties:
+        marketCycle:
+          type: number
+        startDate:
+          type: string
+          description: Effective canonical market date starting this fortnight
+        endDate:
+          type: string
+          description: Effective canonical market date ending this fortnight
+        purchases:
+          type: array
+          items:
+            $ref: "#/components/schemas/NonFlowerPurchase"
     FlowerPricePoint:
       type: object
       required: [marketCycle, date, pricePerBunch, costPerStem, unitCost]

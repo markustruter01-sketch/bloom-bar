@@ -184,6 +184,25 @@ export const marketCostsTable = pgTable("market_costs", {
   amount: doublePrecision("amount").notNull(),
 });
 
+export const nonFlowerPurchasesTable = pgTable(
+  "non_flower_purchases",
+  {
+    id: serial("id").primaryKey(),
+    marketCycle: integer("market_cycle")
+      .notNull()
+      .references(() => marketsTable.cycle, { onDelete: "cascade" }),
+    category: text("category").notNull(),
+    description: text("description").notNull(),
+    totalPrice: doublePrecision("total_price").notNull(),
+    quantity: integer("quantity").notNull(),
+    productType: text("product_type"),
+  },
+  (table) => ({
+    totalPriceNonNegative: check("non_flower_purchases_total_price_non_negative", sql`${table.totalPrice} >= 0`),
+    quantityPositive: check("non_flower_purchases_quantity_positive", sql`${table.quantity} > 0`),
+  }),
+);
+
 export const bouquetPlansTable = pgTable("market_bouquet_plans", {
   marketCycle: integer("market_cycle")
     .primaryKey()
@@ -210,6 +229,7 @@ export const insertMarketBuyListEditLogSchema = createInsertSchema(marketBuyList
 export const insertMarketActualPurchaseSchema = createInsertSchema(marketActualPurchasesTable).omit({ id: true });
 export const insertFlowerPriceBackfillSchema = createInsertSchema(flowerPriceBackfillsTable).omit({ id: true, createdAt: true });
 export const insertMarketCostSchema = createInsertSchema(marketCostsTable).omit({ id: true });
+export const insertNonFlowerPurchaseSchema = createInsertSchema(nonFlowerPurchasesTable).omit({ id: true });
 export const insertBouquetPlanSchema = createInsertSchema(bouquetPlansTable);
 export const insertCloseMarketSchema = createInsertSchema(closeMarketsTable);
 
@@ -221,6 +241,7 @@ export type InsertMarketBuyListEditLog = z.infer<typeof insertMarketBuyListEditL
 export type InsertMarketActualPurchase = z.infer<typeof insertMarketActualPurchaseSchema>;
 export type InsertFlowerPriceBackfill = z.infer<typeof insertFlowerPriceBackfillSchema>;
 export type InsertMarketCost = z.infer<typeof insertMarketCostSchema>;
+export type InsertNonFlowerPurchase = z.infer<typeof insertNonFlowerPurchaseSchema>;
 export type InsertBouquetPlan = z.infer<typeof insertBouquetPlanSchema>;
 export type InsertCloseMarket = z.infer<typeof insertCloseMarketSchema>;
 export type Market = typeof marketsTable.$inferSelect;
@@ -231,5 +252,6 @@ export type MarketBuyListEditLog = typeof marketBuyListEditLogsTable.$inferSelec
 export type MarketActualPurchase = typeof marketActualPurchasesTable.$inferSelect;
 export type FlowerPriceBackfill = typeof flowerPriceBackfillsTable.$inferSelect;
 export type MarketCost = typeof marketCostsTable.$inferSelect;
+export type NonFlowerPurchase = typeof nonFlowerPurchasesTable.$inferSelect;
 export type BouquetPlan = typeof bouquetPlansTable.$inferSelect;
 export type CloseMarket = typeof closeMarketsTable.$inferSelect;

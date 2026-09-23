@@ -352,6 +352,81 @@ export const CreateFlowerPriceBackfillResponse = zod.object({
 
 
 /**
+ * Returns manually entered non-flower business purchases grouped by the canonical market schedule.
+ * @summary List non-flower purchases by market fortnight
+ */
+export const listNonFlowerPurchasesResponsePurchasesItemTotalPriceMin = 0;
+
+
+export const listNonFlowerPurchasesResponsePurchasesItemCostPerPieceMin = 0;
+
+
+
+export const ListNonFlowerPurchasesResponseItem = zod.object({
+  "marketCycle": zod.number(),
+  "startDate": zod.string().describe('Effective canonical market date starting this fortnight'),
+  "endDate": zod.string().describe('Effective canonical market date ending this fortnight'),
+  "purchases": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "category": zod.string(),
+  "description": zod.string(),
+  "totalPrice": zod.number().min(listNonFlowerPurchasesResponsePurchasesItemTotalPriceMin),
+  "quantity": zod.number().min(1),
+  "costPerPiece": zod.number().min(listNonFlowerPurchasesResponsePurchasesItemCostPerPieceMin).describe('Calculated as totalPrice divided by quantity'),
+  "productType": zod.string().nullable()
+}))
+})
+export const ListNonFlowerPurchasesResponse = zod.array(ListNonFlowerPurchasesResponseItem)
+
+
+/**
+ * @summary Replace non-flower purchases for a market fortnight
+ */
+export const ReplaceNonFlowerPurchasesParams = zod.object({
+  "cycle": zod.coerce.number()
+})
+
+export const replaceNonFlowerPurchasesBodyPurchasesItemTotalPriceMin = 0;
+
+
+
+
+export const ReplaceNonFlowerPurchasesBody = zod.object({
+  "purchases": zod.array(zod.object({
+  "category": zod.string(),
+  "description": zod.string(),
+  "totalPrice": zod.number().min(replaceNonFlowerPurchasesBodyPurchasesItemTotalPriceMin),
+  "quantity": zod.number().min(1),
+  "productType": zod.string().nullable()
+}))
+})
+
+export const replaceNonFlowerPurchasesResponsePurchasesItemTotalPriceMin = 0;
+
+
+export const replaceNonFlowerPurchasesResponsePurchasesItemCostPerPieceMin = 0;
+
+
+
+export const ReplaceNonFlowerPurchasesResponse = zod.object({
+  "marketCycle": zod.number(),
+  "startDate": zod.string().describe('Effective canonical market date starting this fortnight'),
+  "endDate": zod.string().describe('Effective canonical market date ending this fortnight'),
+  "purchases": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "category": zod.string(),
+  "description": zod.string(),
+  "totalPrice": zod.number().min(replaceNonFlowerPurchasesResponsePurchasesItemTotalPriceMin),
+  "quantity": zod.number().min(1),
+  "costPerPiece": zod.number().min(replaceNonFlowerPurchasesResponsePurchasesItemCostPerPieceMin).describe('Calculated as totalPrice divided by quantity'),
+  "productType": zod.string().nullable()
+}))
+})
+
+
+/**
  * @summary Get the saved context for a scheduled market cycle
  */
 export const GetMarketContextParams = zod.object({

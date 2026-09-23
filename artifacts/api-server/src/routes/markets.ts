@@ -10,6 +10,7 @@ import {
   marketBuyListEditLogsTable,
   marketBuyListStatesTable,
   marketCostsTable,
+  nonFlowerPurchasesTable,
   marketsTable,
   marketScheduleOverridesTable,
   flowerCategories,
@@ -49,6 +50,10 @@ import {
   UpsertMarketScheduleOverrideParams,
   UpsertMarketScheduleOverrideResponse,
   DeleteMarketScheduleOverrideParams,
+  ListNonFlowerPurchasesResponse,
+  ReplaceNonFlowerPurchasesBody,
+  ReplaceNonFlowerPurchasesParams,
+  ReplaceNonFlowerPurchasesResponse,
 } from "@workspace/api-zod";
 import type { FlowerCategory, SellThroughRecord } from "@workspace/db";
 import {
@@ -358,6 +363,20 @@ async function readMarketContext(cycle: number) {
   };
 }
 
+function formatNonFlowerPeriod(cycle: number, purchases: Array<typeof nonFlowerPurchasesTable.$inferSelect>, overrides: ScheduleOverride[]) {
+  const endDate = getScheduledMarketDate(cycle, overrides);
+  const startDate = getScheduledMarketDate(cycle - 1, overrides);
+  return {
+    marketCycle: cycle,
+    startDate,
+    endDate,
+    purchases: purchases.map((purchase) => ({
+      ...purchase,
+      costPerPiece: purchase.totalPrice / purchase.quantity,
+    })),
+  };
+}
+
 async function readBuyListState(cycle: number) {
   const [buyList] = await db.select().from(marketBuyListStatesTable).where(eq(marketBuyListStatesTable.marketCycle, cycle));
   const editLog = await db
@@ -376,6 +395,73 @@ async function readBuyListState(cycle: number) {
     })),
   };
 }
+
+router.get("/markets/non-flower-purchases", async (_req, res): Promise<void> => {
+  const overrides = await readScheduleOverrides();
+  const markets = await db
+    .select({ cycle: marketsTable.cycle })
+    .from(marketsTable)
+    .orderBy(asc(marketsTable.cycle));
+  const cycles = markets.map((market) => market.cycle);
+  const purchases = cycles.length
+    ? await db
+      .select()
+      .from(nonFlowerPurchasesTable)
+      .where(inArray(nonFlowerPurchasesTable.marketCycle, cycles))
+      .orderBy(asc(nonFlowerPurchasesTable.marketCycle), asc(nonFlowerPurchasesTable.id))
+    : [];
+  const purchasesByCycle = new Map<number, Array<typeof nonFlowerPurchasesTable.$inferSelect>>();
+  for (const purchase of purchases) {
+    const current = purchasesByCycle.get(purchase.marketCycle) ?? [];
+    current.push(purchase);
+    purchasesByCycle.set(purchase.marketCycle, current);
+  }
+  res.json(ListNonFlowerPurchasesResponse.parse(
+    cycles.map((cycle) => formatNonFlowerPeriod(cycle, purchasesByCycle.get(cycle) ?? [], overrides)),
+  ));
+});
+
+router.put("/markets/non-flower-purchases/:cycle", async (req, res): Promise<void> => {
+  const params = ReplaceNonFlowerPurchasesParams.safeParse(req.params);
+  const body = ReplaceNonFlowerPurchasesBody.safeParse(req.body);
+  if (!params.success || !body.success || !Number.isInteger(params.data.cycle)) {
+    res.status(400).json({ error: "Invalid market cycle or non-flower purchase data." });
+    return;
+  }
+  if (body.data.purchases.some((purchase) =>
+    !purchase.category.trim()
+    || !purchase.description.trim()
+    || !Number.isFinite(purchase.totalPrice)
+    || purchase.totalPrice < 0
+    || !Number.isInteger(purchase.quantity)
+    || purchase.quantity <= 0
+  )) {
+    res.status(400).json({ error: "Each purchase needs a category, description, non-negative total price, and positive item quantity." });
+    return;
+  }
+
+  await ensureMarketContext(params.data.cycle);
+  const saved = await db.transaction(async (tx) => {
+    await tx.delete(nonFlowerPurchasesTable).where(eq(nonFlowerPurchasesTable.marketCycle, params.data.cycle));
+    if (body.data.purchases.length > 0) {
+      await tx.insert(nonFlowerPurchasesTable).values(body.data.purchases.map((purchase) => ({
+        marketCycle: params.data.cycle,
+        category: purchase.category.trim(),
+        description: purchase.description.trim(),
+        totalPrice: purchase.totalPrice,
+        quantity: purchase.quantity,
+        productType: purchase.productType?.trim() || null,
+      })));
+    }
+    const purchases = await tx
+      .select()
+      .from(nonFlowerPurchasesTable)
+      .where(eq(nonFlowerPurchasesTable.marketCycle, params.data.cycle))
+      .orderBy(asc(nonFlowerPurchasesTable.id));
+    return formatNonFlowerPeriod(params.data.cycle, purchases, await readScheduleOverrides());
+  });
+  res.json(ReplaceNonFlowerPurchasesResponse.parse(saved));
+});
 
 router.get("/markets/schedule/overrides", async (_req, res): Promise<void> => {
   res.json(ListMarketScheduleOverridesResponse.parse(await readScheduleOverrides()));

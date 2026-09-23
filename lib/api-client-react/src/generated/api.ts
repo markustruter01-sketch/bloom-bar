@@ -43,6 +43,8 @@ import type {
   MarketCostsUpdate,
   MarketScheduleOverride,
   MarketScheduleOverrideUpdate,
+  NonFlowerPurchasePeriod,
+  NonFlowerPurchasesUpdate,
   SellThroughComparison
 } from './api.schemas';
 
@@ -841,6 +843,156 @@ export const useCreateFlowerPriceBackfill = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getCreateFlowerPriceBackfillMutationOptions(options));
+    }
+
+export const getListNonFlowerPurchasesUrl = () => {
+
+
+
+
+  return `/api/markets/non-flower-purchases`
+}
+
+/**
+ * Returns manually entered non-flower business purchases grouped by the canonical market schedule.
+ * @summary List non-flower purchases by market fortnight
+ */
+export const listNonFlowerPurchases = async ( options?: Parameters<typeof customFetch>[1]): Promise<NonFlowerPurchasePeriod[]> => {
+
+  return customFetch<NonFlowerPurchasePeriod[]>(getListNonFlowerPurchasesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListNonFlowerPurchasesQueryKey = () => {
+    return [
+    `/api/markets/non-flower-purchases`
+    ] as const;
+    }
+
+
+export const getListNonFlowerPurchasesQueryOptions = <TData = Awaited<ReturnType<typeof listNonFlowerPurchases>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listNonFlowerPurchases>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListNonFlowerPurchasesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listNonFlowerPurchases>>> = ({ signal }) => listNonFlowerPurchases({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listNonFlowerPurchases>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListNonFlowerPurchasesQueryResult = NonNullable<Awaited<ReturnType<typeof listNonFlowerPurchases>>>
+export type ListNonFlowerPurchasesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List non-flower purchases by market fortnight
+ */
+
+export function useListNonFlowerPurchases<TData = Awaited<ReturnType<typeof listNonFlowerPurchases>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listNonFlowerPurchases>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListNonFlowerPurchasesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReplaceNonFlowerPurchasesUrl = (cycle: number,) => {
+
+
+
+
+  return `/api/markets/non-flower-purchases/${cycle}`
+}
+
+/**
+ * @summary Replace non-flower purchases for a market fortnight
+ */
+export const replaceNonFlowerPurchases = async (cycle: number,
+    nonFlowerPurchasesUpdate: NonFlowerPurchasesUpdate, options?: Parameters<typeof customFetch>[1]): Promise<NonFlowerPurchasePeriod> => {
+
+  return customFetch<NonFlowerPurchasePeriod>(getReplaceNonFlowerPurchasesUrl(cycle),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(nonFlowerPurchasesUpdate)
+  }
+);}
+
+
+
+
+
+export const getReplaceNonFlowerPurchasesMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceNonFlowerPurchases>>, TError,{cycle: number;data: BodyType<NonFlowerPurchasesUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof replaceNonFlowerPurchases>>, TError,{cycle: number;data: BodyType<NonFlowerPurchasesUpdate>}, TContext> => {
+
+const mutationKey = ['replaceNonFlowerPurchases'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof replaceNonFlowerPurchases>>, {cycle: number;data: BodyType<NonFlowerPurchasesUpdate>}> = (props) => {
+          const {cycle,data} = props ?? {};
+
+          return  replaceNonFlowerPurchases(cycle,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReplaceNonFlowerPurchasesMutationResult = NonNullable<Awaited<ReturnType<typeof replaceNonFlowerPurchases>>>
+    export type ReplaceNonFlowerPurchasesMutationBody = BodyType<NonFlowerPurchasesUpdate>
+    export type ReplaceNonFlowerPurchasesMutationError = ErrorType<void>
+
+    /**
+ * @summary Replace non-flower purchases for a market fortnight
+ */
+export const useReplaceNonFlowerPurchases = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceNonFlowerPurchases>>, TError,{cycle: number;data: BodyType<NonFlowerPurchasesUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof replaceNonFlowerPurchases>>,
+        TError,
+        {cycle: number;data: BodyType<NonFlowerPurchasesUpdate>},
+        TContext
+      > => {
+      return useMutation(getReplaceNonFlowerPurchasesMutationOptions(options));
     }
 
 export const getGetMarketContextUrl = (cycle: number,) => {

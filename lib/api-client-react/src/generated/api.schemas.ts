@@ -307,6 +307,46 @@ export interface MarketCostsResponse {
   margin: number;
 }
 
+export interface NonFlowerPurchase {
+  id: number;
+  marketCycle: number;
+  category: string;
+  description: string;
+  /** @minimum 0 */
+  totalPrice: number;
+  /** @minimum 1 */
+  quantity: number;
+  /**
+     * Calculated as totalPrice divided by quantity
+     * @minimum 0
+     */
+  costPerPiece: number;
+  productType: string | null;
+}
+
+export interface NonFlowerPurchaseInput {
+  category: string;
+  description: string;
+  /** @minimum 0 */
+  totalPrice: number;
+  /** @minimum 1 */
+  quantity: number;
+  productType: string | null;
+}
+
+export interface NonFlowerPurchasesUpdate {
+  purchases: NonFlowerPurchaseInput[];
+}
+
+export interface NonFlowerPurchasePeriod {
+  marketCycle: number;
+  /** Effective canonical market date starting this fortnight */
+  startDate: string;
+  /** Effective canonical market date ending this fortnight */
+  endDate: string;
+  purchases: NonFlowerPurchase[];
+}
+
 export interface FlowerPricePoint {
   marketCycle: number;
   date: string;

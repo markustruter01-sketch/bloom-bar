@@ -14,6 +14,7 @@ import {
   marketBuyListStatesTable,
   marketCostsTable,
   marketScheduleOverridesTable,
+  nonFlowerPurchasesTable,
   marketsTable,
   pool,
 } from "@workspace/db";
@@ -49,6 +50,7 @@ async function resetTestCycles() {
     await tx.delete(flowerPriceBackfillsTable);
     await tx.delete(marketBuyListEditLogsTable).where(inArray(marketBuyListEditLogsTable.marketCycle, testCycles));
     await tx.delete(marketCostsTable).where(inArray(marketCostsTable.marketCycle, testCycles));
+    await tx.delete(nonFlowerPurchasesTable).where(inArray(nonFlowerPurchasesTable.marketCycle, testCycles));
     await tx.delete(marketBuyListStatesTable).where(inArray(marketBuyListStatesTable.marketCycle, testCycles));
     await tx.delete(buyItemsTable).where(inArray(buyItemsTable.marketCycle, testCycles));
     await tx.delete(bouquetPlansTable).where(inArray(bouquetPlansTable.marketCycle, testCycles));
@@ -860,5 +862,50 @@ describe("market context persistence", () => {
 
     const otherCycleReloaded = await getContext(testCycles[1]);
     assert.deepEqual(otherCycleReloaded, otherCycle);
+  });
+});
+
+describe("non-flower price tracking", () => {
+  it("supports adding, editing, recalculating, and deleting fortnight purchase lines", async () => {
+    const cycle = testCycles[2];
+    const added = await request(`/markets/non-flower-purchases/${cycle}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        purchases: [
+          { category: "Packaging", description: "Kraft wrap", totalPrice: 24, quantity: 6, productType: "Bouquet" },
+          { category: "Stationery", description: "Bookmark card stock", totalPrice: 12.5, quantity: 5, productType: "Bookmark" },
+        ],
+      }),
+    });
+    assert.equal(added.status, 200);
+    assert.equal(added.body.purchases.length, 2);
+    assert.equal(added.body.purchases[0].costPerPiece, 4);
+    assert.equal(added.body.purchases[1].costPerPiece, 2.5);
+    assert.equal(new Date(added.body.endDate).getTime() - new Date(added.body.startDate).getTime(), 14 * 24 * 60 * 60 * 1000);
+
+    const edited = await request(`/markets/non-flower-purchases/${cycle}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        purchases: [
+          { category: "Packaging", description: "Kraft wrap", totalPrice: 30, quantity: 5, productType: "Bouquet" },
+        ],
+      }),
+    });
+    assert.equal(edited.status, 200);
+    assert.equal(edited.body.purchases.length, 1);
+    assert.equal(edited.body.purchases[0].costPerPiece, 6);
+
+    const listed = await request("/markets/non-flower-purchases");
+    assert.equal(listed.status, 200);
+    const listedPeriod = listed.body.find((period: any) => period.marketCycle === cycle);
+    assert.equal(listedPeriod.purchases[0].description, "Kraft wrap");
+    assert.equal(listedPeriod.purchases[0].costPerPiece, 6);
+
+    const deleted = await request(`/markets/non-flower-purchases/${cycle}`, {
+      method: "PUT",
+      body: JSON.stringify({ purchases: [] }),
+    });
+    assert.equal(deleted.status, 200);
+    assert.deepEqual(deleted.body.purchases, []);
   });
 });
