@@ -243,7 +243,7 @@ type FlowerKnowledgeSeed = {
 
 const knowledgeSectionLabels = {
   "vase-and-dried-life": "Vase life and dried life",
-  "pairing-compatibility": "Pairing compatibility",
+  "pairing-compatibility": "Shared-vase-water compatibility",
   fragrance: "Fragrance",
   "opens-indoors": "Opens further indoors",
   "symbolic-meaning": "Symbolic / traditional meaning",
@@ -298,7 +298,7 @@ const defaultFlowerKnowledge: Record<string, FlowerKnowledgeSection[]> = {
     vaseWithFood: "About 14–21 days is a practical florist estimate when conditioned in clean water with food; cultivar and harvest stage vary.",
     vaseWithoutFood: "About 10–14 days is a cautious estimate in clean water without food; change water before it clouds.",
     driedLife: "Several years when fully dry and kept away from humidity; the round heads hold their shape well.",
-    pairing: "Works well with airy fillers, grasses, eucalyptus and soft garden flowers. Its stiff stems can dominate delicate, compact designs.",
+    pairing: "No clear shared-vase-water incompatibility was identified in this lookup. It is generally suitable to condition with other clean, well-conditioned stems; keep all foliage below the waterline and change cloudy water promptly. This is a water-compatibility note, not a visual pairing recommendation.",
     fragrance: "Little to no noticeable fragrance is expected.",
     opens: "No. The spherical heads are largely formed at harvest and do not noticeably open indoors.",
     meaning: "Often associated with resilience, good health, optimism and everlasting friendship; meanings are cultural rather than botanical facts.",
@@ -316,7 +316,7 @@ const defaultFlowerKnowledge: Record<string, FlowerKnowledgeSection[]> = {
     vaseWithFood: "About 7–10 days with clean water, flower food and regular stem recutting.",
     vaseWithoutFood: "About 5–7 days without food; hygiene and frequent water changes become more important.",
     driedLife: "Usually months when completely dry, though the petals may curl or fade.",
-    pairing: "Pairs easily with lisianthus, snapdragons, foliage and other relaxed meadow flowers; keep the palette and stem strength balanced.",
+    pairing: "No clear shared-vase-water incompatibility was identified in this lookup. Daisy can share clean vase water with other properly conditioned stems; remove submerged foliage and separate any stem that causes clouding. This is a water-compatibility note, not a visual pairing recommendation.",
     fragrance: "Usually light or not noticeable; fragrance varies by daisy type.",
     opens: "Some buds may continue to open indoors, but harvested stems will not all open equally.",
     meaning: "Commonly associated with innocence, cheerfulness, loyal love and new beginnings.",
@@ -334,7 +334,7 @@ const defaultFlowerKnowledge: Record<string, FlowerKnowledgeSection[]> = {
     vaseWithFood: "About 14–21 days with flower food, clean water and properly conditioned stems.",
     vaseWithoutFood: "About 7–14 days without food, depending on hygiene, temperature and stem condition.",
     driedLife: "Several months when dried carefully, although the large disbud head can become brittle and may fade.",
-    pairing: "A reliable structural focal flower with lisianthus, snapdragons, eucalyptus and textural fillers; give the large head room.",
+    pairing: "No clear shared-vase-water incompatibility was identified in this lookup. Disbud chrysanthemum can share clean vase water when conditioned with other stems; keep foliage out of the water and monitor hygiene. This is a water-compatibility note, not a visual pairing recommendation.",
     fragrance: "Usually mild to moderate and variable; some chrysanthemums have a distinctly herbal scent.",
     opens: "Yes, if harvested before full maturity. Disbuds open gradually indoors, but a very tight or damaged bud may not fully expand.",
     meaning: "Often linked with longevity, joy, optimism and honour; colour and cultural context change the meaning.",
@@ -352,7 +352,7 @@ const defaultFlowerKnowledge: Record<string, FlowerKnowledgeSection[]> = {
     vaseWithFood: "About 14–21 days with clean water and flower food; foliage may last longer if refreshed and kept cool.",
     vaseWithoutFood: "About 7–14 days without food. Some stems can begin drying in the vase before they decline.",
     driedLife: "Many months to years when kept dry; leaves may darken or become crisp over time.",
-    pairing: "Pairs broadly with nearly all listed flowers, especially lisianthus, snapdragons, daisies and billy buttons. Its scent and shape can overwhelm small arrangements.",
+    pairing: "No clear shared-vase-water incompatibility was identified in this lookup. Eucalyptus foliage can share clean vase water with other conditioned stems, but remove leaves below the waterline because decaying foliage clouds water quickly. This is a water-compatibility note, not a visual pairing recommendation.",
     fragrance: "Distinctive camphor-like eucalyptus fragrance, strongest when the leaves are rubbed or warmed.",
     opens: "Not applicable to foliage; it does not open like a flower. New side growth will not develop after cutting.",
     meaning: "Often used to represent protection, healing, cleansing and renewal, depending on the tradition.",
@@ -370,7 +370,7 @@ const defaultFlowerKnowledge: Record<string, FlowerKnowledgeSection[]> = {
     vaseWithFood: "About 10–14 days with flower food, clean water and regular topping up.",
     vaseWithoutFood: "About 5–7 days without food; thirsty stems and warm rooms can shorten this.",
     driedLife: "Several months if dried while fresh, though petals can become papery and colours usually soften.",
-    pairing: "Pairs well with daisies, snapdragons, eucalyptus and airy lace flowers. Its soft petals suit gentle, low-pressure companions.",
+    pairing: "No clear shared-vase-water incompatibility was identified in this lookup. Lisianthus can share clean vase water with other properly conditioned stems; keep the water fresh and remove any slimy or decaying material. This is a water-compatibility note, not a visual pairing recommendation.",
     fragrance: "Usually faint to lightly sweet; many stems have little noticeable fragrance.",
     opens: "Yes. Lisianthus buds commonly continue opening indoors, so choose stems with a mix of buds and open flowers.",
     meaning: "Often associated with appreciation, gratitude, charm and a calm or enduring bond.",
@@ -388,7 +388,7 @@ const defaultFlowerKnowledge: Record<string, FlowerKnowledgeSection[]> = {
     vaseWithFood: "About 3–7 days is a practical estimate with flower food and careful conditioning; harvest stage has a large effect.",
     vaseWithoutFood: "About 3–5 days without food. Change water often and remove any softening foliage.",
     driedLife: "Many months when dried as the heads begin to curl into a bird’s-nest shape; seeds may shed.",
-    pairing: "Excellent with lisianthus, daisies, snapdragons and eucalyptus for air and texture. Its fine umbels need protection from heavy heads.",
+    pairing: "No clear shared-vase-water incompatibility was identified in this lookup. Queen Anne's lace can share clean vase water with other conditioned stems, although its short vase life makes water hygiene especially important. This is a water-compatibility note, not a visual pairing recommendation.",
     fragrance: "Usually faint or not noticeable; some stems have a green, carrot-like note.",
     opens: "Limited. Heads may expand slightly from a tight stage, but fully open lace will not reopen dramatically indoors.",
     meaning: "Often associated with sanctuary, femininity, delicacy and a hidden dark centre; symbolic meanings are traditional rather than fixed.",
@@ -406,7 +406,7 @@ const defaultFlowerKnowledge: Record<string, FlowerKnowledgeSection[]> = {
     vaseWithFood: "About 7–10 days with flower food, upright conditioning and cool storage.",
     vaseWithoutFood: "About 5–7 days without food; stems are more prone to wilt and buds may develop poorly.",
     driedLife: "Several months when dried carefully, but the spikes become brittle and colours fade.",
-    pairing: "Adds height with daisies, lisianthus, eucalyptus and lace flowers. Keep stems upright and avoid crowding the spike.",
+    pairing: "No clear shared-vase-water incompatibility was identified in this lookup. Snapdragon can share clean vase water with other properly conditioned stems; keep the vase topped up and remove foliage below the waterline. This is a water-compatibility note, not a visual pairing recommendation.",
     fragrance: "Usually light or not noticeable, though some cultivars have a soft sweet scent.",
     opens: "Yes, gradually. Stems stored with only a few open flowers can continue opening indoors when kept upright.",
     meaning: "Commonly associated with grace, strength, graciousness and deception in older flower-language traditions.",
@@ -414,6 +414,42 @@ const defaultFlowerKnowledge: Record<string, FlowerKnowledgeSection[]> = {
     sun: "Avoid hot direct sun and heat; bright indirect light helps keep pastel colours from fading quickly.",
     water: "Moderate to high during conditioning. Keep the vase topped up, recut cleanly and remove leaves below the waterline.",
     pets: "ASPCA lists garden snapdragon (Antirrhinum majus) as non-toxic to dogs and cats, but any plant material can still cause stomach upset.",
+  }),
+  daffodil: buildFlowerKnowledge({
+    sourceName: "Royal Horticultural Society — Daffodil growing guide",
+    sourceUrl: "https://www.rhs.org.uk/flowers/daffodils/growing-guide",
+    petSourceName: "ASPCA — Daffodil",
+    petSourceUrl: "https://www.aspca.org/pet-care/animal-poison-control/toxic-and-non-toxic-plants/daffodil",
+    confidence: "high",
+    vaseWithFood: "About 4–7 days with clean water and flower food; harvest stage and cultivar affect longevity.",
+    vaseWithoutFood: "About 3–5 days without food; keep water clean and recut only before separate conditioning.",
+    driedLife: "Usually limited. Petals and stems become brittle quickly, so trial-dry a stem before preserving a bunch.",
+    pairing: "Shared-vase-water warning: fresh-cut daffodil and narcissus stems release sap that can shorten the life of other flowers. Condition them in their own water for at least 12–24 hours; the safest option is a separate vase. If combining after conditioning, avoid recutting the daffodils.",
+    fragrance: "Often sweetly fragrant, though intensity varies by cultivar.",
+    opens: "Yes, tight buds can continue opening indoors when kept cool and supplied with clean water.",
+    meaning: "Often associated with renewal, new beginnings and regard; meanings vary by tradition.",
+    dries: "Not usually reliable. Petals lose form and colour quickly compared with purpose-grown dried flowers.",
+    sun: "Use bright, indirect light and avoid heat, which accelerates opening and water loss.",
+    water: "Moderate. Change cloudy water promptly; the sap released during conditioning is the key shared-vase concern.",
+    pets: "ASPCA lists daffodil as toxic to dogs, cats and horses, especially the bulb. Keep all parts away from pets.",
+  }),
+  poppy: buildFlowerKnowledge({
+    sourceName: "Royal Horticultural Society — Poppy growing guidance",
+    sourceUrl: "https://www.rhs.org.uk/plants/poppy/growing-guide",
+    petSourceName: "ASPCA — Poppy",
+    petSourceUrl: "https://www.aspca.org/pet-care/animal-poison-control/toxic-and-non-toxic-plants/poppy",
+    confidence: "medium",
+    vaseWithFood: "About 3–7 days when stems are conditioned promptly and kept in clean water; species and harvest stage vary.",
+    vaseWithoutFood: "Often 2–5 days without food. Recut and refresh water if the stems soften or the water clouds.",
+    driedLife: "Seed pods can last for months when dried; delicate petalled flowers are less dependable.",
+    pairing: "Shared-vase-water warning: cut poppy stems can release milky latex sap. Condition them separately until the sap has stopped, and use a separate vase if the water clouds or other stems decline. This is a water-compatibility note, not a visual pairing recommendation.",
+    fragrance: "Usually little to no fragrance is noticeable.",
+    opens: "Yes. Poppy buds may open quickly indoors, so choose partly coloured buds for a longer display.",
+    meaning: "Often associated with remembrance, consolation and imagination; meanings depend on species and culture.",
+    dries: "Seed pods dry well; the fresh petalled stems are fragile and usually do not preserve as reliably.",
+    sun: "Keep in bright, indirect light and away from hot windows or heaters.",
+    water: "Moderate. Latex and stem debris make clean water especially important during conditioning.",
+    pets: "Poppy species vary and common names are ambiguous. Do not assume an unidentified poppy is pet-safe; keep it away from chewing pets.",
   }),
 };
 
@@ -427,7 +463,7 @@ function getFlowerKnowledgeSeed(flower: string): FlowerKnowledgeSection[] {
     vaseWithFood: "Info not found for this flower; use clean water and commercial flower food while verifying the species.",
     vaseWithoutFood: "Info not found for this flower; expect a shorter life without flower food and monitor closely.",
     driedLife: "Info not found; dry a small test stem in a cool, dark, dry place before preserving the whole bunch.",
-    pairing: "Compatibility depends on stem strength, conditioning and design. Test with similarly conditioned flowers.",
+    pairing: "No clear shared-vase-water issue was found for this flower in the one-time lookup. That absence is not a guarantee: if the stem releases milky sap or quickly clouds the water, condition it separately and use a separate vase until verified. This section covers shared vase water, not visual design pairing.",
     fragrance: "Info not found for this flower.",
     opens: "Info not found; buds may or may not continue opening after harvest.",
     meaning: "No single universal meaning verified for this flower.",
@@ -470,6 +506,9 @@ async function readFlowerKnowledgeEntries() {
     const sectionsByKey = new Map(entry.sections.map((section) => [section.key, section]));
     const sections = seededSections.map((seededSection) => {
       const current = sectionsByKey.get(seededSection.key);
+      if (current?.key === "pairing-compatibility" && current.sourceStatus !== "manually-edited") {
+        return seededSection;
+      }
       return current
         ? { ...current, subvalues: current.subvalues ?? [] }
         : seededSection;

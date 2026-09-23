@@ -172,6 +172,22 @@ describe("market context persistence", () => {
           bunchesPurchased: 2,
           pricePerBunch: 12,
           source: "manual",
+        }, {
+          flower: "Daffodil",
+          detail: "Water compatibility fixture",
+          category: "Classic Blooms",
+          bunchSize: 10,
+          bunchesPurchased: 1,
+          pricePerBunch: 8,
+          source: "manual",
+        }, {
+          flower: "Poppy",
+          detail: "Water compatibility fixture",
+          category: "Classic Blooms",
+          bunchSize: 10,
+          bunchesPurchased: 1,
+          pricePerBunch: 9,
+          source: "manual",
         }],
       }),
     });
@@ -186,6 +202,12 @@ describe("market context persistence", () => {
     assert.equal(autoEntry.sections.length, 9);
     assert.equal(autoEntry.sections.find((section: any) => section.key === "vase-and-dried-life").subvalues.length, 3);
     assert.equal(autoEntry.sourceStatus, "auto-sourced");
+    const daffodil = listed.body.find((entry: any) => entry.flower === "Daffodil");
+    const poppy = listed.body.find((entry: any) => entry.flower === "Poppy");
+    assert.match(daffodil.sections.find((section: any) => section.key === "pairing-compatibility").value, /sap.*shorten the life of other flowers/i);
+    assert.match(daffodil.sections.find((section: any) => section.key === "pairing-compatibility").value, /separate vase/i);
+    assert.match(poppy.sections.find((section: any) => section.key === "pairing-compatibility").value, /milky latex sap/i);
+    assert.match(poppy.sections.find((section: any) => section.key === "pairing-compatibility").value, /condition them separately/i);
 
     const originalSource = autoEntry.sections.find((section: any) => section.key === "fragrance").sourceUrl;
     const nextSections = autoEntry.sections.map((section: any) => section.key === "fragrance"

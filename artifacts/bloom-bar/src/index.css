@@ -256,6 +256,178 @@
   --shadow-2xl: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0);
 }
 
+.buy-print-view {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 1.5rem 0;
+}
+
+.buy-print-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: 2rem;
+}
+
+.buy-print-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid hsl(var(--foreground) / .15);
+  padding-bottom: 1rem;
+}
+
+.buy-print-lock {
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #dce3c2;
+  padding: .4rem .7rem;
+  color: hsl(var(--primary));
+  font-family: var(--app-font-mono);
+  font-size: .65rem;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.buy-print-note {
+  margin: 1rem 0 1.25rem;
+  border-left: 3px solid hsl(var(--accent));
+  padding-left: .75rem;
+  color: hsl(var(--muted-foreground));
+  font-size: .8rem;
+  line-height: 1.5;
+}
+
+.buy-print-items {
+  display: grid;
+  gap: .6rem;
+}
+
+.buy-print-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(250px, 1fr);
+  gap: 1rem;
+  break-inside: avoid;
+  border: 1px solid hsl(var(--foreground) / .12);
+  border-radius: .6rem;
+  padding: .85rem 1rem;
+}
+
+.buy-print-fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .7rem;
+  align-items: center;
+}
+
+.buy-print-fields span {
+  display: block;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: .58rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.buy-print-fields strong {
+  display: block;
+  margin-top: .25rem;
+  font-family: var(--app-font-mono);
+  font-size: .8rem;
+  font-weight: 500;
+}
+
+.buy-print-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: .9rem;
+  border-top: 2px solid hsl(var(--primary) / .25);
+  padding-top: .9rem;
+  color: hsl(var(--primary));
+  font-family: var(--app-font-mono);
+  font-size: .8rem;
+  text-transform: uppercase;
+}
+
+.buy-print-total strong {
+  font-size: 1rem;
+}
+
+@media (max-width: 640px) {
+  .buy-print-view {
+    padding: .5rem 0 5rem;
+  }
+
+  .buy-print-actions {
+    margin-bottom: 1.5rem;
+  }
+
+  .buy-print-actions button {
+    flex: 1 1 12rem;
+  }
+
+  .buy-print-header {
+    gap: .65rem;
+  }
+
+  .buy-print-header h1 {
+    font-size: 1.75rem;
+  }
+
+  .buy-print-row {
+    grid-template-columns: 1fr;
+    gap: .8rem;
+    padding: .8rem;
+  }
+
+  .buy-print-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .65rem;
+    border-top: 1px solid hsl(var(--foreground) / .1);
+    padding-top: .7rem;
+  }
+}
+
+@media print {
+  @page {
+    margin: 12mm;
+    size: A4 portrait;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .buy-print-view,
+  .buy-print-view * {
+    visibility: visible !important;
+  }
+
+  .buy-print-view {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    color: #20261f;
+    background: white;
+  }
+
+  .buy-print-actions {
+    display: none !important;
+  }
+
+  .buy-print-row {
+    grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr);
+    border-color: #c8cfc1;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;

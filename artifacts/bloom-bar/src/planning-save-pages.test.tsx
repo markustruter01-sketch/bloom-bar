@@ -80,6 +80,37 @@ describe('planning save rejection states', () => {
     cleanup();
   });
 
+  it('opens a clean print view for the locked proposed buy list', () => {
+    render(
+      <BuyPage
+        buyItems={buyItems}
+        actualPurchases={[]}
+        costs={[]}
+        buyList={{
+          marketCycle: 0,
+          locked: true,
+          reported: false,
+          receiptFileName: null,
+          receiptText: null,
+          receiptCandidates: [],
+          editLog: [],
+        }}
+        nextMarket={nextMarket}
+        toggleBuyItem={async () => true}
+        setBuyListLock={async () => true}
+        saveActualPurchases={async () => true}
+        saveCosts={async () => true}
+        reportPurchases={async () => true}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('button-open-buy-list-print'));
+    assert.ok(screen.getByTestId('buy-list-print-view'));
+    assert.match(screen.getByTestId('buy-list-print-view').textContent ?? '', /Locked Buy List/);
+    assert.match(screen.getByTestId('buy-list-print-view').textContent ?? '', /Lisianthus/);
+    assert.ok(screen.getByTestId('button-print-buy-list'));
+  });
+
   it('keeps edited buy-list values visible through a failed save and retry', async () => {
     const failed = deferred<boolean>();
     const retried = deferred<boolean>();

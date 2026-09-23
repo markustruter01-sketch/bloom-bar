@@ -7,8 +7,9 @@ import type {
   NonFlowerPurchaseInput,
   NonFlowerPurchasePeriod,
 } from '@workspace/api-client-react';
-import { AlertTriangle, CalendarDays, CheckCircle2, DollarSign, FileUp, LoaderCircle, Plus, ReceiptText, Save, Tag, Trash2 } from 'lucide-react';
+import { AlertTriangle, CalendarDays, CheckCircle2, DollarSign, Download, FileUp, LoaderCircle, Plus, ReceiptText, Save, Tag, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { downloadCsv } from '@/lib/csv-export';
 import { formatMarketDate, marketSchedule, type MarketCycleSummary, type MarketScheduleOverride } from '@/lib/market-schedule';
 import { parseBankCsv, parseBankPdf, sha256Fingerprint } from '@/lib/non-flower-bank-import';
 import {
@@ -34,6 +35,70 @@ function unitMoney(value: number) {
 
 function dateLabel(date: string) {
   return formatMarketDate(new Date(`${date}T00:00:00Z`), 'short');
+}
+
+const nonFlowerCsvHeaders = [
+  'Record type',
+  'Market cycle',
+  'Period start',
+  'Period end',
+  'Transaction date',
+  'Category',
+  'Description',
+  'Quantity',
+  'Total price (AUD)',
+  'Cost per piece (AUD)',
+  'Product allocations',
+  'Source file',
+];
+
+function formatPurchaseAllocations(purchase: NonFlowerPurchasePeriod['purchases'][number]) {
+  return purchase.allocations.map((allocation) => {
+    const basis = allocation.allocationQuantity !== null
+      ? `${allocation.allocationQuantity} unit${allocation.allocationQuantity === 1 ? '' : 's'}`
+      : `${allocation.allocationPercentage ?? 0}%`;
+    const cost = calculateNonFlowerAllocationCost(
+      purchase.totalPrice,
+      purchase.quantity,
+      allocation.allocationQuantity,
+      allocation.allocationPercentage,
+    );
+    return `${allocation.productType} (${basis}; ${unitMoney(cost)})`;
+  }).join('; ');
+}
+
+function exportNonFlowerData(periods: NonFlowerPurchasePeriod[]) {
+  const rows = periods.flatMap((period) => [
+    ...period.purchases.map((purchase) => [
+      'purchase',
+      period.marketCycle,
+      period.startDate,
+      period.endDate,
+      '',
+      purchase.category,
+      purchase.description,
+      purchase.quantity,
+      purchase.totalPrice.toFixed(2),
+      calculateNonFlowerCostPerPiece(purchase.totalPrice, purchase.quantity).toFixed(2),
+      formatPurchaseAllocations(purchase),
+      '',
+    ]),
+    ...period.imports.flatMap((imported) => imported.lines.map((line) => [
+      'bank-import',
+      period.marketCycle,
+      period.startDate,
+      period.endDate,
+      line.transactionDate ?? '',
+      'Imported bank line',
+      [line.merchant, line.description].filter(Boolean).join(' — '),
+      1,
+      line.amount.toFixed(2),
+      line.amount.toFixed(2),
+      line.details.map((detail) => `${detail.category}: ${detail.description} (${detail.quantity} unit${detail.quantity === 1 ? '' : 's'}; ${unitMoney(detail.totalPrice)})`).join('; '),
+      imported.fileName,
+    ])),
+  ]);
+  downloadCsv('bloom-bar-non-flower-price-tracker.csv', nonFlowerCsvHeaders, rows);
 }
 
 function Button({ children, className = '', onClick, disabled = false, testId }: { children: ReactNode; className?: string; onClick?: () => void; disabled?: boolean; testId: string }) {
@@ -302,7 +367,7 @@ export function NonFlowerPriceTrackingPage({ periods, scheduleOverrides, nextMar
   };
 
   return <div className="space-y-7" data-testid="section-non-flower-price-tracking">
-    <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><div className="mb-2 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.18em] text-muted-foreground"><span className="h-px w-7 bg-accent" />Business costs</div><h1 className="display-font text-4xl leading-[1.02] tracking-[-.035em] text-foreground md:text-5xl">Non-Flower Price Tracking</h1><p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">Keep packaging, stationery, and other business purchases tied to the fortnight they belong to. Split one purchase across the products it supports.</p></div><Button onClick={addPurchase} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-add-non-flower-purchase"><Plus size={15} /> Add purchase</Button></div>
+     <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><div className="mb-2 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.18em] text-muted-foreground"><span className="h-px w-7 bg-accent" />Business costs</div><h1 className="display-font text-4xl leading-[1.02] tracking-[-.035em] text-foreground md:text-5xl">Non-Flower Price Tracking</h1><p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">Keep packaging, stationery, and other business purchases tied to the fortnight they belong to. Split one purchase across the products it supports.</p></div><div className="flex flex-wrap gap-2"><Button onClick={() => exportNonFlowerData(schedulePeriods)} className="border border-foreground/15 bg-card text-foreground hover:border-primary" testId="button-export-non-flower-csv"><Download size={15} /> Export CSV</Button><Button onClick={addPurchase} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-add-non-flower-purchase"><Plus size={15} /> Add purchase</Button></div></div>
     {activePeriod && <section className="paper-card rounded-lg border border-card-border p-5" data-testid="section-non-flower-bank-import">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-muted-foreground"><FileUp size={14} className="text-primary" /> Bank export import</div><p className="mt-2 max-w-xl text-sm text-muted-foreground">Upload the CSV or PDF export for the selected fortnight. Purchase lines are kept as imported source records, then you can break each one into detailed cost rows.</p></div>

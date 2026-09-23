@@ -75,6 +75,7 @@ import { ToastAction } from '@/components/ui/toast';
 import { Toaster } from '@/components/ui/toaster';
 import { toast } from '@/hooks/use-toast';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { downloadCsv } from '@/lib/csv-export';
 import {
   ArrowLeft,
   ArrowRight,
@@ -89,6 +90,7 @@ import {
   ClipboardList,
   Clock3,
   DollarSign,
+  Download,
   Flower2,
   Leaf,
   LayoutDashboard,
@@ -100,6 +102,7 @@ import {
   Package,
   Pencil,
   Plus,
+  Printer,
   ReceiptText,
   Search,
   ShoppingBasket,
@@ -195,6 +198,44 @@ function money(value: number) {
 
 function unitMoney(value: number) {
   return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+}
+
+const flowerPriceCsvHeaders = [
+  'Record type',
+  'Purchase date',
+  'Market cycle',
+  'Flower',
+  'Category',
+  'Supplier',
+  'Stems per bunch',
+  'Bunches purchased',
+  'Price per bunch (AUD)',
+  'Total stems',
+  'Cost per stem (AUD)',
+  'Sell-through (%)',
+  'Market notes',
+];
+
+function exportFlowerPriceData(observations: FlowerPriceDashboardObservation[]) {
+  downloadCsv(
+    'bloom-bar-flower-price-tracker.csv',
+    flowerPriceCsvHeaders,
+    observations.map((observation) => [
+      observation.source,
+      observation.purchaseDate,
+      observation.marketCycle,
+      observation.flower,
+      observation.category,
+      observation.supplier ?? '',
+      observation.bunchSize,
+      observation.bunchesPurchased,
+      observation.pricePerBunch.toFixed(2),
+      observation.totalStemQty,
+      observation.costPerStem.toFixed(2),
+      observation.sellThrough?.sellThroughPercent ?? '',
+      observation.marketNotes ?? '',
+    ]),
+  );
 }
 
 function Button({ children, className = '', onClick, type = 'button', testId, disabled = false }: { children: ReactNode; className?: string; onClick?: () => void; type?: 'button' | 'submit'; testId: string; disabled?: boolean }) {
@@ -565,7 +606,7 @@ export function FlowerPriceTrackerPage({ reports, isLoading, dashboardObservatio
       eyebrow="The studio / cost intelligence"
       title="Flower Price Tracker"
       description="See your real cost per stem, learn which seasons are kindest to each flower, and keep older receipts in the same history."
-      action={<Button onClick={() => setBackfillOpen((open) => !open)} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-toggle-backfill"><Pencil size={15} /> {backfillOpen ? 'Close backfill' : 'Add historical record'}</Button>}
+      action={<div className="flex flex-wrap gap-2"><Button onClick={() => exportFlowerPriceData(dashboardObservations)} disabled={dashboardObservations.length === 0} className="border border-foreground/15 bg-card text-foreground hover:border-primary" testId="button-export-flower-price-csv"><Download size={15} /> Export CSV</Button><Button onClick={() => setBackfillOpen((open) => !open)} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-toggle-backfill"><Pencil size={15} /> {backfillOpen ? 'Close backfill' : 'Add historical record'}</Button></div>}
     />
     {backfillOpen && <div className="mb-6"><BackfillForm onSave={saveBackfill} /></div>}
      {dashboardLoading ? <p className="rounded-md bg-muted px-4 py-3 text-xs text-muted-foreground" role="status">Loading price dashboard…</p> : <section className="space-y-6" data-testid="flower-price-dashboard">
@@ -1086,6 +1127,44 @@ function purchaseDraftFromActual(purchase: ActualPurchase): BunchPurchaseInput {
   };
 }
 
+function BuyListPrintView({ buyItems, nextMarket, onExit }: { buyItems: BuyItem[]; nextMarket: MarketCycleSummary; onExit: () => void }) {
+  return <div className="buy-print-view" data-testid="buy-list-print-view">
+    <div className="buy-print-actions">
+      <Button onClick={onExit} className="border border-foreground/15 bg-card text-foreground hover:border-primary" testId="button-exit-buy-list-print"><ArrowLeft size={15} /> Back to locked list</Button>
+      <Button onClick={() => window.print?.()} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-print-buy-list"><Printer size={15} /> Print / Save PDF</Button>
+    </div>
+    <header className="buy-print-header">
+      <div>
+        <p className="font-mono text-[10px] uppercase tracking-[.18em] text-muted-foreground">Bloom Bar · offline shopping copy</p>
+        <h1 className="mt-2 font-serif text-3xl text-primary">Locked Buy List</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{nextMarket.fullDate} · {nextMarket.recurrence}</p>
+      </div>
+      <span className="buy-print-lock">Locked</span>
+    </header>
+    <p className="buy-print-note">Take this list to the wholesaler or market. Prices are the latest recorded estimates and quantities are the proposed purchase quantities.</p>
+    <div className="buy-print-items">
+      {buyItems.length === 0 ? <p className="rounded-md border border-dashed border-foreground/20 p-5 text-sm text-muted-foreground">No flowers are on this locked list.</p> : buyItems.map((item) => <article key={item.id} className="buy-print-row">
+        <div className="min-w-0">
+          <h2 className="break-words font-semibold text-foreground">{item.flower}</h2>
+          <p className="mt-1 break-words text-xs text-muted-foreground">{item.detail}</p>
+          <p className="mt-2 text-[11px] text-muted-foreground">{item.category}</p>
+        </div>
+        <div className="buy-print-fields">
+          <div><span>Qty</span><strong>{item.qty}</strong></div>
+          <div><span>Unit</span><strong>{item.unit}</strong></div>
+          <div><span>Last price</span><strong>{unitMoney(item.lastPrice)}</strong></div>
+          <div><span>Estimate</span><strong>{money(item.qty * item.lastPrice)}</strong></div>
+        </div>
+      </article>)}
+    </div>
+    <footer className="buy-print-total">
+      <span>Estimated flower spend</span>
+      <strong>{money(buyItems.reduce((sum, item) => sum + item.qty * item.lastPrice, 0))}</strong>
+    </footer>
+    <p className="mt-6 text-[11px] text-muted-foreground">Generated from the locked proposed list. Actual purchases can differ and are recorded separately after shopping.</p>
+  </div>;
+}
+
 export function BuyPage({
   buyItems,
   actualPurchases,
@@ -1109,6 +1188,7 @@ export function BuyPage({
   saveCosts: (costs: MarketCostInput[]) => Promise<boolean>;
   reportPurchases: () => Promise<boolean>;
 }) {
+  const [printMode, setPrintMode] = useState(false);
   const [filter, setFilter] = useState('All categories');
   const [drafts, setDrafts] = useState<BunchPurchaseInput[]>([]);
   const [costDrafts, setCostDrafts] = useState<MarketCostInput[]>([]);
@@ -1143,6 +1223,10 @@ export function BuyPage({
     });
     setManualPriceEdits(new Set(actualPurchases.flatMap((purchase, index) => purchase.source === 'manual' ? [index] : [])));
   }, [buyList.marketCycle, buyList.locked, buyList.receiptFileName, buyList.receiptText, buyList.receiptCandidates, actualPurchases, buyItems, costs]);
+
+  if (buyList.locked && printMode) {
+    return <BuyListPrintView buyItems={buyItems} nextMarket={nextMarket} onExit={() => setPrintMode(false)} />;
+  }
 
   const updateDraft = (index: number, patch: Partial<BunchPurchaseInput>, marksManualPrice = false) => {
     setSaveState('idle');
@@ -1253,7 +1337,7 @@ export function BuyPage({
       eyebrow="Next market / preparation"
       title={buyList.locked ? 'Record what really came home.' : 'Buy with a clear head.'}
       description={buyList.locked ? 'The proposed list is locked. Record each bunch you actually bought, including supplier details when useful.' : 'Build the proposed flower run, tick items off as they land in your trolley, then lock the list before shopping.'}
-      action={<div className="flex items-center gap-2"><div className="rounded-md bg-[#dce3c2] px-3 py-2 text-center"><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">{nextMarket.shortDate}</div><div className="text-sm font-semibold text-primary">{nextMarket.daysUntil} to go</div></div>{buyList.locked && <Button onClick={() => { if (window.confirm('Unlock this proposed list so you can edit it? Your actual purchases will stay saved.')) void performSave({ kind: 'unlock' }); }} disabled={isSaving} className="border border-primary/20 bg-background text-primary hover:bg-primary/5" testId="button-unlock-buy-list"><UnlockKeyhole size={15} /> Unlock to Edit</Button>}</div>}
+      action={<div className="flex flex-wrap items-center justify-end gap-2"><div className="rounded-md bg-[#dce3c2] px-3 py-2 text-center"><div className="font-mono text-[9px] uppercase tracking-[.12em] text-muted-foreground">{nextMarket.shortDate}</div><div className="text-sm font-semibold text-primary">{nextMarket.daysUntil} to go</div></div>{buyList.locked && <><Button onClick={() => setPrintMode(true)} className="border border-primary/20 bg-background text-primary hover:bg-primary/5" testId="button-open-buy-list-print"><Printer size={15} /> Print / PDF</Button><Button onClick={() => { if (window.confirm('Unlock this proposed list so you can edit it? Your actual purchases will stay saved.')) void performSave({ kind: 'unlock' }); }} disabled={isSaving} className="border border-primary/20 bg-background text-primary hover:bg-primary/5" testId="button-unlock-buy-list"><UnlockKeyhole size={15} /> Unlock to Edit</Button></>}</div>}
     />
     <MarketSubnav active="buy" nextMarket={nextMarket} />
     {!buyList.locked ? <div className="grid gap-5 lg:grid-cols-[1fr_330px]">
