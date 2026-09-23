@@ -354,6 +354,50 @@ export const flowerCareEntriesTable = pgTable(
   }),
 );
 
+export const flowerKnowledgeSectionKeys = [
+  "vase-and-dried-life",
+  "pairing-compatibility",
+  "fragrance",
+  "opens-indoors",
+  "symbolic-meaning",
+  "dries-well",
+  "sun-sensitivity",
+  "water-consumption",
+  "pet-safety",
+] as const;
+
+export type FlowerKnowledgeSectionKey = (typeof flowerKnowledgeSectionKeys)[number];
+
+export type FlowerKnowledgeSubvalue = {
+  label: string;
+  value: string;
+};
+
+export type FlowerKnowledgeSection = {
+  key: FlowerKnowledgeSectionKey;
+  label: string;
+  value: string;
+  subvalues?: FlowerKnowledgeSubvalue[];
+  sourceName: string;
+  sourceUrl: string;
+  sourceStatus: "auto-sourced" | "manually-edited";
+  confidence: "high" | "medium" | "low";
+};
+
+export const flowerKnowledgeEntriesTable = pgTable(
+  "flower_knowledge_entries",
+  {
+    id: serial("id").primaryKey(),
+    flower: text("flower").notNull(),
+    sections: jsonb("sections").$type<FlowerKnowledgeSection[]>().notNull().default([]),
+    sourceStatus: text("source_status", { enum: ["auto-sourced", "manually-edited"] }).notNull().default("auto-sourced"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    flowerUnique: unique("flower_knowledge_entries_flower_unique").on(table.flower),
+  }),
+);
+
 export const insertMarketSchema = createInsertSchema(marketsTable).omit({ id: true });
 export const insertMarketScheduleOverrideSchema = createInsertSchema(marketScheduleOverridesTable);
 export const insertBuyItemSchema = createInsertSchema(buyItemsTable).omit({ id: true });
@@ -372,6 +416,7 @@ export const insertCloseMarketSchema = createInsertSchema(closeMarketsTable);
 export const insertMarketDayTodoItemSchema = createInsertSchema(marketDayTodoItemsTable).omit({ id: true });
 export const insertMarketDayTodoSnapshotSchema = createInsertSchema(marketDayTodoSnapshotsTable);
 export const insertFlowerCareEntrySchema = createInsertSchema(flowerCareEntriesTable).omit({ id: true, updatedAt: true });
+export const insertFlowerKnowledgeEntrySchema = createInsertSchema(flowerKnowledgeEntriesTable).omit({ id: true, updatedAt: true });
 
 export type InsertMarket = z.infer<typeof insertMarketSchema>;
 export type InsertMarketScheduleOverride = z.infer<typeof insertMarketScheduleOverrideSchema>;
@@ -408,3 +453,4 @@ export type CloseMarket = typeof closeMarketsTable.$inferSelect;
 export type MarketDayTodoItem = typeof marketDayTodoItemsTable.$inferSelect;
 export type MarketDayTodoSnapshot = typeof marketDayTodoSnapshotsTable.$inferSelect;
 export type FlowerCareEntry = typeof flowerCareEntriesTable.$inferSelect;
+export type FlowerKnowledgeEntry = typeof flowerKnowledgeEntriesTable.$inferSelect;

@@ -6,6 +6,7 @@ import {
   bouquetPlansTable,
   closeMarketsTable,
   flowerCareEntriesTable,
+  flowerKnowledgeEntriesTable,
   marketActualPurchasesTable,
   marketDayTodoItemsTable,
   marketDayTodoSnapshotsTable,
@@ -61,6 +62,10 @@ import {
   UpdateFlowerCareBody,
   UpdateFlowerCareParams,
   UpdateFlowerCareResponse,
+  ListFlowerKnowledgeResponse,
+  UpdateFlowerKnowledgeBody,
+  UpdateFlowerKnowledgeParams,
+  UpdateFlowerKnowledgeResponse,
   ListMarketDayTodosResponse,
   ReplaceMarketDayTodosBody,
   ReplaceMarketDayTodosParams,
@@ -76,7 +81,7 @@ import {
   ReplaceNonFlowerPurchasesParams,
   ReplaceNonFlowerPurchasesResponse,
 } from "@workspace/api-zod";
-import type { FlowerCategory, SellThroughRecord } from "@workspace/db";
+import type { FlowerCategory, FlowerKnowledgeSection, SellThroughRecord } from "@workspace/db";
 import {
   formatScheduledMarketDate,
   getScheduledMarketDate,
@@ -207,6 +212,279 @@ async function readFlowerCareEntries() {
     ? await db.select().from(flowerCareEntriesTable).where(inArray(flowerCareEntriesTable.flower, flowerNames))
     : [];
   const entriesByFlower = new Map(entries.map((entry) => [entry.flower, entry]));
+  return flowerNames
+    .map((flower) => {
+      const entry = entriesByFlower.get(flower);
+      const purchaseStats = stats.get(flower)!;
+      return entry ? { ...entry, ...purchaseStats } : null;
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+    .sort((a, b) => a.flower.localeCompare(b.flower));
+}
+
+type FlowerKnowledgeSeed = {
+  sourceName: string;
+  sourceUrl: string;
+  petSourceName: string;
+  petSourceUrl: string;
+  confidence: "high" | "medium" | "low";
+  vaseWithFood: string;
+  vaseWithoutFood: string;
+  driedLife: string;
+  pairing: string;
+  fragrance: string;
+  opens: string;
+  meaning: string;
+  dries: string;
+  sun: string;
+  water: string;
+  pets: string;
+};
+
+const knowledgeSectionLabels = {
+  "vase-and-dried-life": "Vase life and dried life",
+  "pairing-compatibility": "Pairing compatibility",
+  fragrance: "Fragrance",
+  "opens-indoors": "Opens further indoors",
+  "symbolic-meaning": "Symbolic / traditional meaning",
+  "dries-well": "Dries well",
+  "sun-sensitivity": "Sun sensitivity",
+  "water-consumption": "Water consumption",
+  "pet-safety": "Pet safety",
+} as const;
+
+function buildFlowerKnowledge(seed: FlowerKnowledgeSeed): FlowerKnowledgeSection[] {
+  const source = (key: keyof typeof knowledgeSectionLabels, value: string, overrides?: Partial<FlowerKnowledgeSection>): FlowerKnowledgeSection => ({
+    key,
+    label: knowledgeSectionLabels[key],
+    value,
+    sourceName: seed.sourceName,
+    sourceUrl: seed.sourceUrl,
+    subvalues: [],
+    sourceStatus: "auto-sourced",
+    confidence: seed.confidence,
+    ...overrides,
+  });
+  return [
+    source("vase-and-dried-life", "See the three vase and drying estimates below.", {
+      subvalues: [
+        { label: "Vase life with flower food", value: seed.vaseWithFood },
+        { label: "Vase life without flower food", value: seed.vaseWithoutFood },
+        { label: "Dried life", value: seed.driedLife },
+      ],
+    }),
+    source("pairing-compatibility", seed.pairing),
+    source("fragrance", seed.fragrance),
+    source("opens-indoors", seed.opens),
+    source("symbolic-meaning", seed.meaning),
+    source("dries-well", seed.dries),
+    source("sun-sensitivity", seed.sun),
+    source("water-consumption", seed.water),
+    source("pet-safety", seed.pets, {
+      sourceName: seed.petSourceName,
+      sourceUrl: seed.petSourceUrl,
+      confidence: seed.petSourceName.startsWith("ASPCA") ? "high" : "low",
+    }),
+  ];
+}
+
+const defaultFlowerKnowledge: Record<string, FlowerKnowledgeSection[]> = {
+  "billy buttons": buildFlowerKnowledge({
+    sourceName: "Plantura — Craspedia care",
+    sourceUrl: "https://plantura.garden/uk/flowers-perennials/craspedia/craspedia-overview",
+    petSourceName: "ASPCA — toxic and non-toxic plant guidance",
+    petSourceUrl: "https://www.aspca.org/pet-care/aspca-poison-control/toxic-and-non-toxic-plants",
+    confidence: "medium",
+    vaseWithFood: "About 14–21 days is a practical florist estimate when conditioned in clean water with food; cultivar and harvest stage vary.",
+    vaseWithoutFood: "About 10–14 days is a cautious estimate in clean water without food; change water before it clouds.",
+    driedLife: "Several years when fully dry and kept away from humidity; the round heads hold their shape well.",
+    pairing: "Works well with airy fillers, grasses, eucalyptus and soft garden flowers. Its stiff stems can dominate delicate, compact designs.",
+    fragrance: "Little to no noticeable fragrance is expected.",
+    opens: "No. The spherical heads are largely formed at harvest and do not noticeably open indoors.",
+    meaning: "Often associated with resilience, good health, optimism and everlasting friendship; meanings are cultural rather than botanical facts.",
+    dries: "Yes. It is one of the more dependable flowers for drying and can be dried in roughly 7–10 days in a warm, dark, dry place.",
+    sun: "Fresh stems last longer in bright, indirect light. Avoid hot direct sun, which can fade the yellow heads and warm the water.",
+    water: "Moderate to low once conditioned; use a shallow clean-water level and monitor for woody stems or clouding.",
+    pets: "A species-specific ASPCA listing was not found for Craspedia. Treat it as unconfirmed rather than pet-safe, and prevent pets from chewing any bouquet material.",
+  }),
+  daisy: buildFlowerKnowledge({
+    sourceName: "Plants & Flowers Foundation Holland — Daisy care",
+    sourceUrl: "https://www.plantsandflowersfoundationholland.org/en/flowerguide/daisy",
+    petSourceName: "ASPCA — Daisy",
+    petSourceUrl: "https://www.aspca.org/pet-care/aspca-poison-control/toxic-and-non-toxic-plants/daisy",
+    confidence: "medium",
+    vaseWithFood: "About 7–10 days with clean water, flower food and regular stem recutting.",
+    vaseWithoutFood: "About 5–7 days without food; hygiene and frequent water changes become more important.",
+    driedLife: "Usually months when completely dry, though the petals may curl or fade.",
+    pairing: "Pairs easily with lisianthus, snapdragons, foliage and other relaxed meadow flowers; keep the palette and stem strength balanced.",
+    fragrance: "Usually light or not noticeable; fragrance varies by daisy type.",
+    opens: "Some buds may continue to open indoors, but harvested stems will not all open equally.",
+    meaning: "Commonly associated with innocence, cheerfulness, loyal love and new beginnings.",
+    dries: "Fairly well, but the result is more delicate than a dried billy button and may lose petal shape.",
+    sun: "Keep in bright, indirect light. Direct heat and sun shorten vase life and can bleach the petals.",
+    water: "Moderate to high; check the vase daily because leafy stems and warm rooms increase uptake.",
+    pets: "Common-name ambiguity matters: ASPCA lists some plants called Daisy as toxic, while Gerber daisy is listed separately. Identify the species before calling a bouquet pet-safe.",
+  }),
+  "disbud chrysanthemum": buildFlowerKnowledge({
+    sourceName: "FloraLife — Chrysanthemum handling",
+    sourceUrl: "https://floralife.com/2023/03/21/chrysanthemum-the-florists-most-reliable-asset",
+    petSourceName: "ASPCA — Chrysanthemum",
+    petSourceUrl: "https://www.aspca.org/pet-care/aspca-poison-control/toxic-and-non-toxic-plants/chrysanthemum",
+    confidence: "high",
+    vaseWithFood: "About 14–21 days with flower food, clean water and properly conditioned stems.",
+    vaseWithoutFood: "About 7–14 days without food, depending on hygiene, temperature and stem condition.",
+    driedLife: "Several months when dried carefully, although the large disbud head can become brittle and may fade.",
+    pairing: "A reliable structural focal flower with lisianthus, snapdragons, eucalyptus and textural fillers; give the large head room.",
+    fragrance: "Usually mild to moderate and variable; some chrysanthemums have a distinctly herbal scent.",
+    opens: "Yes, if harvested before full maturity. Disbuds open gradually indoors, but a very tight or damaged bud may not fully expand.",
+    meaning: "Often linked with longevity, joy, optimism and honour; colour and cultural context change the meaning.",
+    dries: "Yes, with mixed results. Hang individual heads in a dark, dry, ventilated place and expect some colour change.",
+    sun: "Sensitive to heat and strong direct sun once cut; bright indirect light is safer for preserving colour.",
+    water: "High during conditioning and moderate thereafter; keep the vase topped up and remove foliage below the waterline.",
+    pets: "ASPCA lists Chrysanthemum species as toxic to dogs, cats and horses. Keep disbuds away from pets and seek veterinary advice after ingestion.",
+  }),
+  "eucalyptus foliage": buildFlowerKnowledge({
+    sourceName: "Moyses Flowers — Eucalyptus care",
+    sourceUrl: "https://www.moysesflowers.mom/flower-care/eucalyptus",
+    petSourceName: "ASPCA — Eucalyptus",
+    petSourceUrl: "https://www.aspca.org/pet-care/aspca-poison-control/toxic-and-non-toxic-plants/eucalyptus",
+    confidence: "high",
+    vaseWithFood: "About 14–21 days with clean water and flower food; foliage may last longer if refreshed and kept cool.",
+    vaseWithoutFood: "About 7–14 days without food. Some stems can begin drying in the vase before they decline.",
+    driedLife: "Many months to years when kept dry; leaves may darken or become crisp over time.",
+    pairing: "Pairs broadly with nearly all listed flowers, especially lisianthus, snapdragons, daisies and billy buttons. Its scent and shape can overwhelm small arrangements.",
+    fragrance: "Distinctive camphor-like eucalyptus fragrance, strongest when the leaves are rubbed or warmed.",
+    opens: "Not applicable to foliage; it does not open like a flower. New side growth will not develop after cutting.",
+    meaning: "Often used to represent protection, healing, cleansing and renewal, depending on the tradition.",
+    dries: "Yes. It can dry upright in a vase or upside down; dry it with good airflow to reduce mould.",
+    sun: "Avoid hot direct sun, which dries leaves unevenly and fades silver foliage. Bright indirect light is best indoors.",
+    water: "Moderate at first, then lower as it dries. Check the stems and change cloudy water promptly.",
+    pets: "ASPCA lists Eucalyptus species as toxic to dogs and cats. Keep foliage out of reach and do not let pets chew fallen leaves.",
+  }),
+  lisianthus: buildFlowerKnowledge({
+    sourceName: "Plants & Flowers Foundation Holland — Lisianthus care",
+    sourceUrl: "https://www.plantsandflowersfoundationholland.org/en/flowerguide/lisianthus",
+    petSourceName: "ASPCA — Safe bouquet guidance",
+    petSourceUrl: "https://www.aspca.org/news/safe-bouquet-mothers-day",
+    confidence: "high",
+    vaseWithFood: "About 10–14 days with flower food, clean water and regular topping up.",
+    vaseWithoutFood: "About 5–7 days without food; thirsty stems and warm rooms can shorten this.",
+    driedLife: "Several months if dried while fresh, though petals can become papery and colours usually soften.",
+    pairing: "Pairs well with daisies, snapdragons, eucalyptus and airy lace flowers. Its soft petals suit gentle, low-pressure companions.",
+    fragrance: "Usually faint to lightly sweet; many stems have little noticeable fragrance.",
+    opens: "Yes. Lisianthus buds commonly continue opening indoors, so choose stems with a mix of buds and open flowers.",
+    meaning: "Often associated with appreciation, gratitude, charm and a calm or enduring bond.",
+    dries: "Moderately well. Hang small bunches with airflow; expect a delicate result and some petal drop.",
+    sun: "Keep in bright, indirect light and away from heaters, drafts and ripening fruit. Strong sun accelerates fading and water loss.",
+    water: "High; keep the vase topped up, use a clean vessel and remove lower foliage from the water.",
+    pets: "A species-specific ASPCA listing was not found for Lisianthus. Do not infer safety from that absence; prevent chewing and confirm with a veterinarian for pet households.",
+  }),
+  "queen anne's lace": buildFlowerKnowledge({
+    sourceName: "Floral Design Institute — Queen Anne’s Lace",
+    sourceUrl: "https://www.floraldesigninstitute.com/blogs/resources-flower-library/queen-annes-lace",
+    petSourceName: "ASPCA — False Queen Anne’s Lace",
+    petSourceUrl: "https://www.aspca.org/pet-care/aspca-poison-control/toxic-and-non-toxic-plants/false-queen-annes-lace",
+    confidence: "medium",
+    vaseWithFood: "About 3–7 days is a practical estimate with flower food and careful conditioning; harvest stage has a large effect.",
+    vaseWithoutFood: "About 3–5 days without food. Change water often and remove any softening foliage.",
+    driedLife: "Many months when dried as the heads begin to curl into a bird’s-nest shape; seeds may shed.",
+    pairing: "Excellent with lisianthus, daisies, snapdragons and eucalyptus for air and texture. Its fine umbels need protection from heavy heads.",
+    fragrance: "Usually faint or not noticeable; some stems have a green, carrot-like note.",
+    opens: "Limited. Heads may expand slightly from a tight stage, but fully open lace will not reopen dramatically indoors.",
+    meaning: "Often associated with sanctuary, femininity, delicacy and a hidden dark centre; symbolic meanings are traditional rather than fixed.",
+    dries: "Yes, especially once the head starts to turn inward. It can be left upright in a dry vase or hung with airflow.",
+    sun: "Keep cut stems out of direct sun and heat. Bright indirect light helps preserve the delicate umbels.",
+    water: "Moderate to high during the first conditioning period; use clean water and recut stems if they wilt.",
+    pets: "The common name covers different species. ASPCA lists false Queen Anne’s lace (Ammi majus) as toxic, so do not label an unidentified stem pet-safe.",
+  }),
+  snapdragon: buildFlowerKnowledge({
+    sourceName: "UC Davis Postharvest Research & Extension Center — Snapdragon",
+    sourceUrl: "https://postharvest.ucdavis.edu/produce-facts-sheets/snapdragon",
+    petSourceName: "ASPCA — Garden Snapdragon",
+    petSourceUrl: "https://www.aspca.org/pet-care/animal-poison-control/toxic-and-non-toxic-plants/garden-snapdragon",
+    confidence: "high",
+    vaseWithFood: "About 7–10 days with flower food, upright conditioning and cool storage.",
+    vaseWithoutFood: "About 5–7 days without food; stems are more prone to wilt and buds may develop poorly.",
+    driedLife: "Several months when dried carefully, but the spikes become brittle and colours fade.",
+    pairing: "Adds height with daisies, lisianthus, eucalyptus and lace flowers. Keep stems upright and avoid crowding the spike.",
+    fragrance: "Usually light or not noticeable, though some cultivars have a soft sweet scent.",
+    opens: "Yes, gradually. Stems stored with only a few open flowers can continue opening indoors when kept upright.",
+    meaning: "Commonly associated with grace, strength, graciousness and deception in older flower-language traditions.",
+    dries: "Moderately well. Hang upright in a dark, dry, ventilated place and expect the lower florets to become fragile.",
+    sun: "Avoid hot direct sun and heat; bright indirect light helps keep pastel colours from fading quickly.",
+    water: "Moderate to high during conditioning. Keep the vase topped up, recut cleanly and remove leaves below the waterline.",
+    pets: "ASPCA lists garden snapdragon (Antirrhinum majus) as non-toxic to dogs and cats, but any plant material can still cause stomach upset.",
+  }),
+};
+
+function getFlowerKnowledgeSeed(flower: string): FlowerKnowledgeSection[] {
+  return defaultFlowerKnowledge[normalizeFlowerName(flower)] ?? buildFlowerKnowledge({
+    sourceName: "NC State Extension — Cut-flower care",
+    sourceUrl: "https://gardening.ces.ncsu.edu/gardening-plants/flowers-2/selecting-caring-for-cut-flowers",
+    petSourceName: "ASPCA — toxic and non-toxic plant guidance",
+    petSourceUrl: "https://www.aspca.org/pet-care/aspca-poison-control/toxic-and-non-toxic-plants",
+    confidence: "low",
+    vaseWithFood: "Info not found for this flower; use clean water and commercial flower food while verifying the species.",
+    vaseWithoutFood: "Info not found for this flower; expect a shorter life without flower food and monitor closely.",
+    driedLife: "Info not found; dry a small test stem in a cool, dark, dry place before preserving the whole bunch.",
+    pairing: "Compatibility depends on stem strength, conditioning and design. Test with similarly conditioned flowers.",
+    fragrance: "Info not found for this flower.",
+    opens: "Info not found; buds may or may not continue opening after harvest.",
+    meaning: "No single universal meaning verified for this flower.",
+    dries: "Info not found; trial-dry a stem before relying on it for a dried design.",
+    sun: "Keep in bright, indirect light and away from hot direct sun until species-specific guidance is verified.",
+    water: "Info not found; start with clean water, check daily and change it when cloudy.",
+    pets: "Pet safety not verified for this flower. Keep it away from chewing pets until its botanical identity is confirmed.",
+  });
+}
+
+async function readFlowerKnowledgeEntries() {
+  const purchases = await db
+    .select({
+      flower: marketActualPurchasesTable.flower,
+      marketCycle: marketActualPurchasesTable.marketCycle,
+      totalStemQty: marketActualPurchasesTable.totalStemQty,
+    })
+    .from(marketActualPurchasesTable)
+    .orderBy(asc(marketActualPurchasesTable.flower), asc(marketActualPurchasesTable.marketCycle));
+  const stats = new Map<string, { purchaseCount: number; purchasedStems: number; lastPurchasedCycle: number }>();
+  for (const purchase of purchases) {
+    const current = stats.get(purchase.flower) ?? { purchaseCount: 0, purchasedStems: 0, lastPurchasedCycle: purchase.marketCycle };
+    current.purchaseCount += 1;
+    current.purchasedStems += purchase.totalStemQty ?? 0;
+    current.lastPurchasedCycle = Math.max(current.lastPurchasedCycle, purchase.marketCycle);
+    stats.set(purchase.flower, current);
+  }
+  const flowerNames = [...stats.keys()];
+  for (const flower of flowerNames) {
+    await db
+      .insert(flowerKnowledgeEntriesTable)
+      .values({ flower, sections: getFlowerKnowledgeSeed(flower) })
+      .onConflictDoNothing({ target: flowerKnowledgeEntriesTable.flower });
+  }
+  const entries = flowerNames.length
+    ? await db.select().from(flowerKnowledgeEntriesTable).where(inArray(flowerKnowledgeEntriesTable.flower, flowerNames))
+    : [];
+  const normalizedEntries = await Promise.all(entries.map(async (entry) => {
+    const seededSections = getFlowerKnowledgeSeed(entry.flower);
+    const sectionsByKey = new Map(entry.sections.map((section) => [section.key, section]));
+    const sections = seededSections.map((seededSection) => {
+      const current = sectionsByKey.get(seededSection.key);
+      return current
+        ? { ...current, subvalues: current.subvalues ?? [] }
+        : seededSection;
+    });
+    const needsRepair = entry.sections.length !== sections.length
+      || entry.sections.some((section, index) => JSON.stringify(section) !== JSON.stringify(sections[index]));
+    if (!needsRepair) return { ...entry, sections };
+    const [repaired] = await db
+      .update(flowerKnowledgeEntriesTable)
+      .set({ sections, updatedAt: new Date() })
+      .where(eq(flowerKnowledgeEntriesTable.id, entry.id))
+      .returning();
+    return repaired ?? { ...entry, sections };
+  }));
+  const entriesByFlower = new Map(normalizedEntries.map((entry) => [entry.flower, entry]));
   return flowerNames
     .map((flower) => {
       const entry = entriesByFlower.get(flower);
@@ -767,6 +1045,80 @@ router.put("/markets/flower-care/:flower", async (req, res): Promise<void> => {
   const entries = await readFlowerCareEntries();
   const saved = entries.find((entry) => entry.flower === flower);
   res.json(UpdateFlowerCareResponse.parse(saved));
+});
+
+const flowerKnowledgeKeys = new Set([
+  "vase-and-dried-life",
+  "pairing-compatibility",
+  "fragrance",
+  "opens-indoors",
+  "symbolic-meaning",
+  "dries-well",
+  "sun-sensitivity",
+  "water-consumption",
+  "pet-safety",
+]);
+
+function isValidKnowledgeSections(value: unknown): value is FlowerKnowledgeSection[] {
+  if (!Array.isArray(value) || value.length !== 9) return false;
+  const keys = new Set<string>();
+  return value.every((section) => {
+    if (!section || typeof section !== "object") return false;
+    const candidate = section as Record<string, unknown>;
+    if (typeof candidate.key !== "string" || !flowerKnowledgeKeys.has(candidate.key) || keys.has(candidate.key)) return false;
+    if (typeof candidate.value !== "string" || !candidate.value.trim() || candidate.value.length > 2000) return false;
+    if (!Array.isArray(candidate.subvalues) || candidate.subvalues.some((subvalue) => {
+      if (!subvalue || typeof subvalue !== "object") return true;
+      const subvalueRecord = subvalue as Record<string, unknown>;
+      return typeof subvalueRecord.label !== "string"
+        || typeof subvalueRecord.value !== "string"
+        || !subvalueRecord.value.trim()
+        || subvalueRecord.value.length > 2000;
+    })) return false;
+    keys.add(candidate.key);
+    return true;
+  }) && keys.size === 9;
+}
+
+router.get("/markets/flower-knowledge", async (_req, res): Promise<void> => {
+  res.json(ListFlowerKnowledgeResponse.parse(await readFlowerKnowledgeEntries()));
+});
+
+router.put("/markets/flower-knowledge/:flower", async (req, res): Promise<void> => {
+  const params = UpdateFlowerKnowledgeParams.safeParse(req.params);
+  const body = UpdateFlowerKnowledgeBody.safeParse(req.body);
+  if (!params.success || !body.success || !isValidKnowledgeSections(body.data.sections)) {
+    res.status(400).json({ error: "Flower knowledge must contain nine non-empty sections." });
+    return;
+  }
+  const flower = params.data.flower.trim();
+  await readFlowerKnowledgeEntries();
+  const [existing] = await db
+    .select()
+    .from(flowerKnowledgeEntriesTable)
+    .where(eq(flowerKnowledgeEntriesTable.flower, flower));
+  if (!existing) {
+    res.status(404).json({ error: "Flower knowledge entry not found in purchase history." });
+    return;
+  }
+  const submittedByKey = new Map(body.data.sections.map((section) => [section.key, section]));
+  const sections = existing.sections.map((section) => {
+    const submitted = submittedByKey.get(section.key);
+    return {
+      ...section,
+      value: submitted?.value.trim() ?? section.value,
+      subvalues: submitted?.subvalues?.map((subvalue) => ({ label: subvalue.label, value: subvalue.value.trim() })),
+      sourceStatus: "manually-edited" as const,
+    };
+  });
+  const [updated] = await db
+    .update(flowerKnowledgeEntriesTable)
+    .set({ sections, sourceStatus: "manually-edited", updatedAt: new Date() })
+    .where(eq(flowerKnowledgeEntriesTable.flower, flower))
+    .returning();
+  const entries = await readFlowerKnowledgeEntries();
+  const saved = entries.find((entry) => entry.flower === flower) ?? updated;
+  res.json(UpdateFlowerKnowledgeResponse.parse(saved));
 });
 
 router.get("/markets/non-flower-purchases", async (_req, res): Promise<void> => {

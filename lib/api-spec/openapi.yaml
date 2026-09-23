@@ -167,6 +167,47 @@ paths:
                 $ref: "#/components/schemas/FlowerCareEntry"
         "404":
           description: Flower is not present in actual purchase history
+  /markets/flower-knowledge:
+    get:
+      operationId: listFlowerKnowledge
+      tags: [markets]
+      summary: List knowledge for every purchased flower
+      description: Returns nine editable, source-labelled knowledge sections for each flower found in actual purchase history.
+      responses:
+        "200":
+          description: Purchased flower knowledge entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlowerKnowledgeEntry"
+  /markets/flower-knowledge/{flower}:
+    put:
+      operationId: updateFlowerKnowledge
+      tags: [markets]
+      summary: Edit knowledge sections for a purchased flower
+      parameters:
+        - name: flower
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlowerKnowledgeUpdate"
+      responses:
+        "200":
+          description: Updated flower knowledge entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlowerKnowledgeEntry"
+        "404":
+          description: Flower is not present in actual purchase history
   /markets/flower-price-tracker:
     get:
       operationId: listFlowerPriceTracker
@@ -1217,6 +1258,81 @@ components:
           type: string
           minLength: 1
           maxLength: 5000
+    FlowerKnowledgeSubvalue:
+      type: object
+      required: [label, value]
+      properties:
+        label:
+          type: string
+        value:
+          type: string
+          minLength: 1
+          maxLength: 2000
+    FlowerKnowledgeSection:
+      type: object
+      required: [key, label, value, subvalues, sourceName, sourceUrl, sourceStatus, confidence]
+      properties:
+        key:
+          type: string
+          enum: [vase-and-dried-life, pairing-compatibility, fragrance, opens-indoors, symbolic-meaning, dries-well, sun-sensitivity, water-consumption, pet-safety]
+        label:
+          type: string
+        value:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        subvalues:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowerKnowledgeSubvalue"
+        sourceName:
+          type: string
+        sourceUrl:
+          type: string
+        sourceStatus:
+          type: string
+          enum: [auto-sourced, manually-edited]
+        confidence:
+          type: string
+          enum: [high, medium, low]
+    FlowerKnowledgeEntry:
+      type: object
+      required: [id, flower, purchaseCount, purchasedStems, lastPurchasedCycle, sections, sourceStatus, updatedAt]
+      properties:
+        id:
+          type: number
+        flower:
+          type: string
+        purchaseCount:
+          type: number
+          minimum: 1
+        purchasedStems:
+          type: number
+          minimum: 0
+        lastPurchasedCycle:
+          type: number
+        sections:
+          type: array
+          minItems: 9
+          maxItems: 9
+          items:
+            $ref: "#/components/schemas/FlowerKnowledgeSection"
+        sourceStatus:
+          type: string
+          enum: [auto-sourced, manually-edited]
+        updatedAt:
+          type: string
+          format: date-time
+    FlowerKnowledgeUpdate:
+      type: object
+      required: [sections]
+      properties:
+        sections:
+          type: array
+          minItems: 9
+          maxItems: 9
+          items:
+            $ref: "#/components/schemas/FlowerKnowledgeSection"
     FlowerPriceTrackerLineItem:
       type: object
       required: [id, marketCycle, flower, supplier, bunchSize, bunchesPurchased, pricePerBunch, totalStemQty, costPerStem, sellThrough]

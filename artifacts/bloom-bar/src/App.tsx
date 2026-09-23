@@ -6,6 +6,7 @@ import {
   getListFlowerPriceDashboardQueryKey,
   getListFlowerPriceTrackerQueryKey,
   getListFlowerCareQueryKey,
+  getListFlowerKnowledgeQueryKey,
   getListMarketsQueryKey,
   getListMarketScheduleOverridesQueryKey,
   getListMarketDayTodosQueryKey,
@@ -13,6 +14,7 @@ import {
   useListFlowerPriceTracker,
   useListFlowerPriceDashboard,
   useListFlowerCare,
+  useListFlowerKnowledge,
   useCreateFlowerPriceBackfill,
   useGetSellThroughComparison,
   useListFlowerPrices,
@@ -35,6 +37,7 @@ import {
   useImportNonFlowerBankFile,
   useReplaceNonFlowerBankImportDetails,
   useUpdateFlowerCare,
+  useUpdateFlowerKnowledge,
   FlowerCategory as ApiFlowerCategory,
 } from '@workspace/api-client-react';
 import type {
@@ -50,6 +53,7 @@ import type {
   FlowerSellThroughGuidance,
   FlowerPriceTrackerMarket,
   FlowerCareEntry,
+  FlowerKnowledgeEntry,
   Market,
   MarketContext,
   MarketCost,
@@ -178,6 +182,7 @@ const navItems = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/flowers', label: 'Flower library', icon: Flower2 },
   { href: '/flower-care', label: 'Flower Care', icon: Leaf },
+  { href: '/flower-knowledge', label: 'Flower Knowledge', icon: CircleHelp },
   { href: '/flower-price-tracker', label: 'Flower Price Tracker', icon: TrendingUp },
   { href: '/non-flower-price-tracker', label: 'Non-Flower Price Tracking', icon: ReceiptText },
   { href: '/markets', label: 'Markets', icon: Store },
@@ -233,7 +238,7 @@ function announceSave(success: boolean, savedMessage: string, retry: () => void)
 function AppShell({ children, remainingBuyItems, nextMarket }: { children: ReactNode; remainingBuyItems: number; nextMarket: MarketCycleSummary }) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
-  const pageTitle = location === '/' ? 'Good morning, florist' : location.includes('/buy') ? 'Buy list' : location.includes('/close') ? 'Close market' : location.includes('/bouquets') ? 'Bouquet planning' : location === '/flowers' ? 'Flower library' : location === '/flower-care' ? 'Flower Care' : location === '/flower-price-tracker' ? 'Flower Price Tracker' : location === '/non-flower-price-tracker' ? 'Non-Flower Price Tracking' : location === '/markets' ? 'Markets' : 'Bloom Bar';
+  const pageTitle = location === '/' ? 'Good morning, florist' : location.includes('/buy') ? 'Buy list' : location.includes('/close') ? 'Close market' : location.includes('/bouquets') ? 'Bouquet planning' : location === '/flowers' ? 'Flower library' : location === '/flower-care' ? 'Flower Care' : location === '/flower-knowledge' ? 'Flower Knowledge' : location === '/flower-price-tracker' ? 'Flower Price Tracker' : location === '/non-flower-price-tracker' ? 'Non-Flower Price Tracking' : location === '/markets' ? 'Markets' : 'Bloom Bar';
   return (
     <div className="min-h-[100dvh] bg-background text-foreground">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[248px] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
@@ -708,6 +713,119 @@ export function FlowerCarePage({
                 {saveState === 'saved' && <span className="text-xs text-primary" role="status">Saved and marked manually edited.</span>}
                 {saveState === 'error' && <span className="text-xs text-destructive" role="alert">Couldn’t save.</span>}
                 <Button onClick={() => void save(entry)} disabled={savingFlower !== null || !(drafts[entry.flower] ?? '').trim()} className="bg-primary text-primary-foreground hover:bg-primary/90" testId={`button-save-flower-care-${entry.flower.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}>{saveState === 'saving' ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />} {saveState === 'saving' ? 'Saving…' : 'Save notes'}</Button>
+              </div>
+            </div>
+          </div>}
+        </section>;
+      })}
+    </div>}
+  </div>;
+}
+
+export function FlowerKnowledgePage({
+  entries,
+  loading,
+  saveEntry,
+}: {
+  entries: FlowerKnowledgeEntry[];
+  loading: boolean;
+  saveEntry: (flower: string, sections: FlowerKnowledgeEntry['sections']) => Promise<boolean>;
+}) {
+  const [query, setQuery] = useState('');
+  const [expandedFlower, setExpandedFlower] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, FlowerKnowledgeEntry['sections']>>({});
+  const [savingFlower, setSavingFlower] = useState<string | null>(null);
+  const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({});
+
+  useEffect(() => {
+    setDrafts(Object.fromEntries(entries.map((entry) => [entry.flower, entry.sections])));
+  }, [entries]);
+
+  const visible = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return entries.filter((entry) => entry.flower.toLowerCase().includes(normalizedQuery));
+  }, [entries, query]);
+
+  const updateSection = (flower: string, key: string, value: string, subvalueLabel?: string) => {
+    setDrafts((current) => ({
+      ...current,
+      [flower]: (current[flower] ?? []).map((section) => section.key === key
+        ? subvalueLabel
+          ? { ...section, subvalues: section.subvalues.map((subvalue) => subvalue.label === subvalueLabel ? { ...subvalue, value } : subvalue) }
+          : { ...section, value }
+        : section),
+    }));
+  };
+
+  const save = async (entry: FlowerKnowledgeEntry) => {
+    const sections = drafts[entry.flower] ?? entry.sections;
+    const complete = sections.length === 9 && sections.every((section) => section.value.trim() && section.subvalues.every((subvalue) => subvalue.value.trim()));
+    if (!complete || savingFlower) return;
+    setSavingFlower(entry.flower);
+    setSaveStates((current) => ({ ...current, [entry.flower]: 'saving' }));
+    const saved = await saveEntry(entry.flower, sections);
+    setSavingFlower(null);
+    setSaveStates((current) => ({ ...current, [entry.flower]: saved ? 'saved' : 'error' }));
+  };
+
+  const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+  return <div>
+    <PageIntro eyebrow="The studio / flower knowledge" title="Know every stem you buy." description="A source-labelled reference built from your actual purchase history. Search a flower, open its nine knowledge sections, and keep verified notes beside the original research." />
+    <section className="mb-6 rounded-lg border border-primary/10 bg-[#e8e4cd] p-5 md:p-6" data-testid="flower-knowledge-history-summary">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><CircleHelp size={13} /> Purchase history</div>
+          <p className="mt-3 max-w-2xl font-serif text-2xl leading-snug text-primary">Nine useful facts for every flower you have actually purchased.</p>
+          <p className="mt-2 text-xs leading-relaxed text-primary/65">Content is auto-sourced where possible, with source links and confidence shown on every section. Saving a change marks that section as manually edited.</p>
+        </div>
+        <div className="rounded-md bg-background/45 px-4 py-3 text-center text-primary">
+          <div className="font-mono text-[9px] uppercase tracking-[.12em]">Purchased types</div>
+          <div className="mt-1 font-serif text-3xl" data-testid="text-flower-knowledge-count">{entries.length}</div>
+        </div>
+      </div>
+    </section>
+
+    <div className="mb-5 flex items-center gap-3 rounded-lg border border-foreground/10 bg-card/70 p-3">
+      <label className="relative flex-1">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search purchased flowers" aria-label="Search Flower Knowledge entries" data-testid="input-search-flower-knowledge" className="h-10 w-full rounded-md border border-foreground/10 bg-background pl-9 pr-3 text-sm outline-none placeholder:text-muted-foreground/70 focus:border-primary" />
+      </label>
+      <span className="hidden text-xs text-muted-foreground sm:block" data-testid="text-flower-knowledge-visible-count">{visible.length} shown</span>
+    </div>
+
+    {loading ? <p className="rounded-lg bg-muted px-4 py-3 text-xs text-muted-foreground" role="status">Loading flower knowledge from purchase history…</p> : visible.length === 0 ? <div className="rounded-lg border border-dashed border-foreground/15 bg-card p-10 text-center"><CircleHelp className="mx-auto text-muted-foreground/50" size={28} /><p className="mt-3 font-serif text-xl">{entries.length ? 'No purchased flowers match that search' : 'No actual purchases yet'}</p><p className="mt-1 text-sm text-muted-foreground">{entries.length ? 'Try a different flower name.' : 'Save an actual purchase on the Buy list and it will appear here.'}</p></div> : <div className="space-y-3" data-testid="flower-knowledge-list">
+      {visible.map((entry) => {
+        const expanded = expandedFlower === entry.flower;
+        const saveState = saveStates[entry.flower] ?? 'idle';
+        const sections = drafts[entry.flower] ?? entry.sections;
+        return <section key={entry.flower} className="overflow-hidden rounded-lg border border-card-border bg-card" data-testid={`flower-knowledge-entry-${slug(entry.flower)}`}>
+          <button type="button" onClick={() => setExpandedFlower(expanded ? null : entry.flower)} aria-expanded={expanded} data-testid={`button-expand-flower-knowledge-${slug(entry.flower)}`} className="flex w-full items-center gap-4 px-4 py-4 text-left hover:bg-muted/45 md:px-5">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e4d7e9] text-primary"><CircleHelp size={18} /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">{entry.flower}</span>
+              <span className="mt-1 block text-xs text-muted-foreground">{entry.purchaseCount} purchase line{entry.purchaseCount === 1 ? '' : 's'} · {entry.purchasedStems} stems · {entry.sections.length} knowledge sections</span>
+            </span>
+            <span className={`hidden rounded-full px-2.5 py-1 font-mono text-[9px] uppercase tracking-[.08em] sm:inline-flex ${entry.sourceStatus === 'manually-edited' ? 'bg-[#e4d7e9] text-primary' : 'bg-muted text-muted-foreground'}`}>{entry.sourceStatus === 'manually-edited' ? 'Manually edited' : 'Auto-sourced'}</span>
+            <ChevronDown size={17} className={`shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+          {expanded && <div className="border-t border-foreground/10 px-4 py-5 md:px-5" data-testid={`flower-knowledge-details-${slug(entry.flower)}`}>
+            <div className="grid gap-3 md:grid-cols-2">
+              {sections.map((section) => <article key={section.key} className="rounded-md border border-foreground/10 bg-background/45 p-4" data-testid={`flower-knowledge-section-${slug(entry.flower)}-${section.key}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <label className="font-mono text-[10px] uppercase tracking-[.12em] text-muted-foreground">{section.label}</label>
+                  <span className={`shrink-0 rounded-full px-2 py-1 font-mono text-[8px] uppercase tracking-[.08em] ${section.sourceStatus === 'manually-edited' ? 'bg-[#e4d7e9] text-primary' : 'bg-muted text-muted-foreground'}`}>{section.sourceStatus === 'manually-edited' ? 'Edited' : 'Auto-sourced'}</span>
+                </div>
+                {section.subvalues.length > 0 ? <div className="mt-3 space-y-3">{section.subvalues.map((subvalue) => <label key={subvalue.label} className="block"><span className="text-xs font-semibold text-primary">{subvalue.label}</span><textarea value={sections.find((candidate) => candidate.key === section.key)?.subvalues.find((candidate) => candidate.label === subvalue.label)?.value ?? ''} onChange={(event) => updateSection(entry.flower, section.key, event.target.value, subvalue.label)} rows={2} maxLength={2000} data-testid={`textarea-flower-knowledge-${slug(entry.flower)}-${section.key}-${slug(subvalue.label)}`} className="mt-1 w-full resize-y rounded-md border border-foreground/15 bg-background px-3 py-2 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70 focus:border-primary" /></label>)}</div> : <textarea value={sections.find((candidate) => candidate.key === section.key)?.value ?? ''} onChange={(event) => updateSection(entry.flower, section.key, event.target.value)} rows={4} maxLength={2000} data-testid={`textarea-flower-knowledge-${slug(entry.flower)}-${section.key}`} className="mt-3 w-full resize-y rounded-md border border-foreground/15 bg-background px-3 py-2 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70 focus:border-primary" />}
+                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">Source: <a href={section.sourceUrl} target="_blank" rel="noreferrer" className="font-medium text-primary underline decoration-primary/30 underline-offset-2">{section.sourceName}</a> · {section.confidence} confidence</p>
+              </article>)}
+            </div>
+            <div className="mt-4 flex flex-col gap-3 border-t border-foreground/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs leading-relaxed text-muted-foreground">Source links remain attached when you edit a value.</p>
+              <div className="flex items-center gap-3">
+                {saveState === 'saved' && <span className="text-xs text-primary" role="status">Saved and marked manually edited.</span>}
+                {saveState === 'error' && <span className="text-xs text-destructive" role="alert">Couldn’t save.</span>}
+                <Button onClick={() => void save(entry)} disabled={savingFlower !== null || sections.some((section) => !section.value.trim() || section.subvalues.some((subvalue) => !subvalue.value.trim()))} className="bg-primary text-primary-foreground hover:bg-primary/90" testId={`button-save-flower-knowledge-${slug(entry.flower)}`}>{saveState === 'saving' ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />} {saveState === 'saving' ? 'Saving…' : 'Save knowledge'}</Button>
               </div>
             </div>
           </div>}
@@ -1252,8 +1370,8 @@ export function ClosePage({ closeMarket, actualPurchases, nextMarket, saveCloseM
   </div>;
 }
 
-function Router({ nextMarket, scheduleOverrides, buyItems, actualPurchases, costs, buyList, markets, bouquetPlan, closeMarket, flowerPrices, flowerPricesLoading, flowerCare, flowerCareLoading, flowerPriceTrackerReports, flowerPriceTrackerLoading, flowerPriceDashboardObservations, flowerPriceSellThroughGuidance, flowerPriceDashboardLoading, nonFlowerPeriods, marketDayTodos, saveBackfill, saveFlowerCare, saveNonFlowerPurchases, importBankFile, saveImportDetails, toggleBuyItem, setBuyListLock, saveActualPurchases, saveCosts, reportPurchases, saveBouquetPlan, saveCloseMarket, saveMarketDayTodos, saveScheduleOverride, clearScheduleOverride }: { nextMarket: MarketCycleSummary; scheduleOverrides: MarketScheduleOverride[]; buyItems: BuyItem[]; actualPurchases: ActualPurchase[]; costs: MarketCost[]; buyList: MarketContext['buyList']; markets: Market[]; bouquetPlan: BouquetPlan; closeMarket: CloseMarket; flowerPrices: FlowerPriceHistory[]; flowerPricesLoading: boolean; flowerCare: FlowerCareEntry[]; flowerCareLoading: boolean; flowerPriceTrackerReports: FlowerPriceTrackerMarket[]; flowerPriceTrackerLoading: boolean; flowerPriceDashboardObservations: FlowerPriceDashboardObservation[]; flowerPriceSellThroughGuidance: FlowerSellThroughGuidance[]; flowerPriceDashboardLoading: boolean; nonFlowerPeriods: NonFlowerPurchasePeriod[]; marketDayTodos: MarketDayTodoPeriod[]; saveBackfill: (data: FlowerPriceBackfillInput) => Promise<boolean>; saveFlowerCare: (flower: string, instructions: string) => Promise<boolean>; saveNonFlowerPurchases: (cycle: number, purchases: NonFlowerPurchaseInput[]) => Promise<boolean>; importBankFile: (cycle: number, data: NonFlowerBankImportInput) => Promise<NonFlowerBankImportUploadResponse | null>; saveImportDetails: (importId: number, data: NonFlowerBankImportDetailsUpdate) => Promise<NonFlowerBankImport | null>; toggleBuyItem: (id: number) => Promise<boolean>; setBuyListLock: (locked: boolean) => Promise<boolean>; saveActualPurchases: (purchases: BunchPurchaseInput[], receipt: ReceiptPayload) => Promise<boolean>; saveCosts: (costs: MarketCostInput[]) => Promise<boolean>; reportPurchases: () => Promise<boolean>; saveBouquetPlan: (selectedBand: string, count: number) => Promise<boolean>; saveCloseMarket: (counts: Record<string, number>, closed: boolean, reopen?: boolean, notes?: string | null) => Promise<boolean>; saveMarketDayTodos: (cycle: number, items: Array<{ description: string; completed: boolean; position: number }>) => Promise<boolean>; saveScheduleOverride: (cycle: number, data: MarketScheduleOverrideUpdate) => Promise<boolean>; clearScheduleOverride: (cycle: number) => Promise<boolean> }) {
-  return <AppShell nextMarket={nextMarket} remainingBuyItems={buyItems.filter((item) => !item.checked).length}><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} />} /><Route path="/flowers" component={() => <FlowersPage flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesLoading} />} /><Route path="/flower-care" component={() => <FlowerCarePage entries={flowerCare} loading={flowerCareLoading} saveEntry={saveFlowerCare} />} /><Route path="/flower-price-tracker" component={() => <FlowerPriceTrackerPage reports={flowerPriceTrackerReports} isLoading={flowerPriceTrackerLoading} dashboardObservations={flowerPriceDashboardObservations} sellThroughGuidance={flowerPriceSellThroughGuidance} dashboardLoading={flowerPriceDashboardLoading} saveBackfill={saveBackfill} />} /><Route path="/non-flower-price-tracker" component={() => <NonFlowerPriceTrackingPage periods={nonFlowerPeriods} scheduleOverrides={scheduleOverrides} nextMarket={nextMarket} savePurchases={saveNonFlowerPurchases} importBankFile={importBankFile} saveImportDetails={saveImportDetails} />} /><Route path="/markets" component={() => <div className="space-y-7"><MarketsPage markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /><SellThroughComparisonPanel markets={markets} scheduleOverrides={scheduleOverrides} /></div>} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} nextMarket={nextMarket} toggleBuyItem={toggleBuyItem} setBuyListLock={setBuyListLock} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} />} /><Route path="/markets/next/close" component={() => <ClosePage closeMarket={closeMarket} actualPurchases={actualPurchases} nextMarket={nextMarket} saveCloseMarket={saveCloseMarket} />} /><Route path="/markets/next/bouquets" component={() => <BouquetsPage bouquetPlan={bouquetPlan} nextMarket={nextMarket} saveBouquetPlan={saveBouquetPlan} />} /><Route path="/markets/next/to-do" component={() => <MarketDayTodoPage periods={marketDayTodos} nextMarketCycle={nextMarket.cycle} saveTodos={saveMarketDayTodos} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
+function Router({ nextMarket, scheduleOverrides, buyItems, actualPurchases, costs, buyList, markets, bouquetPlan, closeMarket, flowerPrices, flowerPricesLoading, flowerCare, flowerCareLoading, flowerKnowledge, flowerKnowledgeLoading, flowerPriceTrackerReports, flowerPriceTrackerLoading, flowerPriceDashboardObservations, flowerPriceSellThroughGuidance, flowerPriceDashboardLoading, nonFlowerPeriods, marketDayTodos, saveBackfill, saveFlowerCare, saveFlowerKnowledge, saveNonFlowerPurchases, importBankFile, saveImportDetails, toggleBuyItem, setBuyListLock, saveActualPurchases, saveCosts, reportPurchases, saveBouquetPlan, saveCloseMarket, saveMarketDayTodos, saveScheduleOverride, clearScheduleOverride }: { nextMarket: MarketCycleSummary; scheduleOverrides: MarketScheduleOverride[]; buyItems: BuyItem[]; actualPurchases: ActualPurchase[]; costs: MarketCost[]; buyList: MarketContext['buyList']; markets: Market[]; bouquetPlan: BouquetPlan; closeMarket: CloseMarket; flowerPrices: FlowerPriceHistory[]; flowerPricesLoading: boolean; flowerCare: FlowerCareEntry[]; flowerCareLoading: boolean; flowerKnowledge: FlowerKnowledgeEntry[]; flowerKnowledgeLoading: boolean; flowerPriceTrackerReports: FlowerPriceTrackerMarket[]; flowerPriceTrackerLoading: boolean; flowerPriceDashboardObservations: FlowerPriceDashboardObservation[]; flowerPriceSellThroughGuidance: FlowerSellThroughGuidance[]; flowerPriceDashboardLoading: boolean; nonFlowerPeriods: NonFlowerPurchasePeriod[]; marketDayTodos: MarketDayTodoPeriod[]; saveBackfill: (data: FlowerPriceBackfillInput) => Promise<boolean>; saveFlowerCare: (flower: string, instructions: string) => Promise<boolean>; saveFlowerKnowledge: (flower: string, sections: FlowerKnowledgeEntry['sections']) => Promise<boolean>; saveNonFlowerPurchases: (cycle: number, purchases: NonFlowerPurchaseInput[]) => Promise<boolean>; importBankFile: (cycle: number, data: NonFlowerBankImportInput) => Promise<NonFlowerBankImportUploadResponse | null>; saveImportDetails: (importId: number, data: NonFlowerBankImportDetailsUpdate) => Promise<NonFlowerBankImport | null>; toggleBuyItem: (id: number) => Promise<boolean>; setBuyListLock: (locked: boolean) => Promise<boolean>; saveActualPurchases: (purchases: BunchPurchaseInput[], receipt: ReceiptPayload) => Promise<boolean>; saveCosts: (costs: MarketCostInput[]) => Promise<boolean>; reportPurchases: () => Promise<boolean>; saveBouquetPlan: (selectedBand: string, count: number) => Promise<boolean>; saveCloseMarket: (counts: Record<string, number>, closed: boolean, reopen?: boolean, notes?: string | null) => Promise<boolean>; saveMarketDayTodos: (cycle: number, items: Array<{ description: string; completed: boolean; position: number }>) => Promise<boolean>; saveScheduleOverride: (cycle: number, data: MarketScheduleOverrideUpdate) => Promise<boolean>; clearScheduleOverride: (cycle: number) => Promise<boolean> }) {
+  return <AppShell nextMarket={nextMarket} remainingBuyItems={buyItems.filter((item) => !item.checked).length}><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} />} /><Route path="/flowers" component={() => <FlowersPage flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesLoading} />} /><Route path="/flower-care" component={() => <FlowerCarePage entries={flowerCare} loading={flowerCareLoading} saveEntry={saveFlowerCare} />} /><Route path="/flower-knowledge" component={() => <FlowerKnowledgePage entries={flowerKnowledge} loading={flowerKnowledgeLoading} saveEntry={saveFlowerKnowledge} />} /><Route path="/flower-price-tracker" component={() => <FlowerPriceTrackerPage reports={flowerPriceTrackerReports} isLoading={flowerPriceTrackerLoading} dashboardObservations={flowerPriceDashboardObservations} sellThroughGuidance={flowerPriceSellThroughGuidance} dashboardLoading={flowerPriceDashboardLoading} saveBackfill={saveBackfill} />} /><Route path="/non-flower-price-tracker" component={() => <NonFlowerPriceTrackingPage periods={nonFlowerPeriods} scheduleOverrides={scheduleOverrides} nextMarket={nextMarket} savePurchases={saveNonFlowerPurchases} importBankFile={importBankFile} saveImportDetails={saveImportDetails} />} /><Route path="/markets" component={() => <div className="space-y-7"><MarketsPage markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /><SellThroughComparisonPanel markets={markets} scheduleOverrides={scheduleOverrides} /></div>} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} nextMarket={nextMarket} toggleBuyItem={toggleBuyItem} setBuyListLock={setBuyListLock} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} />} /><Route path="/markets/next/close" component={() => <ClosePage closeMarket={closeMarket} actualPurchases={actualPurchases} nextMarket={nextMarket} saveCloseMarket={saveCloseMarket} />} /><Route path="/markets/next/bouquets" component={() => <BouquetsPage bouquetPlan={bouquetPlan} nextMarket={nextMarket} saveBouquetPlan={saveBouquetPlan} />} /><Route path="/markets/next/to-do" component={() => <MarketDayTodoPage periods={marketDayTodos} nextMarketCycle={nextMarket.cycle} saveTodos={saveMarketDayTodos} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
 }
 
 export function useUtcDayRollover() {
@@ -1302,6 +1420,7 @@ function AppContent() {
   const marketsQuery = useListMarkets();
   const flowerPricesQuery = useListFlowerPrices();
   const flowerCareQuery = useListFlowerCare();
+  const flowerKnowledgeQuery = useListFlowerKnowledge();
   const flowerPriceTrackerQuery = useListFlowerPriceTracker();
   const flowerPriceDashboardQuery = useListFlowerPriceDashboard();
   const nonFlowerPeriodsQuery = useListNonFlowerPurchases();
@@ -1312,6 +1431,7 @@ function AppContent() {
         queryClient.invalidateQueries({ queryKey: getGetMarketContextQueryKey(nextMarketCycle) }),
         queryClient.invalidateQueries({ queryKey: getListMarketsQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getListFlowerCareQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getListFlowerKnowledgeQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getListFlowerPriceTrackerQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getListFlowerPriceDashboardQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getListNonFlowerPurchasesQueryKey() }),
@@ -1339,6 +1459,7 @@ function AppContent() {
   const reportPurchasesMutation = useReportMarketPurchases();
   const backfillMutation = useCreateFlowerPriceBackfill();
   const flowerCareMutation = useUpdateFlowerCare();
+  const flowerKnowledgeMutation = useUpdateFlowerKnowledge();
   const bouquetPlanMutation = useUpdateMarketBouquetPlan();
   const closeMarketMutation = useUpdateMarketClose();
   const marketDayTodosMutation = useReplaceMarketDayTodos();
@@ -1351,6 +1472,7 @@ function AppContent() {
   const markets = marketsQuery.data ?? [];
   const flowerPrices = flowerPricesQuery.data ?? [];
   const flowerCare = flowerCareQuery.data ?? [];
+  const flowerKnowledge = flowerKnowledgeQuery.data ?? [];
   const flowerPriceTrackerReports = flowerPriceTrackerQuery.data ?? [];
   const flowerPriceDashboardObservations = flowerPriceDashboardQuery.data?.observations ?? [];
   const flowerPriceSellThroughGuidance = flowerPriceDashboardQuery.data?.sellThroughGuidance ?? [];
@@ -1498,6 +1620,15 @@ function AppContent() {
       return false;
     }
   };
+  const saveFlowerKnowledge = async (flower: string, sections: FlowerKnowledgeEntry['sections']) => {
+    try {
+      await flowerKnowledgeMutation.mutateAsync({ flower, data: { sections } });
+      await queryClient.invalidateQueries({ queryKey: getListFlowerKnowledgeQueryKey() });
+      return true;
+    } catch {
+      return false;
+    }
+  };
   const saveNonFlowerPurchases = async (cycle: number, purchases: NonFlowerPurchaseInput[]) => {
     try {
       const saved = await nonFlowerPurchasesMutation.mutateAsync({ cycle, data: { purchases } });
@@ -1537,13 +1668,13 @@ function AppContent() {
       return null;
     }
   };
-  if (marketContextQuery.isError || marketsQuery.isError || scheduleOverridesQuery.isError || flowerCareQuery.isError || flowerPriceTrackerQuery.isError || flowerPriceDashboardQuery.isError || nonFlowerPeriodsQuery.isError || marketDayTodosQuery.isError) {
+  if (marketContextQuery.isError || marketsQuery.isError || scheduleOverridesQuery.isError || flowerCareQuery.isError || flowerKnowledgeQuery.isError || flowerPriceTrackerQuery.isError || flowerPriceDashboardQuery.isError || nonFlowerPeriodsQuery.isError || marketDayTodosQuery.isError) {
     return <TooltipProvider><div className="flex min-h-[100dvh] items-center justify-center bg-background px-6 text-center font-serif text-lg text-muted-foreground">Your market notes could not be loaded. Refresh to try again.</div></TooltipProvider>;
   }
-  if (marketContextQuery.isLoading || marketsQuery.isLoading || scheduleOverridesQuery.isLoading || flowerCareQuery.isLoading || flowerPriceTrackerQuery.isLoading || flowerPriceDashboardQuery.isLoading || nonFlowerPeriodsQuery.isLoading || marketDayTodosQuery.isLoading || !context) {
+  if (marketContextQuery.isLoading || marketsQuery.isLoading || scheduleOverridesQuery.isLoading || flowerCareQuery.isLoading || flowerKnowledgeQuery.isLoading || flowerPriceTrackerQuery.isLoading || flowerPriceDashboardQuery.isLoading || nonFlowerPeriodsQuery.isLoading || marketDayTodosQuery.isLoading || !context) {
     return <TooltipProvider><div className="flex min-h-[100dvh] items-center justify-center bg-background font-serif text-lg text-muted-foreground">Loading your market notes…</div></TooltipProvider>;
   }
-  return <TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} markets={markets} bouquetPlan={context.bouquetPlan} closeMarket={context.closeMarket} flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesQuery.isLoading} flowerCare={flowerCare} flowerCareLoading={flowerCareQuery.isLoading} flowerPriceTrackerReports={flowerPriceTrackerReports} flowerPriceTrackerLoading={flowerPriceTrackerQuery.isLoading} flowerPriceDashboardObservations={flowerPriceDashboardObservations} flowerPriceSellThroughGuidance={flowerPriceSellThroughGuidance} flowerPriceDashboardLoading={flowerPriceDashboardQuery.isLoading} nonFlowerPeriods={nonFlowerPeriods} marketDayTodos={marketDayTodos} saveBackfill={saveBackfill} saveFlowerCare={saveFlowerCare} saveNonFlowerPurchases={saveNonFlowerPurchases} importBankFile={importBankFile} saveImportDetails={saveImportDetails} toggleBuyItem={toggleBuyItem} setBuyListLock={setBuyListLock} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} saveBouquetPlan={saveBouquetPlan} saveCloseMarket={saveCloseMarket} saveMarketDayTodos={saveMarketDayTodos} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /></WouterRouter><Toaster /></TooltipProvider>;
+  return <TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} markets={markets} bouquetPlan={context.bouquetPlan} closeMarket={context.closeMarket} flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesQuery.isLoading} flowerCare={flowerCare} flowerCareLoading={flowerCareQuery.isLoading} flowerKnowledge={flowerKnowledge} flowerKnowledgeLoading={flowerKnowledgeQuery.isLoading} flowerPriceTrackerReports={flowerPriceTrackerReports} flowerPriceTrackerLoading={flowerPriceTrackerQuery.isLoading} flowerPriceDashboardObservations={flowerPriceDashboardObservations} flowerPriceSellThroughGuidance={flowerPriceSellThroughGuidance} flowerPriceDashboardLoading={flowerPriceDashboardQuery.isLoading} nonFlowerPeriods={nonFlowerPeriods} marketDayTodos={marketDayTodos} saveBackfill={saveBackfill} saveFlowerCare={saveFlowerCare} saveFlowerKnowledge={saveFlowerKnowledge} saveNonFlowerPurchases={saveNonFlowerPurchases} importBankFile={importBankFile} saveImportDetails={saveImportDetails} toggleBuyItem={toggleBuyItem} setBuyListLock={setBuyListLock} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} saveBouquetPlan={saveBouquetPlan} saveCloseMarket={saveCloseMarket} saveMarketDayTodos={saveMarketDayTodos} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /></WouterRouter><Toaster /></TooltipProvider>;
 }
 
 function App() {

@@ -31,6 +31,8 @@ import type {
   CloseMarketUpdate,
   FlowerCareEntry,
   FlowerCareUpdate,
+  FlowerKnowledgeEntry,
+  FlowerKnowledgeUpdate,
   FlowerPriceBackfillInput,
   FlowerPriceDashboardObservation,
   FlowerPriceDashboardResponse,
@@ -774,6 +776,156 @@ export const useUpdateFlowerCare = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getUpdateFlowerCareMutationOptions(options));
+    }
+
+export const getListFlowerKnowledgeUrl = () => {
+
+
+
+
+  return `/api/markets/flower-knowledge`
+}
+
+/**
+ * Returns nine editable, source-labelled knowledge sections for each flower found in actual purchase history.
+ * @summary List knowledge for every purchased flower
+ */
+export const listFlowerKnowledge = async ( options?: Parameters<typeof customFetch>[1]): Promise<FlowerKnowledgeEntry[]> => {
+
+  return customFetch<FlowerKnowledgeEntry[]>(getListFlowerKnowledgeUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFlowerKnowledgeQueryKey = () => {
+    return [
+    `/api/markets/flower-knowledge`
+    ] as const;
+    }
+
+
+export const getListFlowerKnowledgeQueryOptions = <TData = Awaited<ReturnType<typeof listFlowerKnowledge>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFlowerKnowledge>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFlowerKnowledgeQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFlowerKnowledge>>> = ({ signal }) => listFlowerKnowledge({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFlowerKnowledge>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListFlowerKnowledgeQueryResult = NonNullable<Awaited<ReturnType<typeof listFlowerKnowledge>>>
+export type ListFlowerKnowledgeQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List knowledge for every purchased flower
+ */
+
+export function useListFlowerKnowledge<TData = Awaited<ReturnType<typeof listFlowerKnowledge>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFlowerKnowledge>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListFlowerKnowledgeQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateFlowerKnowledgeUrl = (flower: string,) => {
+
+
+
+
+  return `/api/markets/flower-knowledge/${flower}`
+}
+
+/**
+ * @summary Edit knowledge sections for a purchased flower
+ */
+export const updateFlowerKnowledge = async (flower: string,
+    flowerKnowledgeUpdate: FlowerKnowledgeUpdate, options?: Parameters<typeof customFetch>[1]): Promise<FlowerKnowledgeEntry> => {
+
+  return customFetch<FlowerKnowledgeEntry>(getUpdateFlowerKnowledgeUrl(flower),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(flowerKnowledgeUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateFlowerKnowledgeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFlowerKnowledge>>, TError,{flower: string;data: BodyType<FlowerKnowledgeUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateFlowerKnowledge>>, TError,{flower: string;data: BodyType<FlowerKnowledgeUpdate>}, TContext> => {
+
+const mutationKey = ['updateFlowerKnowledge'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateFlowerKnowledge>>, {flower: string;data: BodyType<FlowerKnowledgeUpdate>}> = (props) => {
+          const {flower,data} = props ?? {};
+
+          return  updateFlowerKnowledge(flower,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateFlowerKnowledgeMutationResult = NonNullable<Awaited<ReturnType<typeof updateFlowerKnowledge>>>
+    export type UpdateFlowerKnowledgeMutationBody = BodyType<FlowerKnowledgeUpdate>
+    export type UpdateFlowerKnowledgeMutationError = ErrorType<void>
+
+    /**
+ * @summary Edit knowledge sections for a purchased flower
+ */
+export const useUpdateFlowerKnowledge = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFlowerKnowledge>>, TError,{flower: string;data: BodyType<FlowerKnowledgeUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateFlowerKnowledge>>,
+        TError,
+        {flower: string;data: BodyType<FlowerKnowledgeUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateFlowerKnowledgeMutationOptions(options));
     }
 
 export const getListFlowerPriceTrackerUrl = () => {

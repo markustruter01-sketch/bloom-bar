@@ -561,6 +561,95 @@ export interface FlowerCareUpdate {
   instructions: string;
 }
 
+export interface FlowerKnowledgeSubvalue {
+  label: string;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  value: string;
+}
+
+export type FlowerKnowledgeSectionKey = typeof FlowerKnowledgeSectionKey[keyof typeof FlowerKnowledgeSectionKey];
+
+
+export const FlowerKnowledgeSectionKey = {
+  'vase-and-dried-life': 'vase-and-dried-life',
+  'pairing-compatibility': 'pairing-compatibility',
+  fragrance: 'fragrance',
+  'opens-indoors': 'opens-indoors',
+  'symbolic-meaning': 'symbolic-meaning',
+  'dries-well': 'dries-well',
+  'sun-sensitivity': 'sun-sensitivity',
+  'water-consumption': 'water-consumption',
+  'pet-safety': 'pet-safety',
+} as const;
+
+export type FlowerKnowledgeSectionSourceStatus = typeof FlowerKnowledgeSectionSourceStatus[keyof typeof FlowerKnowledgeSectionSourceStatus];
+
+
+export const FlowerKnowledgeSectionSourceStatus = {
+  'auto-sourced': 'auto-sourced',
+  'manually-edited': 'manually-edited',
+} as const;
+
+export type FlowerKnowledgeSectionConfidence = typeof FlowerKnowledgeSectionConfidence[keyof typeof FlowerKnowledgeSectionConfidence];
+
+
+export const FlowerKnowledgeSectionConfidence = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+} as const;
+
+export interface FlowerKnowledgeSection {
+  key: FlowerKnowledgeSectionKey;
+  label: string;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  value: string;
+  subvalues: FlowerKnowledgeSubvalue[];
+  sourceName: string;
+  sourceUrl: string;
+  sourceStatus: FlowerKnowledgeSectionSourceStatus;
+  confidence: FlowerKnowledgeSectionConfidence;
+}
+
+export type FlowerKnowledgeEntrySourceStatus = typeof FlowerKnowledgeEntrySourceStatus[keyof typeof FlowerKnowledgeEntrySourceStatus];
+
+
+export const FlowerKnowledgeEntrySourceStatus = {
+  'auto-sourced': 'auto-sourced',
+  'manually-edited': 'manually-edited',
+} as const;
+
+export interface FlowerKnowledgeEntry {
+  id: number;
+  flower: string;
+  /** @minimum 1 */
+  purchaseCount: number;
+  /** @minimum 0 */
+  purchasedStems: number;
+  lastPurchasedCycle: number;
+  /**
+     * @minItems 9
+     * @maxItems 9
+     */
+  sections: FlowerKnowledgeSection[];
+  sourceStatus: FlowerKnowledgeEntrySourceStatus;
+  updatedAt: string;
+}
+
+export interface FlowerKnowledgeUpdate {
+  /**
+     * @minItems 9
+     * @maxItems 9
+     */
+  sections: FlowerKnowledgeSection[];
+}
+
 export interface SellThroughRecord {
   flower: string;
   /** @minimum 0 */

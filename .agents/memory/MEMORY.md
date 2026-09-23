@@ -5,3 +5,4 @@
 - [Integration test isolation](integration-test-isolation.md) — dashboard tests must scope assertions because the development database can contain real reported market rows.
 - [Close-market tracker contract](close-market-tracker-contract.md) — reported observations link finalized sell-through; historical backfills explicitly return null linkage and notes.
 - [Bank PDF import boundary](bank-pdf-import-boundary.md) — selectable-text bank PDFs can be parsed in-browser; scanned/image-only statements need OCR fallback.
+- [Persisted JSON backfills](persisted-json-backfills.md) — when API JSON gains required fields, normalize existing rows at the read boundary without overwriting manual content.

@@ -241,6 +241,115 @@ export const UpdateFlowerCareResponse = zod.object({
 
 
 /**
+ * Returns nine editable, source-labelled knowledge sections for each flower found in actual purchase history.
+ * @summary List knowledge for every purchased flower
+ */
+
+export const listFlowerKnowledgeResponsePurchasedStemsMin = 0;
+
+export const listFlowerKnowledgeResponseSectionsItemValueMax = 2000;
+
+export const listFlowerKnowledgeResponseSectionsItemSubvaluesItemValueMax = 2000;
+
+export const listFlowerKnowledgeResponseSectionsMin = 9;
+export const listFlowerKnowledgeResponseSectionsMax = 9;
+
+
+
+export const ListFlowerKnowledgeResponseItem = zod.object({
+  "id": zod.number(),
+  "flower": zod.string(),
+  "purchaseCount": zod.number().min(1),
+  "purchasedStems": zod.number().min(listFlowerKnowledgeResponsePurchasedStemsMin),
+  "lastPurchasedCycle": zod.number(),
+  "sections": zod.array(zod.object({
+  "key": zod.enum(['vase-and-dried-life', 'pairing-compatibility', 'fragrance', 'opens-indoors', 'symbolic-meaning', 'dries-well', 'sun-sensitivity', 'water-consumption', 'pet-safety']),
+  "label": zod.string(),
+  "value": zod.string().min(1).max(listFlowerKnowledgeResponseSectionsItemValueMax),
+  "subvalues": zod.array(zod.object({
+  "label": zod.string(),
+  "value": zod.string().min(1).max(listFlowerKnowledgeResponseSectionsItemSubvaluesItemValueMax)
+})),
+  "sourceName": zod.string(),
+  "sourceUrl": zod.string(),
+  "sourceStatus": zod.enum(['auto-sourced', 'manually-edited']),
+  "confidence": zod.enum(['high', 'medium', 'low'])
+})).min(listFlowerKnowledgeResponseSectionsMin).max(listFlowerKnowledgeResponseSectionsMax),
+  "sourceStatus": zod.enum(['auto-sourced', 'manually-edited']),
+  "updatedAt": zod.coerce.date()
+})
+export const ListFlowerKnowledgeResponse = zod.array(ListFlowerKnowledgeResponseItem)
+
+
+/**
+ * @summary Edit knowledge sections for a purchased flower
+ */
+export const UpdateFlowerKnowledgeParams = zod.object({
+  "flower": zod.coerce.string()
+})
+
+export const updateFlowerKnowledgeBodySectionsItemValueMax = 2000;
+
+export const updateFlowerKnowledgeBodySectionsItemSubvaluesItemValueMax = 2000;
+
+export const updateFlowerKnowledgeBodySectionsMin = 9;
+export const updateFlowerKnowledgeBodySectionsMax = 9;
+
+
+
+export const UpdateFlowerKnowledgeBody = zod.object({
+  "sections": zod.array(zod.object({
+  "key": zod.enum(['vase-and-dried-life', 'pairing-compatibility', 'fragrance', 'opens-indoors', 'symbolic-meaning', 'dries-well', 'sun-sensitivity', 'water-consumption', 'pet-safety']),
+  "label": zod.string(),
+  "value": zod.string().min(1).max(updateFlowerKnowledgeBodySectionsItemValueMax),
+  "subvalues": zod.array(zod.object({
+  "label": zod.string(),
+  "value": zod.string().min(1).max(updateFlowerKnowledgeBodySectionsItemSubvaluesItemValueMax)
+})),
+  "sourceName": zod.string(),
+  "sourceUrl": zod.string(),
+  "sourceStatus": zod.enum(['auto-sourced', 'manually-edited']),
+  "confidence": zod.enum(['high', 'medium', 'low'])
+})).min(updateFlowerKnowledgeBodySectionsMin).max(updateFlowerKnowledgeBodySectionsMax)
+})
+
+
+export const updateFlowerKnowledgeResponsePurchasedStemsMin = 0;
+
+export const updateFlowerKnowledgeResponseSectionsItemValueMax = 2000;
+
+export const updateFlowerKnowledgeResponseSectionsItemSubvaluesItemValueMax = 2000;
+
+export const updateFlowerKnowledgeResponseSectionsMin = 9;
+export const updateFlowerKnowledgeResponseSectionsMax = 9;
+
+
+
+export const UpdateFlowerKnowledgeResponse = zod.object({
+  "id": zod.number(),
+  "flower": zod.string(),
+  "purchaseCount": zod.number().min(1),
+  "purchasedStems": zod.number().min(updateFlowerKnowledgeResponsePurchasedStemsMin),
+  "lastPurchasedCycle": zod.number(),
+  "sections": zod.array(zod.object({
+  "key": zod.enum(['vase-and-dried-life', 'pairing-compatibility', 'fragrance', 'opens-indoors', 'symbolic-meaning', 'dries-well', 'sun-sensitivity', 'water-consumption', 'pet-safety']),
+  "label": zod.string(),
+  "value": zod.string().min(1).max(updateFlowerKnowledgeResponseSectionsItemValueMax),
+  "subvalues": zod.array(zod.object({
+  "label": zod.string(),
+  "value": zod.string().min(1).max(updateFlowerKnowledgeResponseSectionsItemSubvaluesItemValueMax)
+})),
+  "sourceName": zod.string(),
+  "sourceUrl": zod.string(),
+  "sourceStatus": zod.enum(['auto-sourced', 'manually-edited']),
+  "confidence": zod.enum(['high', 'medium', 'low'])
+})).min(updateFlowerKnowledgeResponseSectionsMin).max(updateFlowerKnowledgeResponseSectionsMax),
+  "sourceStatus": zod.enum(['auto-sourced', 'manually-edited']),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * Returns the finalized bunch-based purchase rows grouped by reported market date.
  * @summary List reported purchase line-items by market date
  */

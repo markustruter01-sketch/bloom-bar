@@ -9,6 +9,7 @@ import {
   closeMarketsTable,
   db,
   flowerCareEntriesTable,
+  flowerKnowledgeEntriesTable,
   marketActualPurchasesTable,
   marketDayTodoItemsTable,
   marketDayTodoSnapshotsTable,
@@ -151,6 +152,56 @@ describe("market context persistence", () => {
     assert.equal(saved.sourceStatus, "manually-edited");
 
     await db.delete(flowerCareEntriesTable).where(eq(flowerCareEntriesTable.flower, flower));
+  });
+
+  it("builds Flower Knowledge with nine sourced sections and preserves sources after edits", async () => {
+    const cycle = testCycles[2];
+    const flower = "API knowledge history fixture";
+    await db.delete(flowerKnowledgeEntriesTable).where(eq(flowerKnowledgeEntriesTable.flower, flower));
+    await getContext(cycle);
+    await patch(`/markets/context/${cycle}/buy-list`, { locked: true });
+
+    const purchase = await request(`/markets/context/${cycle}/actual-purchases`, {
+      method: "PUT",
+      body: JSON.stringify({
+        purchases: [{
+          flower,
+          detail: "Flower Knowledge history fixture",
+          category: "Classic Blooms",
+          bunchSize: 10,
+          bunchesPurchased: 2,
+          pricePerBunch: 12,
+          source: "manual",
+        }],
+      }),
+    });
+    assert.equal(purchase.status, 200);
+
+    const listed = await request("/markets/flower-knowledge");
+    assert.equal(listed.status, 200);
+    const autoEntry = listed.body.find((entry: any) => entry.flower === flower);
+    assert.ok(autoEntry);
+    assert.equal(autoEntry.purchaseCount, 1);
+    assert.equal(autoEntry.purchasedStems, 20);
+    assert.equal(autoEntry.sections.length, 9);
+    assert.equal(autoEntry.sections.find((section: any) => section.key === "vase-and-dried-life").subvalues.length, 3);
+    assert.equal(autoEntry.sourceStatus, "auto-sourced");
+
+    const originalSource = autoEntry.sections.find((section: any) => section.key === "fragrance").sourceUrl;
+    const nextSections = autoEntry.sections.map((section: any) => section.key === "fragrance"
+      ? { ...section, value: "Verified fragrance note." }
+      : section);
+    const edited = await request(`/markets/flower-knowledge/${encodeURIComponent(flower)}`, {
+      method: "PUT",
+      body: JSON.stringify({ sections: nextSections }),
+    });
+    assert.equal(edited.status, 200);
+    assert.equal(edited.body.sections.find((section: any) => section.key === "fragrance").value, "Verified fragrance note.");
+    assert.equal(edited.body.sections.find((section: any) => section.key === "fragrance").sourceUrl, originalSource);
+    assert.equal(edited.body.sections.find((section: any) => section.key === "fragrance").sourceStatus, "manually-edited");
+    assert.equal(edited.body.sourceStatus, "manually-edited");
+
+    await db.delete(flowerKnowledgeEntriesTable).where(eq(flowerKnowledgeEntriesTable.flower, flower));
   });
 
   it("persists a skipped date and keeps downstream comparisons from treating it as real", async () => {
