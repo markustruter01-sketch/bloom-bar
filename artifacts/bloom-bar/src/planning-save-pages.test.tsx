@@ -257,7 +257,7 @@ describe('planning save rejection states', () => {
 
     render(
       <ClosePage
-        closeMarket={{ marketCycle: 0, counts: { Lisianthus: 2 }, sellThrough: [], closed: false }}
+        closeMarket={{ marketCycle: 0, counts: { Lisianthus: 2 }, sellThrough: [], notes: null, closed: false }}
         actualPurchases={[actualPurchase]}
         nextMarket={nextMarket}
         saveCloseMarket={saveCloseMarket}
@@ -289,7 +289,7 @@ describe('planning save rejection states', () => {
 
     render(
       <ClosePage
-        closeMarket={{ marketCycle: 0, counts: { Lisianthus: 2 }, sellThrough: [], closed: true }}
+        closeMarket={{ marketCycle: 0, counts: { Lisianthus: 2 }, sellThrough: [], notes: null, closed: true }}
         actualPurchases={[actualPurchase]}
         nextMarket={nextMarket}
         saveCloseMarket={saveCloseMarket}

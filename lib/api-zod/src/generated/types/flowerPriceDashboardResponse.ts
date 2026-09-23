@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FlowerPriceDashboardObservation } from './flowerPriceDashboardObservation';
+import type { FlowerSellThroughGuidance } from './flowerSellThroughGuidance';
 
 export interface FlowerPriceDashboardResponse {
   observations: FlowerPriceDashboardObservation[];
+  sellThroughGuidance: FlowerSellThroughGuidance[];
 }

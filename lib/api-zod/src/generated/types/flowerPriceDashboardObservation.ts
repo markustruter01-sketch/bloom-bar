@@ -7,6 +7,7 @@
  */
 import type { FlowerCategory } from './flowerCategory';
 import type { FlowerPriceDashboardObservationSource } from './flowerPriceDashboardObservationSource';
+import type { SellThroughRecord } from './sellThroughRecord';
 
 export interface FlowerPriceDashboardObservation {
   id: number;
@@ -26,4 +27,7 @@ export interface FlowerPriceDashboardObservation {
   /** @minimum 0 */
   costPerStem: number;
   source: FlowerPriceDashboardObservationSource;
+  marketCycle: number | null;
+  sellThrough: SellThroughRecord | null;
+  marketNotes: string | null;
 }

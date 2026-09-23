@@ -12,4 +12,6 @@ export interface CloseMarketUpdate {
   closed: boolean;
   /** Explicitly authorize reopening a finalized close-market record for editing */
   reopen?: boolean;
+  /** Optional contextual notes about weather, stall placement, or other market conditions */
+  notes?: string | null;
 }

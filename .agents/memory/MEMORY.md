@@ -3,3 +3,4 @@
 - [Drizzle rename prompts](drizzle-dev-schema-push.md) — noninteractive schema pushes can still prompt on column renames; resolve development changes carefully and leave production to Publish.
 - [Tesseract OCR testing](tesseract-ocr-testing.md) — run direct OCR smoke tests outside the frontend workspace or clean up downloaded language data.
 - [Integration test isolation](integration-test-isolation.md) — dashboard tests must scope assertions because the development database can contain real reported market rows.
+- [Close-market tracker contract](close-market-tracker-contract.md) — reported observations link finalized sell-through; historical backfills explicitly return null linkage and notes.

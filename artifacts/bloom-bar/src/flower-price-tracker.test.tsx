@@ -88,6 +88,7 @@ describe('reported purchase line-item tracker', () => {
         marketCycle: 2,
         date: '03 Oct 2371',
         venue: 'Redcliffe Markets',
+        notes: 'Rain arrived early.',
         lineItems: [
           {
             id: 101,
@@ -99,6 +100,7 @@ describe('reported purchase line-item tracker', () => {
             pricePerBunch: 18,
             totalStemQty: 20,
             costPerStem: 1.8,
+            sellThrough: { flower: 'David Austin roses', purchasedStems: 20, leftoverStems: 4, soldStems: 16, sellThroughPercent: 80 },
           },
           {
             id: 102,
@@ -110,6 +112,7 @@ describe('reported purchase line-item tracker', () => {
             pricePerBunch: 20,
             totalStemQty: 30,
             costPerStem: 2,
+            sellThrough: null,
           },
         ],
       },
@@ -117,6 +120,7 @@ describe('reported purchase line-item tracker', () => {
         marketCycle: 1,
         date: '19 Sep 2371',
         venue: 'Redcliffe Markets',
+        notes: null,
         lineItems: [{
           id: 103,
           marketCycle: 1,
@@ -127,6 +131,7 @@ describe('reported purchase line-item tracker', () => {
           pricePerBunch: 12,
           totalStemQty: 5,
           costPerStem: 2.4,
+          sellThrough: null,
         }],
       },
     ]} isLoading={false} />);
@@ -139,6 +144,8 @@ describe('reported purchase line-item tracker', () => {
     assert.match(firstReport.textContent ?? '', /\$1\.80/);
     assert.match(firstReport.textContent ?? '', /20/);
     assert.match(firstReport.textContent ?? '', /30/);
+    assert.match(firstReport.textContent ?? '', /Rain arrived early/);
+    assert.match(firstReport.textContent ?? '', /80% sold through/);
     assert.equal(screen.getAllByTestId(/tracker-line-item-/).length, 2);
 
     fireEvent.click(screen.getByTestId('tab-flower-price-tracker-1'));
@@ -171,6 +178,9 @@ describe('flower price dashboard states and backfill entry point', () => {
       totalStemQty: 10,
       costPerStem: 3,
       source: 'reported',
+      marketCycle: 0,
+      sellThrough: null,
+      marketNotes: null,
     }]} dashboardLoading={false} />);
 
     assert.match(screen.getByTestId('trend-not-enough-waratah').textContent ?? '', /Not enough data yet/);

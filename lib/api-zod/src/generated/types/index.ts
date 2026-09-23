@@ -33,6 +33,8 @@ export * from './flowerPriceHistory';
 export * from './flowerPricePoint';
 export * from './flowerPriceTrackerLineItem';
 export * from './flowerPriceTrackerMarket';
+export * from './flowerSellThroughGuidance';
+export * from './flowerSellThroughGuidanceGuidance';
 export * from './getSellThroughComparisonParams';
 export * from './healthStatus';
 export * from './legacyActualPurchaseInput';

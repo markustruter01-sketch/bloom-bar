@@ -11,5 +11,6 @@ export interface FlowerPriceTrackerMarket {
   marketCycle: number;
   date: string;
   venue: string;
+  notes: string | null;
   lineItems: FlowerPriceTrackerLineItem[];
 }

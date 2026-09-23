@@ -749,7 +749,7 @@ components:
             $ref: "#/components/schemas/FlowerPricePoint"
     FlowerPriceTrackerLineItem:
       type: object
-      required: [id, marketCycle, flower, supplier, bunchSize, bunchesPurchased, pricePerBunch, totalStemQty, costPerStem]
+      required: [id, marketCycle, flower, supplier, bunchSize, bunchesPurchased, pricePerBunch, totalStemQty, costPerStem, sellThrough]
       properties:
         id:
           type: number
@@ -775,9 +775,13 @@ components:
         costPerStem:
           type: number
           minimum: 0
+        sellThrough:
+          anyOf:
+            - $ref: "#/components/schemas/SellThroughRecord"
+            - type: "null"
     FlowerPriceTrackerMarket:
       type: object
-      required: [marketCycle, date, venue, lineItems]
+      required: [marketCycle, date, venue, notes, lineItems]
       properties:
         marketCycle:
           type: number
@@ -785,13 +789,16 @@ components:
           type: string
         venue:
           type: string
+        notes:
+          type: string
+          nullable: true
         lineItems:
           type: array
           items:
             $ref: "#/components/schemas/FlowerPriceTrackerLineItem"
     FlowerPriceDashboardObservation:
       type: object
-      required: [id, purchaseDate, flower, category, supplier, bunchSize, bunchesPurchased, pricePerBunch, totalStemQty, costPerStem, source]
+      required: [id, purchaseDate, flower, category, supplier, bunchSize, bunchesPurchased, pricePerBunch, totalStemQty, costPerStem, source, marketCycle, sellThrough, marketNotes]
       properties:
         id:
           type: number
@@ -823,14 +830,44 @@ components:
         source:
           type: string
           enum: [reported, backfill]
+        marketCycle:
+          type: number
+          nullable: true
+        sellThrough:
+          anyOf:
+            - $ref: "#/components/schemas/SellThroughRecord"
+            - type: "null"
+        marketNotes:
+          type: string
+          nullable: true
     FlowerPriceDashboardResponse:
       type: object
-      required: [observations]
+      required: [observations, sellThroughGuidance]
       properties:
         observations:
           type: array
           items:
             $ref: "#/components/schemas/FlowerPriceDashboardObservation"
+        sellThroughGuidance:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowerSellThroughGuidance"
+    FlowerSellThroughGuidance:
+      type: object
+      required: [flower, averageSellThroughPercent, marketsTracked, guidance]
+      properties:
+        flower:
+          type: string
+        averageSellThroughPercent:
+          type: number
+          minimum: 0
+          maximum: 100
+        marketsTracked:
+          type: number
+          minimum: 1
+        guidance:
+          type: string
+          enum: ["sells well", "mixed", "doesn't sell well"]
     FlowerPriceBackfillInput:
       type: object
       required: [purchaseDate, flower, category, bunchSize, bunchesPurchased, pricePerBunch]
@@ -877,7 +914,7 @@ components:
           minimum: 0
     CloseMarket:
       type: object
-      required: [marketCycle, counts, sellThrough, closed]
+      required: [marketCycle, counts, sellThrough, notes, closed]
       properties:
         marketCycle:
           type: number
@@ -890,6 +927,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SellThroughRecord"
+        notes:
+          type: string
+          nullable: true
         closed:
           type: boolean
     SellThroughRecord:
@@ -976,6 +1016,10 @@ components:
         reopen:
           type: boolean
           description: Explicitly authorize reopening a finalized close-market record for editing
+        notes:
+          type: string
+          nullable: true
+          description: Optional contextual notes about weather, stall placement, or other market conditions
     MarketContext:
       type: object
       required: [cycle, date, venue, spend, revenue, margin, buyItems, buyList, actualPurchases, costs, bouquetPlan, closeMarket]

@@ -198,6 +198,7 @@ export const closeMarketsTable = pgTable("market_close_records", {
     .references(() => marketsTable.cycle, { onDelete: "cascade" }),
   counts: jsonb("counts").$type<Record<string, number>>().notNull().default({}),
   sellThrough: jsonb("sell_through").$type<SellThroughRecord[]>().notNull().default([]),
+  notes: text("notes"),
   closed: boolean("closed").notNull().default(false),
 });
 

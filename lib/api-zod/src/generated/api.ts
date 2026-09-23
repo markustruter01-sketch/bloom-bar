@@ -192,12 +192,22 @@ export const listFlowerPriceTrackerResponseLineItemsItemTotalStemQtyMin = 0;
 
 export const listFlowerPriceTrackerResponseLineItemsItemCostPerStemMin = 0;
 
+export const listFlowerPriceTrackerResponseLineItemsItemSellThroughOnePurchasedStemsMin = 0;
+
+export const listFlowerPriceTrackerResponseLineItemsItemSellThroughOneLeftoverStemsMin = 0;
+
+export const listFlowerPriceTrackerResponseLineItemsItemSellThroughOneSoldStemsMin = 0;
+
+export const listFlowerPriceTrackerResponseLineItemsItemSellThroughOneSellThroughPercentMin = 0;
+export const listFlowerPriceTrackerResponseLineItemsItemSellThroughOneSellThroughPercentMax = 100;
+
 
 
 export const ListFlowerPriceTrackerResponseItem = zod.object({
   "marketCycle": zod.number(),
   "date": zod.string(),
   "venue": zod.string(),
+  "notes": zod.string().nullable(),
   "lineItems": zod.array(zod.object({
   "id": zod.number(),
   "marketCycle": zod.number(),
@@ -207,7 +217,14 @@ export const ListFlowerPriceTrackerResponseItem = zod.object({
   "bunchesPurchased": zod.number().min(1),
   "pricePerBunch": zod.number().min(listFlowerPriceTrackerResponseLineItemsItemPricePerBunchMin),
   "totalStemQty": zod.number().min(listFlowerPriceTrackerResponseLineItemsItemTotalStemQtyMin),
-  "costPerStem": zod.number().min(listFlowerPriceTrackerResponseLineItemsItemCostPerStemMin)
+  "costPerStem": zod.number().min(listFlowerPriceTrackerResponseLineItemsItemCostPerStemMin),
+  "sellThrough": zod.union([zod.object({
+  "flower": zod.string(),
+  "purchasedStems": zod.number().min(listFlowerPriceTrackerResponseLineItemsItemSellThroughOnePurchasedStemsMin),
+  "leftoverStems": zod.number().min(listFlowerPriceTrackerResponseLineItemsItemSellThroughOneLeftoverStemsMin),
+  "soldStems": zod.number().min(listFlowerPriceTrackerResponseLineItemsItemSellThroughOneSoldStemsMin),
+  "sellThroughPercent": zod.number().min(listFlowerPriceTrackerResponseLineItemsItemSellThroughOneSellThroughPercentMin).max(listFlowerPriceTrackerResponseLineItemsItemSellThroughOneSellThroughPercentMax)
+}),zod.null()])
 }))
 })
 export const ListFlowerPriceTrackerResponse = zod.array(ListFlowerPriceTrackerResponseItem)
@@ -225,6 +242,19 @@ export const listFlowerPriceDashboardResponseObservationsItemTotalStemQtyMin = 0
 
 export const listFlowerPriceDashboardResponseObservationsItemCostPerStemMin = 0;
 
+export const listFlowerPriceDashboardResponseObservationsItemSellThroughOnePurchasedStemsMin = 0;
+
+export const listFlowerPriceDashboardResponseObservationsItemSellThroughOneLeftoverStemsMin = 0;
+
+export const listFlowerPriceDashboardResponseObservationsItemSellThroughOneSoldStemsMin = 0;
+
+export const listFlowerPriceDashboardResponseObservationsItemSellThroughOneSellThroughPercentMin = 0;
+export const listFlowerPriceDashboardResponseObservationsItemSellThroughOneSellThroughPercentMax = 100;
+
+export const listFlowerPriceDashboardResponseSellThroughGuidanceItemAverageSellThroughPercentMin = 0;
+export const listFlowerPriceDashboardResponseSellThroughGuidanceItemAverageSellThroughPercentMax = 100;
+
+
 
 
 export const ListFlowerPriceDashboardResponse = zod.object({
@@ -239,7 +269,22 @@ export const ListFlowerPriceDashboardResponse = zod.object({
   "pricePerBunch": zod.number().min(listFlowerPriceDashboardResponseObservationsItemPricePerBunchMin),
   "totalStemQty": zod.number().min(listFlowerPriceDashboardResponseObservationsItemTotalStemQtyMin),
   "costPerStem": zod.number().min(listFlowerPriceDashboardResponseObservationsItemCostPerStemMin),
-  "source": zod.enum(['reported', 'backfill'])
+  "source": zod.enum(['reported', 'backfill']),
+  "marketCycle": zod.number().nullable(),
+  "sellThrough": zod.union([zod.object({
+  "flower": zod.string(),
+  "purchasedStems": zod.number().min(listFlowerPriceDashboardResponseObservationsItemSellThroughOnePurchasedStemsMin),
+  "leftoverStems": zod.number().min(listFlowerPriceDashboardResponseObservationsItemSellThroughOneLeftoverStemsMin),
+  "soldStems": zod.number().min(listFlowerPriceDashboardResponseObservationsItemSellThroughOneSoldStemsMin),
+  "sellThroughPercent": zod.number().min(listFlowerPriceDashboardResponseObservationsItemSellThroughOneSellThroughPercentMin).max(listFlowerPriceDashboardResponseObservationsItemSellThroughOneSellThroughPercentMax)
+}),zod.null()]),
+  "marketNotes": zod.string().nullable()
+})),
+  "sellThroughGuidance": zod.array(zod.object({
+  "flower": zod.string(),
+  "averageSellThroughPercent": zod.number().min(listFlowerPriceDashboardResponseSellThroughGuidanceItemAverageSellThroughPercentMin).max(listFlowerPriceDashboardResponseSellThroughGuidanceItemAverageSellThroughPercentMax),
+  "marketsTracked": zod.number().min(1),
+  "guidance": zod.enum(['sells well', 'mixed', 'doesn\'t sell well'])
 }))
 })
 
@@ -271,6 +316,15 @@ export const createFlowerPriceBackfillResponseTotalStemQtyMin = 0;
 
 export const createFlowerPriceBackfillResponseCostPerStemMin = 0;
 
+export const createFlowerPriceBackfillResponseSellThroughOnePurchasedStemsMin = 0;
+
+export const createFlowerPriceBackfillResponseSellThroughOneLeftoverStemsMin = 0;
+
+export const createFlowerPriceBackfillResponseSellThroughOneSoldStemsMin = 0;
+
+export const createFlowerPriceBackfillResponseSellThroughOneSellThroughPercentMin = 0;
+export const createFlowerPriceBackfillResponseSellThroughOneSellThroughPercentMax = 100;
+
 
 
 export const CreateFlowerPriceBackfillResponse = zod.object({
@@ -284,7 +338,16 @@ export const CreateFlowerPriceBackfillResponse = zod.object({
   "pricePerBunch": zod.number().min(createFlowerPriceBackfillResponsePricePerBunchMin),
   "totalStemQty": zod.number().min(createFlowerPriceBackfillResponseTotalStemQtyMin),
   "costPerStem": zod.number().min(createFlowerPriceBackfillResponseCostPerStemMin),
-  "source": zod.enum(['reported', 'backfill'])
+  "source": zod.enum(['reported', 'backfill']),
+  "marketCycle": zod.number().nullable(),
+  "sellThrough": zod.union([zod.object({
+  "flower": zod.string(),
+  "purchasedStems": zod.number().min(createFlowerPriceBackfillResponseSellThroughOnePurchasedStemsMin),
+  "leftoverStems": zod.number().min(createFlowerPriceBackfillResponseSellThroughOneLeftoverStemsMin),
+  "soldStems": zod.number().min(createFlowerPriceBackfillResponseSellThroughOneSoldStemsMin),
+  "sellThroughPercent": zod.number().min(createFlowerPriceBackfillResponseSellThroughOneSellThroughPercentMin).max(createFlowerPriceBackfillResponseSellThroughOneSellThroughPercentMax)
+}),zod.null()]),
+  "marketNotes": zod.string().nullable()
 })
 
 
@@ -415,6 +478,7 @@ export const GetMarketContextResponse = zod.object({
   "soldStems": zod.number().min(getMarketContextResponseCloseMarketSellThroughItemSoldStemsMin),
   "sellThroughPercent": zod.number().min(getMarketContextResponseCloseMarketSellThroughItemSellThroughPercentMin).max(getMarketContextResponseCloseMarketSellThroughItemSellThroughPercentMax)
 })),
+  "notes": zod.string().nullable(),
   "closed": zod.boolean()
 })
 })
@@ -737,7 +801,8 @@ export const updateMarketCloseBodyCountsMinOne = 0;
 export const UpdateMarketCloseBody = zod.object({
   "counts": zod.record(zod.string(), zod.number().min(updateMarketCloseBodyCountsMinOne)),
   "closed": zod.boolean(),
-  "reopen": zod.boolean().optional().describe('Explicitly authorize reopening a finalized close-market record for editing')
+  "reopen": zod.boolean().optional().describe('Explicitly authorize reopening a finalized close-market record for editing'),
+  "notes": zod.string().nullish().describe('Optional contextual notes about weather, stall placement, or other market conditions')
 })
 
 export const updateMarketCloseResponseCountsMinOne = 0;
@@ -763,6 +828,7 @@ export const UpdateMarketCloseResponse = zod.object({
   "soldStems": zod.number().min(updateMarketCloseResponseSellThroughItemSoldStemsMin),
   "sellThroughPercent": zod.number().min(updateMarketCloseResponseSellThroughItemSellThroughPercentMin).max(updateMarketCloseResponseSellThroughItemSellThroughPercentMax)
 })),
+  "notes": zod.string().nullable(),
   "closed": zod.boolean()
 })
 

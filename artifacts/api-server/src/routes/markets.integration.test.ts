@@ -535,6 +535,7 @@ describe("market context persistence", () => {
         { flower: "Daisy", purchasedStems: 0, leftoverStems: 2, soldStems: 0, sellThroughPercent: 0 },
         { flower: "Lisianthus", purchasedStems: 0, leftoverStems: 4, soldStems: 0, sellThroughPercent: 0 },
       ],
+      notes: null,
       closed: true,
     });
 
@@ -610,19 +611,86 @@ describe("market context persistence", () => {
     });
     assert.equal(saved.status, 200);
 
+    const report = await request(`/markets/context/${cycle}/report-purchases`, { method: "POST" });
+    assert.equal(report.status, 200);
+
     const closeUpdate = await patch(`/markets/context/${cycle}/close`, {
       counts: { Lisianthus: 2, Daisy: 0 },
       closed: true,
+      notes: "Rain arrived early; the foliage was tucked behind the sign.",
     });
     assert.equal(closeUpdate.status, 200);
     assert.deepEqual(closeUpdate.body.sellThrough, [
       { flower: "Daisy", purchasedStems: 4, leftoverStems: 0, soldStems: 4, sellThroughPercent: 100 },
       { flower: "Lisianthus", purchasedStems: 10, leftoverStems: 2, soldStems: 8, sellThroughPercent: 80 },
     ]);
+    assert.equal(closeUpdate.body.notes, "Rain arrived early; the foliage was tucked behind the sign.");
+
+    const tracker = await request("/markets/flower-price-tracker");
+    assert.equal(tracker.status, 200);
+    const trackedMarket = tracker.body.find((entry: any) => entry.marketCycle === cycle);
+    assert.equal(trackedMarket.notes, closeUpdate.body.notes);
+    assert.deepEqual(
+      trackedMarket.lineItems.map((item: any) => [item.flower, item.sellThrough?.sellThroughPercent]),
+      [["Lisianthus", 80], ["Daisy", 100]],
+    );
+
+    const dashboard = await request("/markets/flower-price-dashboard");
+    assert.equal(dashboard.status, 200);
+    const trackedObservation = dashboard.body.observations.find(
+      (observation: any) => observation.marketCycle === cycle && observation.flower === "Lisianthus",
+    );
+    assert.equal(trackedObservation.purchaseDate, "2371-10-03");
+    assert.equal(trackedObservation.sellThrough.sellThroughPercent, 80);
+    assert.equal(trackedObservation.marketNotes, closeUpdate.body.notes);
+    assert.deepEqual(
+      dashboard.body.sellThroughGuidance
+        .filter((entry: any) => entry.flower === "Lisianthus" || entry.flower === "Daisy")
+        .map((entry: any) => [entry.flower, entry.averageSellThroughPercent, entry.guidance]),
+      [["Daisy", 100, "sells well"], ["Lisianthus", 80, "sells well"]],
+    );
 
     const otherCycle = await getContext(testCycles[1]);
     assert.equal(otherCycle.closeMarket.marketCycle, testCycles[1]);
     assert.notDeepEqual(otherCycle.closeMarket.sellThrough, closeUpdate.body.sellThrough);
+  });
+
+  it("averages finalized sell-through across market dates without using notes", async () => {
+    for (const [cycle, leftover, notes] of [
+      [testCycles[0], 5, "Heavy rain and a hidden stall position."],
+      [testCycles[1], 0, "Bright sun and a front-row stall."],
+    ] as const) {
+      await getContext(cycle);
+      assert.equal((await patch(`/markets/context/${cycle}/buy-list`, { locked: true })).status, 200);
+      const saved = await request(`/markets/context/${cycle}/actual-purchases`, {
+        method: "PUT",
+        body: JSON.stringify({
+          purchases: [{
+            flower: "Lisianthus",
+            detail: "White",
+            category: "Classic Blooms",
+            stems: 10,
+            unitCost: 18,
+            source: "manual",
+          }],
+        }),
+      });
+      assert.equal(saved.status, 200);
+      assert.equal((await request(`/markets/context/${cycle}/report-purchases`, { method: "POST" })).status, 200);
+      const closed = await patch(`/markets/context/${cycle}/close`, {
+        counts: { Lisianthus: leftover },
+        closed: true,
+        notes,
+      });
+      assert.equal(closed.status, 200);
+    }
+
+    const dashboard = await request("/markets/flower-price-dashboard");
+    assert.equal(dashboard.status, 200);
+    assert.deepEqual(
+      dashboard.body.sellThroughGuidance.find((entry: any) => entry.flower === "Lisianthus"),
+      { flower: "Lisianthus", averageSellThroughPercent: 75, marketsTracked: 2, guidance: "sells well" },
+    );
   });
 
   it("tracks reported flower prices and uses the latest report for future estimates", async () => {

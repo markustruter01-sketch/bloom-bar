@@ -481,32 +481,39 @@ router.get("/markets/flower-prices", async (_req, res): Promise<void> => {
 
 router.get("/markets/flower-price-tracker", async (_req, res): Promise<void> => {
   const overrides = await readScheduleOverrides();
-  const rows = await db
-    .select({
-      id: marketActualPurchasesTable.id,
-      marketCycle: marketActualPurchasesTable.marketCycle,
-      flower: marketActualPurchasesTable.flower,
-      supplier: marketActualPurchasesTable.supplier,
-      bunchSize: marketActualPurchasesTable.bunchSize,
-      bunchesPurchased: marketActualPurchasesTable.bunchesPurchased,
-      pricePerBunch: marketActualPurchasesTable.pricePerBunch,
-      totalStemQty: marketActualPurchasesTable.totalStemQty,
-      costPerStem: marketActualPurchasesTable.costPerStem,
-      venue: marketsTable.venue,
-    })
-    .from(marketActualPurchasesTable)
-    .innerJoin(
-      marketBuyListStatesTable,
-      eq(marketBuyListStatesTable.marketCycle, marketActualPurchasesTable.marketCycle),
-    )
-    .innerJoin(marketsTable, eq(marketsTable.cycle, marketActualPurchasesTable.marketCycle))
-    .where(eq(marketBuyListStatesTable.reported, true))
-    .orderBy(marketActualPurchasesTable.marketCycle, marketActualPurchasesTable.id);
+  const [rows, closeRecords] = await Promise.all([
+    db
+      .select({
+        id: marketActualPurchasesTable.id,
+        marketCycle: marketActualPurchasesTable.marketCycle,
+        flower: marketActualPurchasesTable.flower,
+        supplier: marketActualPurchasesTable.supplier,
+        bunchSize: marketActualPurchasesTable.bunchSize,
+        bunchesPurchased: marketActualPurchasesTable.bunchesPurchased,
+        pricePerBunch: marketActualPurchasesTable.pricePerBunch,
+        totalStemQty: marketActualPurchasesTable.totalStemQty,
+        costPerStem: marketActualPurchasesTable.costPerStem,
+        venue: marketsTable.venue,
+      })
+      .from(marketActualPurchasesTable)
+      .innerJoin(
+        marketBuyListStatesTable,
+        eq(marketBuyListStatesTable.marketCycle, marketActualPurchasesTable.marketCycle),
+      )
+      .innerJoin(marketsTable, eq(marketsTable.cycle, marketActualPurchasesTable.marketCycle))
+      .where(eq(marketBuyListStatesTable.reported, true))
+      .orderBy(marketActualPurchasesTable.marketCycle, marketActualPurchasesTable.id),
+    db.select().from(closeMarketsTable),
+  ]);
+  const closeByCycle = new Map(
+    closeRecords.filter((record) => record.closed).map((record) => [record.marketCycle, record]),
+  );
 
   const grouped = new Map<number, {
     marketCycle: number;
     date: string;
     venue: string;
+    notes: string | null;
     lineItems: Array<{
       id: number;
       marketCycle: number;
@@ -517,6 +524,7 @@ router.get("/markets/flower-price-tracker", async (_req, res): Promise<void> => 
       pricePerBunch: number;
       totalStemQty: number;
       costPerStem: number;
+      sellThrough: SellThroughRecord | null;
     }>;
   }>();
 
@@ -526,6 +534,7 @@ router.get("/markets/flower-price-tracker", async (_req, res): Promise<void> => 
       marketCycle: row.marketCycle,
       date: formatScheduledMarketDate(row.marketCycle, overrides),
       venue: row.venue,
+      notes: closeByCycle.get(row.marketCycle)?.notes ?? null,
       lineItems: [],
     };
     report.lineItems.push({
@@ -538,6 +547,7 @@ router.get("/markets/flower-price-tracker", async (_req, res): Promise<void> => 
       pricePerBunch: row.pricePerBunch,
       totalStemQty: row.totalStemQty ?? row.bunchSize * row.bunchesPurchased,
       costPerStem: row.costPerStem ?? row.pricePerBunch / row.bunchSize,
+      sellThrough: closeByCycle.get(row.marketCycle)?.sellThrough.find((record) => record.flower === row.flower) ?? null,
     });
     grouped.set(row.marketCycle, report);
   }
@@ -549,7 +559,7 @@ router.get("/markets/flower-price-tracker", async (_req, res): Promise<void> => 
 
 router.get("/markets/flower-price-dashboard", async (_req, res): Promise<void> => {
   const overrides = await readScheduleOverrides();
-  const [reportedRows, backfillRows] = await Promise.all([
+  const [reportedRows, backfillRows, closeRecords] = await Promise.all([
     db
       .select({
         id: marketActualPurchasesTable.id,
@@ -585,24 +595,34 @@ router.get("/markets/flower-price-dashboard", async (_req, res): Promise<void> =
       })
       .from(flowerPriceBackfillsTable)
       .orderBy(asc(flowerPriceBackfillsTable.purchaseDate), asc(flowerPriceBackfillsTable.id)),
+    db.select().from(closeMarketsTable),
   ]);
+  const closeByCycle = new Map(
+    closeRecords.filter((record) => record.closed).map((record) => [record.marketCycle, record]),
+  );
 
   const observations = [
     ...reportedRows
       .filter((row) => !isSkippedMarketCycle(row.marketCycle, overrides))
-      .map((row) => ({
-        id: row.id,
-        purchaseDate: getScheduledMarketDate(row.marketCycle, overrides),
-        flower: row.flower,
-        category: row.category,
-        supplier: row.supplier,
-        bunchSize: row.bunchSize,
-        bunchesPurchased: row.bunchesPurchased,
-        pricePerBunch: row.pricePerBunch,
-        totalStemQty: row.totalStemQty ?? row.bunchSize * row.bunchesPurchased,
-        costPerStem: row.costPerStem ?? row.pricePerBunch / row.bunchSize,
-        source: "reported" as const,
-      })),
+      .map((row) => {
+        const closeRecord = closeByCycle.get(row.marketCycle);
+        return {
+          id: row.id,
+          purchaseDate: getScheduledMarketDate(row.marketCycle, overrides),
+          flower: row.flower,
+          category: row.category,
+          supplier: row.supplier,
+          bunchSize: row.bunchSize,
+          bunchesPurchased: row.bunchesPurchased,
+          pricePerBunch: row.pricePerBunch,
+          totalStemQty: row.totalStemQty ?? row.bunchSize * row.bunchesPurchased,
+          costPerStem: row.costPerStem ?? row.pricePerBunch / row.bunchSize,
+          source: "reported" as const,
+          marketCycle: row.marketCycle,
+          sellThrough: closeRecord?.sellThrough.find((record) => record.flower === row.flower) ?? null,
+          marketNotes: closeRecord?.notes ?? null,
+        };
+      }),
     ...backfillRows.map((row) => ({
       id: row.id,
       purchaseDate: row.purchaseDate,
@@ -615,10 +635,37 @@ router.get("/markets/flower-price-dashboard", async (_req, res): Promise<void> =
       totalStemQty: row.totalStemQty ?? row.bunchSize * row.bunchesPurchased,
       costPerStem: row.costPerStem ?? row.pricePerBunch / row.bunchSize,
       source: "backfill" as const,
+      marketCycle: null,
+      sellThrough: null,
+      marketNotes: null,
     })),
   ].sort((a, b) => a.purchaseDate.localeCompare(b.purchaseDate) || a.id - b.id);
 
-  res.json(ListFlowerPriceDashboardResponse.parse({ observations }));
+  const guidanceByFlower = new Map<string, { totalPercent: number; markets: Set<number> }>();
+  for (const observation of observations) {
+    if (!observation.sellThrough || observation.marketCycle === null) continue;
+    const current = guidanceByFlower.get(observation.flower) ?? { totalPercent: 0, markets: new Set<number>() };
+    current.totalPercent += observation.sellThrough.sellThroughPercent;
+    current.markets.add(observation.marketCycle);
+    guidanceByFlower.set(observation.flower, current);
+  }
+  const sellThroughGuidance = [...guidanceByFlower.entries()]
+    .map(([flower, value]) => {
+      const averageSellThroughPercent = Math.round((value.totalPercent / value.markets.size) * 10) / 10;
+      return {
+        flower,
+        averageSellThroughPercent,
+        marketsTracked: value.markets.size,
+        guidance: averageSellThroughPercent >= 70
+          ? "sells well" as const
+          : averageSellThroughPercent <= 40
+            ? "doesn't sell well" as const
+            : "mixed" as const,
+      };
+    })
+    .sort((a, b) => a.flower.localeCompare(b.flower));
+
+  res.json(ListFlowerPriceDashboardResponse.parse({ observations, sellThroughGuidance }));
 });
 
 router.post("/markets/flower-price-backfills", async (req, res): Promise<void> => {
@@ -670,6 +717,9 @@ router.post("/markets/flower-price-backfills", async (req, res): Promise<void> =
     totalStemQty: created.totalStemQty ?? created.bunchSize * created.bunchesPurchased,
     costPerStem: created.costPerStem ?? created.pricePerBunch / created.bunchSize,
     source: "backfill",
+    marketCycle: null,
+    sellThrough: null,
+    marketNotes: null,
   }));
 });
 
@@ -1065,9 +1115,12 @@ router.patch("/markets/context/:cycle/close", async (req, res): Promise<void> =>
     purchases.map((purchase) => ({ flower: purchase.flower, stems: purchase.totalStemQty ?? 0 })),
     body.data.counts,
   );
+  const notes = Object.prototype.hasOwnProperty.call(body.data, "notes")
+    ? (typeof body.data.notes === "string" && body.data.notes.trim() ? body.data.notes.trim() : null)
+    : existingCloseMarket?.notes ?? null;
   const [closeMarket] = await db
     .update(closeMarketsTable)
-    .set({ counts: body.data.counts, sellThrough, closed: body.data.closed })
+    .set({ counts: body.data.counts, sellThrough, notes, closed: body.data.closed })
     .where(eq(closeMarketsTable.marketCycle, params.data.cycle))
     .returning();
   res.json(UpdateMarketCloseResponse.parse(closeMarket));

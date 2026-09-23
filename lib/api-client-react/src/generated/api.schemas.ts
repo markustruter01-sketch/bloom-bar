@@ -338,6 +338,21 @@ export interface FlowerPriceHistory {
   history: FlowerPricePoint[];
 }
 
+export interface SellThroughRecord {
+  flower: string;
+  /** @minimum 0 */
+  purchasedStems: number;
+  /** @minimum 0 */
+  leftoverStems: number;
+  /** @minimum 0 */
+  soldStems: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  sellThroughPercent: number;
+}
+
 export interface FlowerPriceTrackerLineItem {
   id: number;
   marketCycle: number;
@@ -353,12 +368,14 @@ export interface FlowerPriceTrackerLineItem {
   totalStemQty: number;
   /** @minimum 0 */
   costPerStem: number;
+  sellThrough: SellThroughRecord | null;
 }
 
 export interface FlowerPriceTrackerMarket {
   marketCycle: number;
   date: string;
   venue: string;
+  notes: string | null;
   lineItems: FlowerPriceTrackerLineItem[];
 }
 
@@ -388,10 +405,35 @@ export interface FlowerPriceDashboardObservation {
   /** @minimum 0 */
   costPerStem: number;
   source: FlowerPriceDashboardObservationSource;
+  marketCycle: number | null;
+  sellThrough: SellThroughRecord | null;
+  marketNotes: string | null;
+}
+
+export type FlowerSellThroughGuidanceGuidance = typeof FlowerSellThroughGuidanceGuidance[keyof typeof FlowerSellThroughGuidanceGuidance];
+
+
+export const FlowerSellThroughGuidanceGuidance = {
+  sells_well: 'sells well',
+  mixed: 'mixed',
+  'doesn\'t_sell_well': 'doesn\'t sell well',
+} as const;
+
+export interface FlowerSellThroughGuidance {
+  flower: string;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  averageSellThroughPercent: number;
+  /** @minimum 1 */
+  marketsTracked: number;
+  guidance: FlowerSellThroughGuidanceGuidance;
 }
 
 export interface FlowerPriceDashboardResponse {
   observations: FlowerPriceDashboardObservation[];
+  sellThroughGuidance: FlowerSellThroughGuidance[];
 }
 
 export interface FlowerPriceBackfillInput {
@@ -428,25 +470,11 @@ export interface BouquetPlanUpdate {
 
 export type CloseMarketCounts = {[key: string]: number};
 
-export interface SellThroughRecord {
-  flower: string;
-  /** @minimum 0 */
-  purchasedStems: number;
-  /** @minimum 0 */
-  leftoverStems: number;
-  /** @minimum 0 */
-  soldStems: number;
-  /**
-     * @minimum 0
-     * @maximum 100
-     */
-  sellThroughPercent: number;
-}
-
 export interface CloseMarket {
   marketCycle: number;
   counts: CloseMarketCounts;
   sellThrough: SellThroughRecord[];
+  notes: string | null;
   closed: boolean;
 }
 
@@ -488,6 +516,8 @@ export interface CloseMarketUpdate {
   closed: boolean;
   /** Explicitly authorize reopening a finalized close-market record for editing */
   reopen?: boolean;
+  /** Optional contextual notes about weather, stall placement, or other market conditions */
+  notes?: string | null;
 }
 
 export interface MarketContext {

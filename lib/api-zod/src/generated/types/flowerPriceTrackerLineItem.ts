@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { SellThroughRecord } from './sellThroughRecord';
 
 export interface FlowerPriceTrackerLineItem {
   id: number;
@@ -21,4 +22,5 @@ export interface FlowerPriceTrackerLineItem {
   totalStemQty: number;
   /** @minimum 0 */
   costPerStem: number;
+  sellThrough: SellThroughRecord | null;
 }
