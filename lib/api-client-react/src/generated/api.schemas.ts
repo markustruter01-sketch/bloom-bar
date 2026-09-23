@@ -520,6 +520,47 @@ export interface FlowerPriceHistory {
   history: FlowerPricePoint[];
 }
 
+export type FlowerCareEntrySourceStatus = typeof FlowerCareEntrySourceStatus[keyof typeof FlowerCareEntrySourceStatus];
+
+
+export const FlowerCareEntrySourceStatus = {
+  'auto-sourced': 'auto-sourced',
+  'manually-edited': 'manually-edited',
+} as const;
+
+export type FlowerCareEntryConfidence = typeof FlowerCareEntryConfidence[keyof typeof FlowerCareEntryConfidence];
+
+
+export const FlowerCareEntryConfidence = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+} as const;
+
+export interface FlowerCareEntry {
+  id: number;
+  flower: string;
+  /** @minimum 1 */
+  purchaseCount: number;
+  /** @minimum 0 */
+  purchasedStems: number;
+  lastPurchasedCycle: number;
+  instructions: string;
+  sourceName: string;
+  sourceUrl: string;
+  sourceStatus: FlowerCareEntrySourceStatus;
+  confidence: FlowerCareEntryConfidence;
+  updatedAt: string;
+}
+
+export interface FlowerCareUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 5000
+     */
+  instructions: string;
+}
+
 export interface SellThroughRecord {
   flower: string;
   /** @minimum 0 */

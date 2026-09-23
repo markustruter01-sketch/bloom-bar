@@ -8,6 +8,7 @@ import {
   buyItemsTable,
   closeMarketsTable,
   db,
+  flowerCareEntriesTable,
   marketActualPurchasesTable,
   marketDayTodoItemsTable,
   marketDayTodoSnapshotsTable,
@@ -103,6 +104,55 @@ after(async () => {
 });
 
 describe("market context persistence", () => {
+  it("builds Flower Care from actual purchase history and marks edited notes", async () => {
+    const cycle = testCycles[1];
+    const flower = "API history-only flower";
+    await getContext(cycle);
+    const lock = await patch(`/markets/context/${cycle}/buy-list`, { locked: true });
+    assert.equal(lock.status, 200);
+
+    const purchase = await request(`/markets/context/${cycle}/actual-purchases`, {
+      method: "PUT",
+      body: JSON.stringify({
+        purchases: [{
+          flower,
+          detail: "Flower Care history fixture",
+          category: "Classic Blooms",
+          bunchSize: 10,
+          bunchesPurchased: 2,
+          pricePerBunch: 12,
+          source: "manual",
+        }],
+      }),
+    });
+    assert.equal(purchase.status, 200);
+
+    const listed = await request("/markets/flower-care");
+    assert.equal(listed.status, 200);
+    const autoEntry = listed.body.find((entry: any) => entry.flower === flower);
+    assert.ok(autoEntry);
+    assert.equal(autoEntry.purchaseCount, 1);
+    assert.equal(autoEntry.purchasedStems, 20);
+    assert.equal(autoEntry.sourceStatus, "auto-sourced");
+    assert.equal(autoEntry.confidence, "low");
+
+    const edited = await request(`/markets/flower-care/${encodeURIComponent(flower)}`, {
+      method: "PUT",
+      body: JSON.stringify({ instructions: "My verified note: recut and remove leaves below the waterline." }),
+    });
+    assert.equal(edited.status, 200);
+    assert.equal(edited.body.instructions, "My verified note: recut and remove leaves below the waterline.");
+    assert.equal(edited.body.sourceStatus, "manually-edited");
+
+    const afterEdit = await request("/markets/flower-care");
+    assert.equal(afterEdit.status, 200);
+    const saved = afterEdit.body.find((entry: any) => entry.flower === flower);
+    assert.equal(saved.instructions, edited.body.instructions);
+    assert.equal(saved.sourceStatus, "manually-edited");
+
+    await db.delete(flowerCareEntriesTable).where(eq(flowerCareEntriesTable.flower, flower));
+  });
+
   it("persists a skipped date and keeps downstream comparisons from treating it as real", async () => {
     const cycle = testCycles[0];
     await getContext(cycle);

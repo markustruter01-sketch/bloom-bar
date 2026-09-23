@@ -337,6 +337,23 @@ export const marketDayTodoSnapshotsTable = pgTable("market_day_todo_snapshots", 
   capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const flowerCareEntriesTable = pgTable(
+  "flower_care_entries",
+  {
+    id: serial("id").primaryKey(),
+    flower: text("flower").notNull(),
+    instructions: text("instructions").notNull(),
+    sourceName: text("source_name").notNull(),
+    sourceUrl: text("source_url").notNull(),
+    sourceStatus: text("source_status", { enum: ["auto-sourced", "manually-edited"] }).notNull().default("auto-sourced"),
+    confidence: text("confidence", { enum: ["high", "medium", "low"] }).notNull().default("medium"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    flowerUnique: unique("flower_care_entries_flower_unique").on(table.flower),
+  }),
+);
+
 export const insertMarketSchema = createInsertSchema(marketsTable).omit({ id: true });
 export const insertMarketScheduleOverrideSchema = createInsertSchema(marketScheduleOverridesTable);
 export const insertBuyItemSchema = createInsertSchema(buyItemsTable).omit({ id: true });
@@ -354,6 +371,7 @@ export const insertBouquetPlanSchema = createInsertSchema(bouquetPlansTable);
 export const insertCloseMarketSchema = createInsertSchema(closeMarketsTable);
 export const insertMarketDayTodoItemSchema = createInsertSchema(marketDayTodoItemsTable).omit({ id: true });
 export const insertMarketDayTodoSnapshotSchema = createInsertSchema(marketDayTodoSnapshotsTable);
+export const insertFlowerCareEntrySchema = createInsertSchema(flowerCareEntriesTable).omit({ id: true, updatedAt: true });
 
 export type InsertMarket = z.infer<typeof insertMarketSchema>;
 export type InsertMarketScheduleOverride = z.infer<typeof insertMarketScheduleOverrideSchema>;
@@ -389,3 +407,4 @@ export type BouquetPlan = typeof bouquetPlansTable.$inferSelect;
 export type CloseMarket = typeof closeMarketsTable.$inferSelect;
 export type MarketDayTodoItem = typeof marketDayTodoItemsTable.$inferSelect;
 export type MarketDayTodoSnapshot = typeof marketDayTodoSnapshotsTable.$inferSelect;
+export type FlowerCareEntry = typeof flowerCareEntriesTable.$inferSelect;

@@ -126,6 +126,47 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/FlowerPriceHistory"
+  /markets/flower-care:
+    get:
+      operationId: listFlowerCare
+      tags: [markets]
+      summary: List care guidance for every purchased flower
+      description: Returns one editable care entry for each flower found in actual purchase history.
+      responses:
+        "200":
+          description: Purchased flower care entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlowerCareEntry"
+  /markets/flower-care/{flower}:
+    put:
+      operationId: updateFlowerCare
+      tags: [markets]
+      summary: Edit care guidance for a purchased flower
+      parameters:
+        - name: flower
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlowerCareUpdate"
+      responses:
+        "200":
+          description: Updated flower care entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlowerCareEntry"
+        "404":
+          description: Flower is not present in actual purchase history
   /markets/flower-price-tracker:
     get:
       operationId: listFlowerPriceTracker
@@ -1137,6 +1178,45 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FlowerPricePoint"
+    FlowerCareEntry:
+      type: object
+      required: [id, flower, purchaseCount, purchasedStems, lastPurchasedCycle, instructions, sourceName, sourceUrl, sourceStatus, confidence, updatedAt]
+      properties:
+        id:
+          type: number
+        flower:
+          type: string
+        purchaseCount:
+          type: number
+          minimum: 1
+        purchasedStems:
+          type: number
+          minimum: 0
+        lastPurchasedCycle:
+          type: number
+        instructions:
+          type: string
+        sourceName:
+          type: string
+        sourceUrl:
+          type: string
+        sourceStatus:
+          type: string
+          enum: [auto-sourced, manually-edited]
+        confidence:
+          type: string
+          enum: [high, medium, low]
+        updatedAt:
+          type: string
+          format: date-time
+    FlowerCareUpdate:
+      type: object
+      required: [instructions]
+      properties:
+        instructions:
+          type: string
+          minLength: 1
+          maxLength: 5000
     FlowerPriceTrackerLineItem:
       type: object
       required: [id, marketCycle, flower, supplier, bunchSize, bunchesPurchased, pricePerBunch, totalStemQty, costPerStem, sellThrough]

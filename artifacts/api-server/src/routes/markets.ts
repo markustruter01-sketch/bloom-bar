@@ -5,6 +5,7 @@ import {
   buyItemsTable,
   bouquetPlansTable,
   closeMarketsTable,
+  flowerCareEntriesTable,
   marketActualPurchasesTable,
   marketDayTodoItemsTable,
   marketDayTodoSnapshotsTable,
@@ -56,6 +57,10 @@ import {
   UpsertMarketScheduleOverrideParams,
   UpsertMarketScheduleOverrideResponse,
   DeleteMarketScheduleOverrideParams,
+  ListFlowerCareResponse,
+  UpdateFlowerCareBody,
+  UpdateFlowerCareParams,
+  UpdateFlowerCareResponse,
   ListMarketDayTodosResponse,
   ReplaceMarketDayTodosBody,
   ReplaceMarketDayTodosParams,
@@ -107,6 +112,110 @@ const defaultBuyItems: Array<{
 ];
 
 const defaultCloseCounts = { Lisianthus: 2, Daisy: 7, Snapdragon: 3, "Eucalyptus foliage": 5 };
+
+type FlowerCareSeed = {
+  instructions: string;
+  sourceName: string;
+  sourceUrl: string;
+  confidence: "high" | "medium" | "low";
+};
+
+const defaultFlowerCare: Record<string, FlowerCareSeed> = {
+  "billy buttons": {
+    instructions: "Re-cut the stems cleanly and place in fresh water. Remove any foliage below the waterline and keep the vase cool, away from direct sun and heat. Billy buttons also dry well: hang them upside down in a warm, dark, dry place once you want to preserve them.",
+    sourceName: "Plantura — Craspedia care",
+    sourceUrl: "https://plantura.garden/uk/flowers-perennials/craspedia/craspedia-overview",
+    confidence: "medium",
+  },
+  "daisy": {
+    instructions: "Use a clean vase and fresh water with flower food. Re-cut the stems on an angle, remove leaves below the waterline, and condition in a cool, dark place before arranging. Refresh the water every 2–3 days and keep daisies away from direct sun, heat and drafts.",
+    sourceName: "NC State Extension — Selecting & caring for cut flowers",
+    sourceUrl: "https://gardening.ces.ncsu.edu/gardening-plants/flowers-2/selecting-caring-for-cut-flowers",
+    confidence: "medium",
+  },
+  "disbud chrysanthemum": {
+    instructions: "Start with a clean, sanitised bucket or vase. Re-cut about 2–3 cm from the stems with a clean tool, remove every leaf that would sit below the waterline, and place immediately into flower food. Allow at least two hours to hydrate, keep cool, and rotate older stock first.",
+    sourceName: "FloraLife — Chrysanthemum care and handling",
+    sourceUrl: "https://floralife.com/2023/03/21/chrysanthemum-the-florists-most-reliable-asset",
+    confidence: "high",
+  },
+  "eucalyptus foliage": {
+    instructions: "Trim the stems on an angle, strip leaves that would sit below the waterline, and place into clean, cool water. Re-cut if the foliage droops and change the water regularly. Eucalyptus can be left to dry in the vase or hung to dry when you want to preserve it.",
+    sourceName: "Moyses Flowers — Eucalyptus care",
+    sourceUrl: "https://www.moysesflowers.mom/flower-care/eucalyptus",
+    confidence: "high",
+  },
+  lisianthus: {
+    instructions: "Give lisianthus a clean vase, fresh water and flower food as soon as possible. Re-cut the stems on an angle, remove excess foliage below the waterline, and keep the vase topped up because lisianthus are thirsty. Keep them cool, out of drafts, direct sun, heaters and fruit bowls.",
+    sourceName: "Plants & Flowers Foundation Holland — Lisianthus care",
+    sourceUrl: "https://www.plantsandflowersfoundationholland.org/en/flowerguide/lisianthus",
+    confidence: "high",
+  },
+  "queen anne's lace": {
+    instructions: "Buy or cut stems while the flower heads are still fairly closed. Remove all foliage below the waterline, make a sharp fresh cut, and hydrate separately in water with commercial flower food for about two hours before using in an arrangement. Change water regularly and re-cut if needed.",
+    sourceName: "Floral Design Institute — Queen Anne’s Lace",
+    sourceUrl: "https://www.floraldesigninstitute.com/blogs/resources-flower-library/queen-annes-lace",
+    confidence: "medium",
+  },
+  snapdragon: {
+    instructions: "Keep snapdragon stems upright while conditioning. Re-cut with a clean tool, remove leaves below the waterline, and place into clean water with flower food. Keep them away from ripening fruit because snapdragons are sensitive to ethylene; keep cool and out of direct sun and heat.",
+    sourceName: "UC Davis Postharvest Research & Extension Center — Snapdragon",
+    sourceUrl: "https://postharvest.ucdavis.edu/produce-facts-sheets/snapdragon",
+    confidence: "high",
+  },
+};
+
+function normalizeFlowerName(flower: string): string {
+  return flower.trim().toLowerCase().replace(/[’]/g, "'");
+}
+
+function getFlowerCareSeed(flower: string): FlowerCareSeed {
+  return defaultFlowerCare[normalizeFlowerName(flower)] ?? {
+    instructions: "Use a clean vase and fresh water with flower food. Re-cut the stems with a clean tool, remove all foliage below the waterline, and keep the flowers cool and away from direct sun, heat, drafts and ripening fruit. Refresh the water regularly and re-cut if the stems begin to droop.",
+    sourceName: "NC State Extension — Selecting & caring for cut flowers",
+    sourceUrl: "https://gardening.ces.ncsu.edu/gardening-plants/flowers-2/selecting-caring-for-cut-flowers",
+    confidence: "low",
+  };
+}
+
+async function readFlowerCareEntries() {
+  const purchases = await db
+    .select({
+      flower: marketActualPurchasesTable.flower,
+      marketCycle: marketActualPurchasesTable.marketCycle,
+      totalStemQty: marketActualPurchasesTable.totalStemQty,
+    })
+    .from(marketActualPurchasesTable)
+    .orderBy(asc(marketActualPurchasesTable.flower), asc(marketActualPurchasesTable.marketCycle));
+  const stats = new Map<string, { purchaseCount: number; purchasedStems: number; lastPurchasedCycle: number }>();
+  for (const purchase of purchases) {
+    const current = stats.get(purchase.flower) ?? { purchaseCount: 0, purchasedStems: 0, lastPurchasedCycle: purchase.marketCycle };
+    current.purchaseCount += 1;
+    current.purchasedStems += purchase.totalStemQty ?? 0;
+    current.lastPurchasedCycle = Math.max(current.lastPurchasedCycle, purchase.marketCycle);
+    stats.set(purchase.flower, current);
+  }
+  const flowerNames = [...stats.keys()];
+  for (const flower of flowerNames) {
+    const seed = getFlowerCareSeed(flower);
+    await db
+      .insert(flowerCareEntriesTable)
+      .values({ flower, ...seed })
+      .onConflictDoNothing({ target: flowerCareEntriesTable.flower });
+  }
+  const entries = flowerNames.length
+    ? await db.select().from(flowerCareEntriesTable).where(inArray(flowerCareEntriesTable.flower, flowerNames))
+    : [];
+  const entriesByFlower = new Map(entries.map((entry) => [entry.flower, entry]));
+  return flowerNames
+    .map((flower) => {
+      const entry = entriesByFlower.get(flower);
+      const purchaseStats = stats.get(flower)!;
+      return entry ? { ...entry, ...purchaseStats } : null;
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+    .sort((a, b) => a.flower.localeCompare(b.flower));
+}
 
 type CanonicalPurchaseInput = {
   flower: string;
@@ -628,6 +737,37 @@ async function readBuyListState(cycle: number) {
     })),
   };
 }
+
+router.get("/markets/flower-care", async (_req, res): Promise<void> => {
+  res.json(ListFlowerCareResponse.parse(await readFlowerCareEntries()));
+});
+
+router.put("/markets/flower-care/:flower", async (req, res): Promise<void> => {
+  const params = UpdateFlowerCareParams.safeParse(req.params);
+  const body = UpdateFlowerCareBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Invalid flower care entry." });
+    return;
+  }
+  const flower = params.data.flower.trim();
+  const instructions = body.data.instructions.trim();
+  if (!flower || !instructions || instructions.length > 5000) {
+    res.status(400).json({ error: "Flower care instructions must be between 1 and 5000 characters." });
+    return;
+  }
+  const [updated] = await db
+    .update(flowerCareEntriesTable)
+    .set({ instructions, sourceStatus: "manually-edited", updatedAt: new Date() })
+    .where(eq(flowerCareEntriesTable.flower, flower))
+    .returning();
+  if (!updated) {
+    res.status(404).json({ error: "Flower care entry not found in purchase history." });
+    return;
+  }
+  const entries = await readFlowerCareEntries();
+  const saved = entries.find((entry) => entry.flower === flower);
+  res.json(UpdateFlowerCareResponse.parse(saved));
+});
 
 router.get("/markets/non-flower-purchases", async (_req, res): Promise<void> => {
   const overrides = await readScheduleOverrides();

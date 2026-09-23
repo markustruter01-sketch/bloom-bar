@@ -181,6 +181,66 @@ export const ListFlowerPricesResponse = zod.array(ListFlowerPricesResponseItem)
 
 
 /**
+ * Returns one editable care entry for each flower found in actual purchase history.
+ * @summary List care guidance for every purchased flower
+ */
+
+export const listFlowerCareResponsePurchasedStemsMin = 0;
+
+
+
+export const ListFlowerCareResponseItem = zod.object({
+  "id": zod.number(),
+  "flower": zod.string(),
+  "purchaseCount": zod.number().min(1),
+  "purchasedStems": zod.number().min(listFlowerCareResponsePurchasedStemsMin),
+  "lastPurchasedCycle": zod.number(),
+  "instructions": zod.string(),
+  "sourceName": zod.string(),
+  "sourceUrl": zod.string(),
+  "sourceStatus": zod.enum(['auto-sourced', 'manually-edited']),
+  "confidence": zod.enum(['high', 'medium', 'low']),
+  "updatedAt": zod.coerce.date()
+})
+export const ListFlowerCareResponse = zod.array(ListFlowerCareResponseItem)
+
+
+/**
+ * @summary Edit care guidance for a purchased flower
+ */
+export const UpdateFlowerCareParams = zod.object({
+  "flower": zod.coerce.string()
+})
+
+export const updateFlowerCareBodyInstructionsMax = 5000;
+
+
+
+export const UpdateFlowerCareBody = zod.object({
+  "instructions": zod.string().min(1).max(updateFlowerCareBodyInstructionsMax)
+})
+
+
+export const updateFlowerCareResponsePurchasedStemsMin = 0;
+
+
+
+export const UpdateFlowerCareResponse = zod.object({
+  "id": zod.number(),
+  "flower": zod.string(),
+  "purchaseCount": zod.number().min(1),
+  "purchasedStems": zod.number().min(updateFlowerCareResponsePurchasedStemsMin),
+  "lastPurchasedCycle": zod.number(),
+  "instructions": zod.string(),
+  "sourceName": zod.string(),
+  "sourceUrl": zod.string(),
+  "sourceStatus": zod.enum(['auto-sourced', 'manually-edited']),
+  "confidence": zod.enum(['high', 'medium', 'low']),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * Returns the finalized bunch-based purchase rows grouped by reported market date.
  * @summary List reported purchase line-items by market date
  */
