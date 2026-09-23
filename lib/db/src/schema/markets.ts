@@ -234,6 +234,61 @@ export const nonFlowerPurchaseAllocationsTable = pgTable(
   }),
 );
 
+export const nonFlowerBankImportsTable = pgTable(
+  "non_flower_bank_imports",
+  {
+    id: serial("id").primaryKey(),
+    marketCycle: integer("market_cycle")
+      .notNull()
+      .references(() => marketsTable.cycle, { onDelete: "cascade" }),
+    fileName: text("file_name").notNull(),
+    fileFormat: text("file_format", { enum: ["csv", "pdf"] }).notNull(),
+    fileFingerprint: text("file_fingerprint").notNull(),
+    importedAt: timestamp("imported_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    cycleFingerprintUnique: unique("non_flower_bank_imports_cycle_fingerprint_unique").on(table.marketCycle, table.fileFingerprint),
+  }),
+);
+
+export const nonFlowerBankImportLinesTable = pgTable(
+  "non_flower_bank_import_lines",
+  {
+    id: serial("id").primaryKey(),
+    importId: integer("import_id")
+      .notNull()
+      .references(() => nonFlowerBankImportsTable.id, { onDelete: "cascade" }),
+    sourceLineNumber: integer("source_line_number").notNull(),
+    transactionDate: text("transaction_date"),
+    merchant: text("merchant").notNull(),
+    description: text("description").notNull(),
+    amount: doublePrecision("amount").notNull(),
+    reference: text("reference"),
+  },
+  (table) => ({
+    sourceLinePositive: check("non_flower_bank_import_lines_source_line_positive", sql`${table.sourceLineNumber} > 0`),
+    amountNonNegative: check("non_flower_bank_import_lines_amount_non_negative", sql`${table.amount} >= 0`),
+  }),
+);
+
+export const nonFlowerBankImportDetailsTable = pgTable(
+  "non_flower_bank_import_details",
+  {
+    id: serial("id").primaryKey(),
+    lineId: integer("line_id")
+      .notNull()
+      .references(() => nonFlowerBankImportLinesTable.id, { onDelete: "cascade" }),
+    category: text("category").notNull(),
+    description: text("description").notNull(),
+    totalPrice: doublePrecision("total_price").notNull(),
+    quantity: integer("quantity").notNull(),
+  },
+  (table) => ({
+    totalPriceNonNegative: check("non_flower_bank_import_details_total_price_non_negative", sql`${table.totalPrice} >= 0`),
+    quantityPositive: check("non_flower_bank_import_details_quantity_positive", sql`${table.quantity} > 0`),
+  }),
+);
+
 export const bouquetPlansTable = pgTable("market_bouquet_plans", {
   marketCycle: integer("market_cycle")
     .primaryKey()
@@ -262,6 +317,9 @@ export const insertFlowerPriceBackfillSchema = createInsertSchema(flowerPriceBac
 export const insertMarketCostSchema = createInsertSchema(marketCostsTable).omit({ id: true });
 export const insertNonFlowerPurchaseSchema = createInsertSchema(nonFlowerPurchasesTable).omit({ id: true });
 export const insertNonFlowerPurchaseAllocationSchema = createInsertSchema(nonFlowerPurchaseAllocationsTable).omit({ id: true });
+export const insertNonFlowerBankImportSchema = createInsertSchema(nonFlowerBankImportsTable).omit({ id: true, importedAt: true });
+export const insertNonFlowerBankImportLineSchema = createInsertSchema(nonFlowerBankImportLinesTable).omit({ id: true });
+export const insertNonFlowerBankImportDetailSchema = createInsertSchema(nonFlowerBankImportDetailsTable).omit({ id: true });
 export const insertBouquetPlanSchema = createInsertSchema(bouquetPlansTable);
 export const insertCloseMarketSchema = createInsertSchema(closeMarketsTable);
 
@@ -275,6 +333,9 @@ export type InsertFlowerPriceBackfill = z.infer<typeof insertFlowerPriceBackfill
 export type InsertMarketCost = z.infer<typeof insertMarketCostSchema>;
 export type InsertNonFlowerPurchase = z.infer<typeof insertNonFlowerPurchaseSchema>;
 export type InsertNonFlowerPurchaseAllocation = z.infer<typeof insertNonFlowerPurchaseAllocationSchema>;
+export type InsertNonFlowerBankImport = z.infer<typeof insertNonFlowerBankImportSchema>;
+export type InsertNonFlowerBankImportLine = z.infer<typeof insertNonFlowerBankImportLineSchema>;
+export type InsertNonFlowerBankImportDetail = z.infer<typeof insertNonFlowerBankImportDetailSchema>;
 export type InsertBouquetPlan = z.infer<typeof insertBouquetPlanSchema>;
 export type InsertCloseMarket = z.infer<typeof insertCloseMarketSchema>;
 export type Market = typeof marketsTable.$inferSelect;
@@ -287,5 +348,8 @@ export type FlowerPriceBackfill = typeof flowerPriceBackfillsTable.$inferSelect;
 export type MarketCost = typeof marketCostsTable.$inferSelect;
 export type NonFlowerPurchase = typeof nonFlowerPurchasesTable.$inferSelect;
 export type NonFlowerPurchaseAllocation = typeof nonFlowerPurchaseAllocationsTable.$inferSelect;
+export type NonFlowerBankImport = typeof nonFlowerBankImportsTable.$inferSelect;
+export type NonFlowerBankImportLine = typeof nonFlowerBankImportLinesTable.$inferSelect;
+export type NonFlowerBankImportDetail = typeof nonFlowerBankImportDetailsTable.$inferSelect;
 export type BouquetPlan = typeof bouquetPlansTable.$inferSelect;
 export type CloseMarket = typeof closeMarketsTable.$inferSelect;

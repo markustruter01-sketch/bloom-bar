@@ -4,3 +4,4 @@
 - [Tesseract OCR testing](tesseract-ocr-testing.md) — run direct OCR smoke tests outside the frontend workspace or clean up downloaded language data.
 - [Integration test isolation](integration-test-isolation.md) — dashboard tests must scope assertions because the development database can contain real reported market rows.
 - [Close-market tracker contract](close-market-tracker-contract.md) — reported observations link finalized sell-through; historical backfills explicitly return null linkage and notes.
+- [Bank PDF import boundary](bank-pdf-import-boundary.md) — selectable-text bank PDFs can be parsed in-browser; scanned/image-only statements need OCR fallback.

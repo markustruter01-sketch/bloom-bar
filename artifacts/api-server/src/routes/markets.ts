@@ -10,6 +10,9 @@ import {
   marketBuyListEditLogsTable,
   marketBuyListStatesTable,
   marketCostsTable,
+  nonFlowerBankImportDetailsTable,
+  nonFlowerBankImportLinesTable,
+  nonFlowerBankImportsTable,
   nonFlowerPurchaseAllocationsTable,
   nonFlowerPurchasesTable,
   marketsTable,
@@ -52,6 +55,12 @@ import {
   UpsertMarketScheduleOverrideResponse,
   DeleteMarketScheduleOverrideParams,
   ListNonFlowerPurchasesResponse,
+  ImportNonFlowerBankFileBody,
+  ImportNonFlowerBankFileParams,
+  ImportNonFlowerBankFileResponse,
+  ReplaceNonFlowerBankImportDetailsBody,
+  ReplaceNonFlowerBankImportDetailsParams,
+  ReplaceNonFlowerBankImportDetailsResponse,
   ReplaceNonFlowerPurchasesBody,
   ReplaceNonFlowerPurchasesParams,
   ReplaceNonFlowerPurchasesResponse,
@@ -390,6 +399,7 @@ function formatNonFlowerPeriod(
   cycle: number,
   purchases: Array<typeof nonFlowerPurchasesTable.$inferSelect>,
   allocationsByPurchase: Map<number, Array<typeof nonFlowerPurchaseAllocationsTable.$inferSelect>>,
+  importsByCycle: Map<number, Array<ReturnType<typeof serializeNonFlowerBankImport>>>,
   overrides: ScheduleOverride[],
 ) {
   const endDate = getScheduledMarketDate(cycle, overrides);
@@ -399,7 +409,112 @@ function formatNonFlowerPeriod(
     startDate,
     endDate,
     purchases: purchases.map((purchase) => serializeNonFlowerPurchase(purchase, allocationsByPurchase.get(purchase.id) ?? [])),
+    imports: importsByCycle.get(cycle) ?? [],
   };
+}
+
+function serializeNonFlowerBankImport(
+  imported: typeof nonFlowerBankImportsTable.$inferSelect,
+  lines: Array<typeof nonFlowerBankImportLinesTable.$inferSelect>,
+  detailsByLine: Map<number, Array<typeof nonFlowerBankImportDetailsTable.$inferSelect>>,
+) {
+  return {
+    id: imported.id,
+    marketCycle: imported.marketCycle,
+    fileName: imported.fileName,
+    fileFormat: imported.fileFormat,
+    importedAt: imported.importedAt.toISOString(),
+    lines: lines
+      .filter((line) => line.importId === imported.id)
+      .map((line) => {
+        const details = detailsByLine.get(line.id) ?? [];
+        const detailsTotal = details.reduce((sum, detail) => sum + detail.totalPrice, 0);
+        return {
+          id: line.id,
+          sourceLineNumber: line.sourceLineNumber,
+          transactionDate: line.transactionDate,
+          merchant: line.merchant,
+          description: line.description,
+          amount: line.amount,
+          reference: line.reference,
+          details: details.map((detail) => ({
+            id: detail.id,
+            lineId: detail.lineId,
+            category: detail.category,
+            description: detail.description,
+            totalPrice: detail.totalPrice,
+            quantity: detail.quantity,
+            unitPrice: detail.quantity > 0 ? detail.totalPrice / detail.quantity : 0,
+          })),
+          detailsTotal,
+          reconciliationDifference: line.amount - detailsTotal,
+          isReconciled: Math.abs(line.amount - detailsTotal) <= 0.005,
+        };
+      }),
+  };
+}
+
+async function readFormattedNonFlowerBankImports(cycles: number[]) {
+  if (cycles.length === 0) return new Map<number, Array<ReturnType<typeof serializeNonFlowerBankImport>>>();
+  const imports = await db
+    .select()
+    .from(nonFlowerBankImportsTable)
+    .where(inArray(nonFlowerBankImportsTable.marketCycle, cycles))
+    .orderBy(asc(nonFlowerBankImportsTable.marketCycle), asc(nonFlowerBankImportsTable.id));
+  const importIds = imports.map((imported) => imported.id);
+  const lines = importIds.length
+    ? await db
+      .select()
+      .from(nonFlowerBankImportLinesTable)
+      .where(inArray(nonFlowerBankImportLinesTable.importId, importIds))
+      .orderBy(asc(nonFlowerBankImportLinesTable.id))
+    : [];
+  const lineIds = lines.map((line) => line.id);
+  const details = lineIds.length
+    ? await db
+      .select()
+      .from(nonFlowerBankImportDetailsTable)
+      .where(inArray(nonFlowerBankImportDetailsTable.lineId, lineIds))
+      .orderBy(asc(nonFlowerBankImportDetailsTable.id))
+    : [];
+  const detailsByLine = new Map<number, Array<typeof nonFlowerBankImportDetailsTable.$inferSelect>>();
+  for (const detail of details) {
+    const current = detailsByLine.get(detail.lineId) ?? [];
+    current.push(detail);
+    detailsByLine.set(detail.lineId, current);
+  }
+  const importsByCycle = new Map<number, Array<ReturnType<typeof serializeNonFlowerBankImport>>>();
+  for (const imported of imports) {
+    const current = importsByCycle.get(imported.marketCycle) ?? [];
+    current.push(serializeNonFlowerBankImport(imported, lines, detailsByLine));
+    importsByCycle.set(imported.marketCycle, current);
+  }
+  return importsByCycle;
+}
+
+async function readFormattedNonFlowerBankImport(importId: number) {
+  const imported = (await db.select().from(nonFlowerBankImportsTable).where(eq(nonFlowerBankImportsTable.id, importId)))[0];
+  if (!imported) return null;
+  const lines = await db
+    .select()
+    .from(nonFlowerBankImportLinesTable)
+    .where(eq(nonFlowerBankImportLinesTable.importId, importId))
+    .orderBy(asc(nonFlowerBankImportLinesTable.id));
+  const lineIds = lines.map((line) => line.id);
+  const details = lineIds.length
+    ? await db
+      .select()
+      .from(nonFlowerBankImportDetailsTable)
+      .where(inArray(nonFlowerBankImportDetailsTable.lineId, lineIds))
+      .orderBy(asc(nonFlowerBankImportDetailsTable.id))
+    : [];
+  const detailsByLine = new Map<number, Array<typeof nonFlowerBankImportDetailsTable.$inferSelect>>();
+  for (const detail of details) {
+    const current = detailsByLine.get(detail.lineId) ?? [];
+    current.push(detail);
+    detailsByLine.set(detail.lineId, current);
+  }
+  return serializeNonFlowerBankImport(imported, lines, detailsByLine);
 }
 
 async function readBuyListState(cycle: number) {
@@ -455,8 +570,9 @@ router.get("/markets/non-flower-purchases", async (_req, res): Promise<void> => 
     current.push(allocation);
     allocationsByPurchase.set(allocation.purchaseId, current);
   }
+  const importsByCycle = await readFormattedNonFlowerBankImports(cycles);
   res.json(ListNonFlowerPurchasesResponse.parse(
-    cycles.map((cycle) => formatNonFlowerPeriod(cycle, purchasesByCycle.get(cycle) ?? [], allocationsByPurchase, overrides)),
+    cycles.map((cycle) => formatNonFlowerPeriod(cycle, purchasesByCycle.get(cycle) ?? [], allocationsByPurchase, importsByCycle, overrides)),
   ));
 });
 
@@ -550,9 +666,144 @@ router.put("/markets/non-flower-purchases/:cycle", async (req, res): Promise<voi
       current.push(allocation);
       allocationsByPurchase.set(allocation.purchaseId, current);
     }
-    return formatNonFlowerPeriod(params.data.cycle, purchases, allocationsByPurchase, overrides);
+    return formatNonFlowerPeriod(params.data.cycle, purchases, allocationsByPurchase, new Map(), overrides);
   });
-  res.json(ReplaceNonFlowerPurchasesResponse.parse(saved));
+  const importsByCycle = await readFormattedNonFlowerBankImports([params.data.cycle]);
+  res.json(ReplaceNonFlowerPurchasesResponse.parse({
+    ...saved,
+    imports: importsByCycle.get(params.data.cycle) ?? [],
+  }));
+});
+
+router.post("/markets/non-flower-purchases/:cycle/imports", async (req, res): Promise<void> => {
+  const params = ImportNonFlowerBankFileParams.safeParse(req.params);
+  const body = ImportNonFlowerBankFileBody.safeParse(req.body);
+  if (!params.success || !body.success || !Number.isInteger(params.data.cycle)) {
+    res.status(400).json({ error: "Invalid market cycle or bank import data." });
+    return;
+  }
+  const fileName = body.data.fileName.trim();
+  const fileFingerprint = body.data.fileFingerprint.trim().toLowerCase();
+  const lines = body.data.lines.map((line) => ({
+    ...line,
+    transactionDate: line.transactionDate?.trim() || null,
+    merchant: line.merchant.trim(),
+    description: line.description.trim(),
+    reference: line.reference?.trim() || null,
+  }));
+  if (
+    !fileName
+    || !/^[a-f0-9]{64}$/.test(fileFingerprint)
+    || lines.some((line) =>
+      line.sourceLineNumber <= 0
+      || !Number.isInteger(line.sourceLineNumber)
+      || !line.merchant
+      || !line.description
+      || !Number.isFinite(line.amount)
+      || line.amount < 0)
+  ) {
+    res.status(400).json({ error: "Each bank line needs a merchant, description, non-negative amount, and positive source line number." });
+    return;
+  }
+
+  await ensureMarketContext(params.data.cycle);
+  const existing = (await db
+    .select()
+    .from(nonFlowerBankImportsTable)
+    .where(and(
+      eq(nonFlowerBankImportsTable.marketCycle, params.data.cycle),
+      eq(nonFlowerBankImportsTable.fileFingerprint, fileFingerprint),
+    )))[0];
+  if (existing) {
+    const existingImport = await readFormattedNonFlowerBankImport(existing.id);
+    if (existingImport) {
+      res.json(ImportNonFlowerBankFileResponse.parse({ status: "duplicate", import: existingImport }));
+      return;
+    }
+  }
+
+  const importedId = await db.transaction(async (tx) => {
+    const [imported] = await tx.insert(nonFlowerBankImportsTable).values({
+      marketCycle: params.data.cycle,
+      fileName,
+      fileFormat: body.data.fileFormat,
+      fileFingerprint,
+    }).returning({ id: nonFlowerBankImportsTable.id });
+    await tx.insert(nonFlowerBankImportLinesTable).values(lines.map((line) => ({
+      importId: imported.id,
+      sourceLineNumber: line.sourceLineNumber,
+      transactionDate: line.transactionDate,
+      merchant: line.merchant,
+      description: line.description,
+      amount: line.amount,
+      reference: line.reference,
+    })));
+    return imported.id;
+  });
+  const saved = await readFormattedNonFlowerBankImport(importedId);
+  if (!saved) {
+    res.status(500).json({ error: "The bank import could not be read after saving." });
+    return;
+  }
+  res.json(ImportNonFlowerBankFileResponse.parse({ status: "imported", import: saved }));
+});
+
+router.put("/markets/non-flower-imports/:importId", async (req, res): Promise<void> => {
+  const params = ReplaceNonFlowerBankImportDetailsParams.safeParse(req.params);
+  const body = ReplaceNonFlowerBankImportDetailsBody.safeParse(req.body);
+  if (!params.success || !body.success || !Number.isInteger(params.data.importId)) {
+    res.status(400).json({ error: "Invalid bank import detail data." });
+    return;
+  }
+  const imported = (await db
+    .select()
+    .from(nonFlowerBankImportsTable)
+    .where(eq(nonFlowerBankImportsTable.id, params.data.importId)))[0];
+  if (!imported) {
+    res.status(404).json({ error: "Bank import not found." });
+    return;
+  }
+  const importLines = await db
+    .select()
+    .from(nonFlowerBankImportLinesTable)
+    .where(eq(nonFlowerBankImportLinesTable.importId, imported.id));
+  const lineIds = new Set(importLines.map((line) => line.id));
+  if (body.data.lines.some((line) =>
+    !lineIds.has(line.lineId)
+    || line.details.some((detail) =>
+      !detail.category.trim()
+      || !detail.description.trim()
+      || !Number.isFinite(detail.totalPrice)
+      || detail.totalPrice < 0
+      || !Number.isInteger(detail.quantity)
+      || detail.quantity <= 0)
+  )) {
+    res.status(400).json({ error: "Each detail needs a category, description, non-negative total price, and positive whole-number quantity." });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    const requestedLineIds = body.data.lines.map((line) => line.lineId);
+    if (requestedLineIds.length > 0) {
+      await tx.delete(nonFlowerBankImportDetailsTable).where(inArray(nonFlowerBankImportDetailsTable.lineId, requestedLineIds));
+      const details = body.data.lines.flatMap((line) => line.details.map((detail) => ({
+        lineId: line.lineId,
+        category: detail.category.trim(),
+        description: detail.description.trim(),
+        totalPrice: detail.totalPrice,
+        quantity: detail.quantity,
+      })));
+      if (details.length > 0) {
+        await tx.insert(nonFlowerBankImportDetailsTable).values(details);
+      }
+    }
+  });
+  const saved = await readFormattedNonFlowerBankImport(imported.id);
+  if (!saved) {
+    res.status(500).json({ error: "The bank import could not be read after saving." });
+    return;
+  }
+  res.json(ReplaceNonFlowerBankImportDetailsResponse.parse(saved));
 });
 
 router.get("/markets/schedule/overrides", async (_req, res): Promise<void> => {

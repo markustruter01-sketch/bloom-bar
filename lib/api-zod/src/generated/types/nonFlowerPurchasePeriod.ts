@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { NonFlowerBankImport } from './nonFlowerBankImport';
 import type { NonFlowerPurchase } from './nonFlowerPurchase';
 
 export interface NonFlowerPurchasePeriod {
@@ -14,4 +15,5 @@ export interface NonFlowerPurchasePeriod {
   /** Effective canonical market date ending this fortnight */
   endDate: string;
   purchases: NonFlowerPurchase[];
+  imports: NonFlowerBankImport[];
 }

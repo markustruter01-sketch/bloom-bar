@@ -43,6 +43,10 @@ import type {
   MarketCostsUpdate,
   MarketScheduleOverride,
   MarketScheduleOverrideUpdate,
+  NonFlowerBankImport,
+  NonFlowerBankImportDetailsUpdate,
+  NonFlowerBankImportInput,
+  NonFlowerBankImportUploadResponse,
   NonFlowerPurchasePeriod,
   NonFlowerPurchasesUpdate,
   SellThroughComparison
@@ -993,6 +997,152 @@ export const useReplaceNonFlowerPurchases = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getReplaceNonFlowerPurchasesMutationOptions(options));
+    }
+
+export const getImportNonFlowerBankFileUrl = (cycle: number,) => {
+
+
+
+
+  return `/api/markets/non-flower-purchases/${cycle}/imports`
+}
+
+/**
+ * Stores parsed bank lines without retaining the uploaded file. Re-uploading the same file for the same fortnight returns the existing import instead of duplicating it.
+ * @summary Import parsed bank purchase lines for a market fortnight
+ */
+export const importNonFlowerBankFile = async (cycle: number,
+    nonFlowerBankImportInput: NonFlowerBankImportInput, options?: Parameters<typeof customFetch>[1]): Promise<NonFlowerBankImportUploadResponse> => {
+
+  return customFetch<NonFlowerBankImportUploadResponse>(getImportNonFlowerBankFileUrl(cycle),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(nonFlowerBankImportInput)
+  }
+);}
+
+
+
+
+
+export const getImportNonFlowerBankFileMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importNonFlowerBankFile>>, TError,{cycle: number;data: BodyType<NonFlowerBankImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importNonFlowerBankFile>>, TError,{cycle: number;data: BodyType<NonFlowerBankImportInput>}, TContext> => {
+
+const mutationKey = ['importNonFlowerBankFile'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importNonFlowerBankFile>>, {cycle: number;data: BodyType<NonFlowerBankImportInput>}> = (props) => {
+          const {cycle,data} = props ?? {};
+
+          return  importNonFlowerBankFile(cycle,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportNonFlowerBankFileMutationResult = NonNullable<Awaited<ReturnType<typeof importNonFlowerBankFile>>>
+    export type ImportNonFlowerBankFileMutationBody = BodyType<NonFlowerBankImportInput>
+    export type ImportNonFlowerBankFileMutationError = ErrorType<void>
+
+    /**
+ * @summary Import parsed bank purchase lines for a market fortnight
+ */
+export const useImportNonFlowerBankFile = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importNonFlowerBankFile>>, TError,{cycle: number;data: BodyType<NonFlowerBankImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importNonFlowerBankFile>>,
+        TError,
+        {cycle: number;data: BodyType<NonFlowerBankImportInput>},
+        TContext
+      > => {
+      return useMutation(getImportNonFlowerBankFileMutationOptions(options));
+    }
+
+export const getReplaceNonFlowerBankImportDetailsUrl = (importId: number,) => {
+
+
+
+
+  return `/api/markets/non-flower-imports/${importId}`
+}
+
+/**
+ * Saves manual sub-entries while preserving the original bank line amount for reconciliation.
+ * @summary Replace detail rows for imported bank lines
+ */
+export const replaceNonFlowerBankImportDetails = async (importId: number,
+    nonFlowerBankImportDetailsUpdate: NonFlowerBankImportDetailsUpdate, options?: Parameters<typeof customFetch>[1]): Promise<NonFlowerBankImport> => {
+
+  return customFetch<NonFlowerBankImport>(getReplaceNonFlowerBankImportDetailsUrl(importId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(nonFlowerBankImportDetailsUpdate)
+  }
+);}
+
+
+
+
+
+export const getReplaceNonFlowerBankImportDetailsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceNonFlowerBankImportDetails>>, TError,{importId: number;data: BodyType<NonFlowerBankImportDetailsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof replaceNonFlowerBankImportDetails>>, TError,{importId: number;data: BodyType<NonFlowerBankImportDetailsUpdate>}, TContext> => {
+
+const mutationKey = ['replaceNonFlowerBankImportDetails'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof replaceNonFlowerBankImportDetails>>, {importId: number;data: BodyType<NonFlowerBankImportDetailsUpdate>}> = (props) => {
+          const {importId,data} = props ?? {};
+
+          return  replaceNonFlowerBankImportDetails(importId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReplaceNonFlowerBankImportDetailsMutationResult = NonNullable<Awaited<ReturnType<typeof replaceNonFlowerBankImportDetails>>>
+    export type ReplaceNonFlowerBankImportDetailsMutationBody = BodyType<NonFlowerBankImportDetailsUpdate>
+    export type ReplaceNonFlowerBankImportDetailsMutationError = ErrorType<void>
+
+    /**
+ * @summary Replace detail rows for imported bank lines
+ */
+export const useReplaceNonFlowerBankImportDetails = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceNonFlowerBankImportDetails>>, TError,{importId: number;data: BodyType<NonFlowerBankImportDetailsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof replaceNonFlowerBankImportDetails>>,
+        TError,
+        {importId: number;data: BodyType<NonFlowerBankImportDetailsUpdate>},
+        TContext
+      > => {
+      return useMutation(getReplaceNonFlowerBankImportDetailsMutationOptions(options));
     }
 
 export const getGetMarketContextUrl = (cycle: number,) => {

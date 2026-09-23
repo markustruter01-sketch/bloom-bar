@@ -373,6 +373,54 @@ export interface NonFlowerPurchasesUpdate {
   purchases: NonFlowerPurchaseInput[];
 }
 
+export type NonFlowerBankImportFileFormat = typeof NonFlowerBankImportFileFormat[keyof typeof NonFlowerBankImportFileFormat];
+
+
+export const NonFlowerBankImportFileFormat = {
+  csv: 'csv',
+  pdf: 'pdf',
+} as const;
+
+export interface NonFlowerBankImportDetail {
+  id: number;
+  lineId: number;
+  category: string;
+  description: string;
+  /** @minimum 0 */
+  totalPrice: number;
+  /** @minimum 1 */
+  quantity: number;
+  /**
+     * Calculated as totalPrice divided by quantity
+     * @minimum 0
+     */
+  unitPrice: number;
+}
+
+export interface NonFlowerBankImportLine {
+  id: number;
+  sourceLineNumber: number;
+  transactionDate: string | null;
+  merchant: string;
+  description: string;
+  /** @minimum 0 */
+  amount: number;
+  reference: string | null;
+  details: NonFlowerBankImportDetail[];
+  detailsTotal: number;
+  reconciliationDifference: number;
+  isReconciled: boolean;
+}
+
+export interface NonFlowerBankImport {
+  id: number;
+  marketCycle: number;
+  fileName: string;
+  fileFormat: NonFlowerBankImportFileFormat;
+  importedAt: string;
+  lines: NonFlowerBankImportLine[];
+}
+
 export interface NonFlowerPurchasePeriod {
   marketCycle: number;
   /** Effective canonical market date starting this fortnight */
@@ -380,6 +428,65 @@ export interface NonFlowerPurchasePeriod {
   /** Effective canonical market date ending this fortnight */
   endDate: string;
   purchases: NonFlowerPurchase[];
+  imports: NonFlowerBankImport[];
+}
+
+export interface NonFlowerBankImportLineInput {
+  /** @minimum 1 */
+  sourceLineNumber: number;
+  transactionDate: string | null;
+  merchant: string;
+  description: string;
+  /** @minimum 0 */
+  amount: number;
+  reference: string | null;
+}
+
+export type NonFlowerBankImportInputFileFormat = typeof NonFlowerBankImportInputFileFormat[keyof typeof NonFlowerBankImportInputFileFormat];
+
+
+export const NonFlowerBankImportInputFileFormat = {
+  csv: 'csv',
+  pdf: 'pdf',
+} as const;
+
+export interface NonFlowerBankImportInput {
+  fileName: string;
+  fileFormat: NonFlowerBankImportInputFileFormat;
+  fileFingerprint: string;
+  /** @minItems 1 */
+  lines: NonFlowerBankImportLineInput[];
+}
+
+export type NonFlowerBankImportUploadResponseStatus = typeof NonFlowerBankImportUploadResponseStatus[keyof typeof NonFlowerBankImportUploadResponseStatus];
+
+
+export const NonFlowerBankImportUploadResponseStatus = {
+  imported: 'imported',
+  duplicate: 'duplicate',
+} as const;
+
+export interface NonFlowerBankImportUploadResponse {
+  status: NonFlowerBankImportUploadResponseStatus;
+  import: NonFlowerBankImport;
+}
+
+export interface NonFlowerBankImportDetailInput {
+  category: string;
+  description: string;
+  /** @minimum 0 */
+  totalPrice: number;
+  /** @minimum 1 */
+  quantity: number;
+}
+
+export interface NonFlowerBankImportLineDetailsUpdate {
+  lineId: number;
+  details: NonFlowerBankImportDetailInput[];
+}
+
+export interface NonFlowerBankImportDetailsUpdate {
+  lines: NonFlowerBankImportLineDetailsUpdate[];
 }
 
 export interface FlowerPricePoint {

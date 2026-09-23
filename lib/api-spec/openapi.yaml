@@ -211,6 +211,56 @@ paths:
                 $ref: "#/components/schemas/NonFlowerPurchasePeriod"
         "400":
           description: Invalid non-flower purchase data
+  /markets/non-flower-purchases/{cycle}/imports:
+    post:
+      operationId: importNonFlowerBankFile
+      tags: [markets]
+      summary: Import parsed bank purchase lines for a market fortnight
+      description: Stores parsed bank lines without retaining the uploaded file. Re-uploading the same file for the same fortnight returns the existing import instead of duplicating it.
+      parameters:
+        - $ref: "#/components/parameters/MarketCycle"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NonFlowerBankImportInput"
+      responses:
+        "200":
+          description: Imported bank lines or an existing import when the file was already uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NonFlowerBankImportUploadResponse"
+        "400":
+          description: Invalid bank import data
+  /markets/non-flower-imports/{importId}:
+    put:
+      operationId: replaceNonFlowerBankImportDetails
+      tags: [markets]
+      summary: Replace detail rows for imported bank lines
+      description: Saves manual sub-entries while preserving the original bank line amount for reconciliation.
+      parameters:
+        - name: importId
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NonFlowerBankImportDetailsUpdate"
+      responses:
+        "200":
+          description: Updated imported bank lines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NonFlowerBankImport"
+        "400":
+          description: Invalid import detail data
   /markets/context/{cycle}:
     get:
       operationId: getMarketContext
@@ -838,7 +888,7 @@ components:
             $ref: "#/components/schemas/NonFlowerPurchaseInput"
     NonFlowerPurchasePeriod:
       type: object
-      required: [marketCycle, startDate, endDate, purchases]
+      required: [marketCycle, startDate, endDate, purchases, imports]
       properties:
         marketCycle:
           type: number
@@ -852,6 +902,160 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/NonFlowerPurchase"
+        imports:
+          type: array
+          items:
+            $ref: "#/components/schemas/NonFlowerBankImport"
+    NonFlowerBankImport:
+      type: object
+      required: [id, marketCycle, fileName, fileFormat, importedAt, lines]
+      properties:
+        id:
+          type: number
+        marketCycle:
+          type: number
+        fileName:
+          type: string
+        fileFormat:
+          type: string
+          enum: [csv, pdf]
+        importedAt:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/NonFlowerBankImportLine"
+    NonFlowerBankImportLine:
+      type: object
+      required: [id, sourceLineNumber, transactionDate, merchant, description, amount, reference, details, detailsTotal, reconciliationDifference, isReconciled]
+      properties:
+        id:
+          type: number
+        sourceLineNumber:
+          type: number
+        transactionDate:
+          type: string
+          nullable: true
+        merchant:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+          minimum: 0
+        reference:
+          type: string
+          nullable: true
+        details:
+          type: array
+          items:
+            $ref: "#/components/schemas/NonFlowerBankImportDetail"
+        detailsTotal:
+          type: number
+        reconciliationDifference:
+          type: number
+        isReconciled:
+          type: boolean
+    NonFlowerBankImportDetail:
+      type: object
+      required: [id, lineId, category, description, totalPrice, quantity, unitPrice]
+      properties:
+        id:
+          type: number
+        lineId:
+          type: number
+        category:
+          type: string
+        description:
+          type: string
+        totalPrice:
+          type: number
+          minimum: 0
+        quantity:
+          type: number
+          minimum: 1
+        unitPrice:
+          type: number
+          minimum: 0
+          description: Calculated as totalPrice divided by quantity
+    NonFlowerBankImportLineInput:
+      type: object
+      required: [sourceLineNumber, transactionDate, merchant, description, amount, reference]
+      properties:
+        sourceLineNumber:
+          type: number
+          minimum: 1
+        transactionDate:
+          type: string
+          nullable: true
+        merchant:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+          minimum: 0
+        reference:
+          type: string
+          nullable: true
+    NonFlowerBankImportInput:
+      type: object
+      required: [fileName, fileFormat, fileFingerprint, lines]
+      properties:
+        fileName:
+          type: string
+        fileFormat:
+          type: string
+          enum: [csv, pdf]
+        fileFingerprint:
+          type: string
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/NonFlowerBankImportLineInput"
+    NonFlowerBankImportUploadResponse:
+      type: object
+      required: [status, import]
+      properties:
+        status:
+          type: string
+          enum: [imported, duplicate]
+        import:
+          $ref: "#/components/schemas/NonFlowerBankImport"
+    NonFlowerBankImportDetailInput:
+      type: object
+      required: [category, description, totalPrice, quantity]
+      properties:
+        category:
+          type: string
+        description:
+          type: string
+        totalPrice:
+          type: number
+          minimum: 0
+        quantity:
+          type: number
+          minimum: 1
+    NonFlowerBankImportLineDetailsUpdate:
+      type: object
+      required: [lineId, details]
+      properties:
+        lineId:
+          type: number
+        details:
+          type: array
+          items:
+            $ref: "#/components/schemas/NonFlowerBankImportDetailInput"
+    NonFlowerBankImportDetailsUpdate:
+      type: object
+      required: [lines]
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/NonFlowerBankImportLineDetailsUpdate"
     FlowerPricePoint:
       type: object
       required: [marketCycle, date, pricePerBunch, costPerStem, unitCost]

@@ -14,6 +14,7 @@ import {
   marketBuyListStatesTable,
   marketCostsTable,
   marketScheduleOverridesTable,
+  nonFlowerBankImportsTable,
   nonFlowerPurchasesTable,
   marketsTable,
   pool,
@@ -50,6 +51,7 @@ async function resetTestCycles() {
     await tx.delete(flowerPriceBackfillsTable);
     await tx.delete(marketBuyListEditLogsTable).where(inArray(marketBuyListEditLogsTable.marketCycle, testCycles));
     await tx.delete(marketCostsTable).where(inArray(marketCostsTable.marketCycle, testCycles));
+    await tx.delete(nonFlowerBankImportsTable).where(inArray(nonFlowerBankImportsTable.marketCycle, testCycles));
     await tx.delete(nonFlowerPurchasesTable).where(inArray(nonFlowerPurchasesTable.marketCycle, testCycles));
     await tx.delete(marketBuyListStatesTable).where(inArray(marketBuyListStatesTable.marketCycle, testCycles));
     await tx.delete(buyItemsTable).where(inArray(buyItemsTable.marketCycle, testCycles));
@@ -934,5 +936,79 @@ describe("non-flower price tracking", () => {
     });
     assert.equal(deleted.status, 200);
     assert.deepEqual(deleted.body.purchases, []);
+  });
+
+  it("imports bank lines once and reconciles editable detail rows to the source amount", async () => {
+    const cycle = testCycles[2];
+    const input = {
+      fileName: "bloom-bar-september-export.csv",
+      fileFormat: "csv",
+      fileFingerprint: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      lines: [
+        {
+          sourceLineNumber: 2,
+          transactionDate: "2026-09-14",
+          merchant: "Amazon Marketplace",
+          description: "Amazon Marketplace",
+          amount: 100,
+          reference: "AMZ-100",
+        },
+        {
+          sourceLineNumber: 3,
+          transactionDate: "2026-09-15",
+          merchant: "Gift Bag Co",
+          description: "Kraft gift bags",
+          amount: 30,
+          reference: "GB-30",
+        },
+      ],
+    };
+    const imported = await request(`/markets/non-flower-purchases/${cycle}/imports`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    assert.equal(imported.status, 200);
+    assert.equal(imported.body.status, "imported");
+    assert.equal(imported.body.import.lines.length, 2);
+    const importId = imported.body.import.id;
+    const duplicate = await request(`/markets/non-flower-purchases/${cycle}/imports`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    assert.equal(duplicate.status, 200);
+    assert.equal(duplicate.body.status, "duplicate");
+    assert.equal(duplicate.body.import.id, importId);
+
+    const saved = await request(`/markets/non-flower-imports/${importId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        lines: [
+          {
+            lineId: imported.body.import.lines[0].id,
+            details: [
+              { category: "Packaging", description: "Mailers", totalPrice: 60, quantity: 10 },
+              { category: "Packaging", description: "Tissue paper", totalPrice: 40, quantity: 20 },
+            ],
+          },
+          {
+            lineId: imported.body.import.lines[1].id,
+            details: [
+              { category: "Packaging", description: "Gift bags", totalPrice: 20, quantity: 10 },
+            ],
+          },
+        ],
+      }),
+    });
+    assert.equal(saved.status, 200);
+    assert.equal(saved.body.lines[0].isReconciled, true);
+    assert.equal(saved.body.lines[0].details[1].unitPrice, 2);
+    assert.equal(saved.body.lines[1].isReconciled, false);
+    assert.equal(saved.body.lines[1].reconciliationDifference, 10);
+
+    const listed = await request("/markets/non-flower-purchases");
+    assert.equal(listed.status, 200);
+    const period = listed.body.find((entry: any) => entry.marketCycle === cycle);
+    assert.equal(period.imports.length, 1);
+    assert.equal(period.imports[0].lines.length, 2);
   });
 });

@@ -364,6 +364,13 @@ export const listNonFlowerPurchasesResponsePurchasesItemCostPerPieceMin = 0;
 export const listNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMin = 0;
 export const listNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMax = 100;
 
+export const listNonFlowerPurchasesResponseImportsItemLinesItemAmountMin = 0;
+
+export const listNonFlowerPurchasesResponseImportsItemLinesItemDetailsItemTotalPriceMin = 0;
+
+
+export const listNonFlowerPurchasesResponseImportsItemLinesItemDetailsItemUnitPriceMin = 0;
+
 
 
 export const ListNonFlowerPurchasesResponseItem = zod.object({
@@ -385,6 +392,34 @@ export const ListNonFlowerPurchasesResponseItem = zod.object({
   "productType": zod.string(),
   "allocationQuantity": zod.number().min(1).nullable().describe('Number of purchase items allocated to this product type'),
   "allocationPercentage": zod.number().min(listNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMin).max(listNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMax).nullable().describe('Percentage of the purchase total allocated to this product type')
+}))
+})),
+  "imports": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "fileName": zod.string(),
+  "fileFormat": zod.enum(['csv', 'pdf']),
+  "importedAt": zod.coerce.date(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "sourceLineNumber": zod.number(),
+  "transactionDate": zod.string().nullable(),
+  "merchant": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number().min(listNonFlowerPurchasesResponseImportsItemLinesItemAmountMin),
+  "reference": zod.string().nullable(),
+  "details": zod.array(zod.object({
+  "id": zod.number(),
+  "lineId": zod.number(),
+  "category": zod.string(),
+  "description": zod.string(),
+  "totalPrice": zod.number().min(listNonFlowerPurchasesResponseImportsItemLinesItemDetailsItemTotalPriceMin),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(listNonFlowerPurchasesResponseImportsItemLinesItemDetailsItemUnitPriceMin).describe('Calculated as totalPrice divided by quantity')
+})),
+  "detailsTotal": zod.number(),
+  "reconciliationDifference": zod.number(),
+  "isReconciled": zod.boolean()
 }))
 }))
 })
@@ -431,6 +466,13 @@ export const replaceNonFlowerPurchasesResponsePurchasesItemCostPerPieceMin = 0;
 export const replaceNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMin = 0;
 export const replaceNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMax = 100;
 
+export const replaceNonFlowerPurchasesResponseImportsItemLinesItemAmountMin = 0;
+
+export const replaceNonFlowerPurchasesResponseImportsItemLinesItemDetailsItemTotalPriceMin = 0;
+
+
+export const replaceNonFlowerPurchasesResponseImportsItemLinesItemDetailsItemUnitPriceMin = 0;
+
 
 
 export const ReplaceNonFlowerPurchasesResponse = zod.object({
@@ -453,6 +495,168 @@ export const ReplaceNonFlowerPurchasesResponse = zod.object({
   "allocationQuantity": zod.number().min(1).nullable().describe('Number of purchase items allocated to this product type'),
   "allocationPercentage": zod.number().min(replaceNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMin).max(replaceNonFlowerPurchasesResponsePurchasesItemAllocationsItemAllocationPercentageMax).nullable().describe('Percentage of the purchase total allocated to this product type')
 }))
+})),
+  "imports": zod.array(zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "fileName": zod.string(),
+  "fileFormat": zod.enum(['csv', 'pdf']),
+  "importedAt": zod.coerce.date(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "sourceLineNumber": zod.number(),
+  "transactionDate": zod.string().nullable(),
+  "merchant": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number().min(replaceNonFlowerPurchasesResponseImportsItemLinesItemAmountMin),
+  "reference": zod.string().nullable(),
+  "details": zod.array(zod.object({
+  "id": zod.number(),
+  "lineId": zod.number(),
+  "category": zod.string(),
+  "description": zod.string(),
+  "totalPrice": zod.number().min(replaceNonFlowerPurchasesResponseImportsItemLinesItemDetailsItemTotalPriceMin),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(replaceNonFlowerPurchasesResponseImportsItemLinesItemDetailsItemUnitPriceMin).describe('Calculated as totalPrice divided by quantity')
+})),
+  "detailsTotal": zod.number(),
+  "reconciliationDifference": zod.number(),
+  "isReconciled": zod.boolean()
+}))
+}))
+})
+
+
+/**
+ * Stores parsed bank lines without retaining the uploaded file. Re-uploading the same file for the same fortnight returns the existing import instead of duplicating it.
+ * @summary Import parsed bank purchase lines for a market fortnight
+ */
+export const ImportNonFlowerBankFileParams = zod.object({
+  "cycle": zod.coerce.number()
+})
+
+
+export const importNonFlowerBankFileBodyLinesItemAmountMin = 0;
+
+
+
+
+export const ImportNonFlowerBankFileBody = zod.object({
+  "fileName": zod.string(),
+  "fileFormat": zod.enum(['csv', 'pdf']),
+  "fileFingerprint": zod.string(),
+  "lines": zod.array(zod.object({
+  "sourceLineNumber": zod.number().min(1),
+  "transactionDate": zod.string().nullable(),
+  "merchant": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number().min(importNonFlowerBankFileBodyLinesItemAmountMin),
+  "reference": zod.string().nullable()
+})).min(1)
+})
+
+export const importNonFlowerBankFileResponseImportLinesItemAmountMin = 0;
+
+export const importNonFlowerBankFileResponseImportLinesItemDetailsItemTotalPriceMin = 0;
+
+
+export const importNonFlowerBankFileResponseImportLinesItemDetailsItemUnitPriceMin = 0;
+
+
+
+export const ImportNonFlowerBankFileResponse = zod.object({
+  "status": zod.enum(['imported', 'duplicate']),
+  "import": zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "fileName": zod.string(),
+  "fileFormat": zod.enum(['csv', 'pdf']),
+  "importedAt": zod.coerce.date(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "sourceLineNumber": zod.number(),
+  "transactionDate": zod.string().nullable(),
+  "merchant": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number().min(importNonFlowerBankFileResponseImportLinesItemAmountMin),
+  "reference": zod.string().nullable(),
+  "details": zod.array(zod.object({
+  "id": zod.number(),
+  "lineId": zod.number(),
+  "category": zod.string(),
+  "description": zod.string(),
+  "totalPrice": zod.number().min(importNonFlowerBankFileResponseImportLinesItemDetailsItemTotalPriceMin),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(importNonFlowerBankFileResponseImportLinesItemDetailsItemUnitPriceMin).describe('Calculated as totalPrice divided by quantity')
+})),
+  "detailsTotal": zod.number(),
+  "reconciliationDifference": zod.number(),
+  "isReconciled": zod.boolean()
+}))
+})
+})
+
+
+/**
+ * Saves manual sub-entries while preserving the original bank line amount for reconciliation.
+ * @summary Replace detail rows for imported bank lines
+ */
+export const ReplaceNonFlowerBankImportDetailsParams = zod.object({
+  "importId": zod.coerce.number()
+})
+
+export const replaceNonFlowerBankImportDetailsBodyLinesItemDetailsItemTotalPriceMin = 0;
+
+
+
+
+export const ReplaceNonFlowerBankImportDetailsBody = zod.object({
+  "lines": zod.array(zod.object({
+  "lineId": zod.number(),
+  "details": zod.array(zod.object({
+  "category": zod.string(),
+  "description": zod.string(),
+  "totalPrice": zod.number().min(replaceNonFlowerBankImportDetailsBodyLinesItemDetailsItemTotalPriceMin),
+  "quantity": zod.number().min(1)
+}))
+}))
+})
+
+export const replaceNonFlowerBankImportDetailsResponseLinesItemAmountMin = 0;
+
+export const replaceNonFlowerBankImportDetailsResponseLinesItemDetailsItemTotalPriceMin = 0;
+
+
+export const replaceNonFlowerBankImportDetailsResponseLinesItemDetailsItemUnitPriceMin = 0;
+
+
+
+export const ReplaceNonFlowerBankImportDetailsResponse = zod.object({
+  "id": zod.number(),
+  "marketCycle": zod.number(),
+  "fileName": zod.string(),
+  "fileFormat": zod.enum(['csv', 'pdf']),
+  "importedAt": zod.coerce.date(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "sourceLineNumber": zod.number(),
+  "transactionDate": zod.string().nullable(),
+  "merchant": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number().min(replaceNonFlowerBankImportDetailsResponseLinesItemAmountMin),
+  "reference": zod.string().nullable(),
+  "details": zod.array(zod.object({
+  "id": zod.number(),
+  "lineId": zod.number(),
+  "category": zod.string(),
+  "description": zod.string(),
+  "totalPrice": zod.number().min(replaceNonFlowerBankImportDetailsResponseLinesItemDetailsItemTotalPriceMin),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(replaceNonFlowerBankImportDetailsResponseLinesItemDetailsItemUnitPriceMin).describe('Calculated as totalPrice divided by quantity')
+})),
+  "detailsTotal": zod.number(),
+  "reconciliationDifference": zod.number(),
+  "isReconciled": zod.boolean()
 }))
 })
 

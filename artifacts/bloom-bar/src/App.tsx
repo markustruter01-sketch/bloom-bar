@@ -27,6 +27,8 @@ import {
   useUpdateMarketBuyList,
   useUpdateMarketClose,
   useReplaceNonFlowerPurchases,
+  useImportNonFlowerBankFile,
+  useReplaceNonFlowerBankImportDetails,
   FlowerCategory as ApiFlowerCategory,
 } from '@workspace/api-client-react';
 import type {
@@ -47,6 +49,10 @@ import type {
   MarketCostInput,
   MarketScheduleOverride,
   MarketScheduleOverrideUpdate,
+  NonFlowerBankImport,
+  NonFlowerBankImportDetailsUpdate,
+  NonFlowerBankImportInput,
+  NonFlowerBankImportUploadResponse,
   NonFlowerPurchaseInput,
   NonFlowerPurchasePeriod,
   ReceiptCandidate,
@@ -1139,8 +1145,8 @@ export function ClosePage({ closeMarket, actualPurchases, nextMarket, saveCloseM
   </div>;
 }
 
-function Router({ nextMarket, scheduleOverrides, buyItems, actualPurchases, costs, buyList, markets, bouquetPlan, closeMarket, flowerPrices, flowerPricesLoading, flowerPriceTrackerReports, flowerPriceTrackerLoading, flowerPriceDashboardObservations, flowerPriceSellThroughGuidance, flowerPriceDashboardLoading, nonFlowerPeriods, saveBackfill, saveNonFlowerPurchases, toggleBuyItem, setBuyListLock, saveActualPurchases, saveCosts, reportPurchases, saveBouquetPlan, saveCloseMarket, saveScheduleOverride, clearScheduleOverride }: { nextMarket: MarketCycleSummary; scheduleOverrides: MarketScheduleOverride[]; buyItems: BuyItem[]; actualPurchases: ActualPurchase[]; costs: MarketCost[]; buyList: MarketContext['buyList']; markets: Market[]; bouquetPlan: BouquetPlan; closeMarket: CloseMarket; flowerPrices: FlowerPriceHistory[]; flowerPricesLoading: boolean; flowerPriceTrackerReports: FlowerPriceTrackerMarket[]; flowerPriceTrackerLoading: boolean; flowerPriceDashboardObservations: FlowerPriceDashboardObservation[]; flowerPriceSellThroughGuidance: FlowerSellThroughGuidance[]; flowerPriceDashboardLoading: boolean; nonFlowerPeriods: NonFlowerPurchasePeriod[]; saveBackfill: (data: FlowerPriceBackfillInput) => Promise<boolean>; saveNonFlowerPurchases: (cycle: number, purchases: NonFlowerPurchaseInput[]) => Promise<boolean>; toggleBuyItem: (id: number) => Promise<boolean>; setBuyListLock: (locked: boolean) => Promise<boolean>; saveActualPurchases: (purchases: BunchPurchaseInput[], receipt: ReceiptPayload) => Promise<boolean>; saveCosts: (costs: MarketCostInput[]) => Promise<boolean>; reportPurchases: () => Promise<boolean>; saveBouquetPlan: (selectedBand: string, count: number) => Promise<boolean>; saveCloseMarket: (counts: Record<string, number>, closed: boolean, reopen?: boolean, notes?: string | null) => Promise<boolean>; saveScheduleOverride: (cycle: number, data: MarketScheduleOverrideUpdate) => Promise<boolean>; clearScheduleOverride: (cycle: number) => Promise<boolean> }) {
-  return <AppShell nextMarket={nextMarket} remainingBuyItems={buyItems.filter((item) => !item.checked).length}><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} />} /><Route path="/flowers" component={() => <FlowersPage flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesLoading} />} /><Route path="/flower-price-tracker" component={() => <FlowerPriceTrackerPage reports={flowerPriceTrackerReports} isLoading={flowerPriceTrackerLoading} dashboardObservations={flowerPriceDashboardObservations} sellThroughGuidance={flowerPriceSellThroughGuidance} dashboardLoading={flowerPriceDashboardLoading} saveBackfill={saveBackfill} />} /><Route path="/non-flower-price-tracker" component={() => <NonFlowerPriceTrackingPage periods={nonFlowerPeriods} scheduleOverrides={scheduleOverrides} nextMarket={nextMarket} savePurchases={saveNonFlowerPurchases} />} /><Route path="/markets" component={() => <div className="space-y-7"><MarketsPage markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /><SellThroughComparisonPanel markets={markets} scheduleOverrides={scheduleOverrides} /></div>} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} nextMarket={nextMarket} toggleBuyItem={toggleBuyItem} setBuyListLock={setBuyListLock} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} />} /><Route path="/markets/next/close" component={() => <ClosePage closeMarket={closeMarket} actualPurchases={actualPurchases} nextMarket={nextMarket} saveCloseMarket={saveCloseMarket} />} /><Route path="/markets/next/bouquets" component={() => <BouquetsPage bouquetPlan={bouquetPlan} nextMarket={nextMarket} saveBouquetPlan={saveBouquetPlan} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
+function Router({ nextMarket, scheduleOverrides, buyItems, actualPurchases, costs, buyList, markets, bouquetPlan, closeMarket, flowerPrices, flowerPricesLoading, flowerPriceTrackerReports, flowerPriceTrackerLoading, flowerPriceDashboardObservations, flowerPriceSellThroughGuidance, flowerPriceDashboardLoading, nonFlowerPeriods, saveBackfill, saveNonFlowerPurchases, importBankFile, saveImportDetails, toggleBuyItem, setBuyListLock, saveActualPurchases, saveCosts, reportPurchases, saveBouquetPlan, saveCloseMarket, saveScheduleOverride, clearScheduleOverride }: { nextMarket: MarketCycleSummary; scheduleOverrides: MarketScheduleOverride[]; buyItems: BuyItem[]; actualPurchases: ActualPurchase[]; costs: MarketCost[]; buyList: MarketContext['buyList']; markets: Market[]; bouquetPlan: BouquetPlan; closeMarket: CloseMarket; flowerPrices: FlowerPriceHistory[]; flowerPricesLoading: boolean; flowerPriceTrackerReports: FlowerPriceTrackerMarket[]; flowerPriceTrackerLoading: boolean; flowerPriceDashboardObservations: FlowerPriceDashboardObservation[]; flowerPriceSellThroughGuidance: FlowerSellThroughGuidance[]; flowerPriceDashboardLoading: boolean; nonFlowerPeriods: NonFlowerPurchasePeriod[]; saveBackfill: (data: FlowerPriceBackfillInput) => Promise<boolean>; saveNonFlowerPurchases: (cycle: number, purchases: NonFlowerPurchaseInput[]) => Promise<boolean>; importBankFile: (cycle: number, data: NonFlowerBankImportInput) => Promise<NonFlowerBankImportUploadResponse | null>; saveImportDetails: (importId: number, data: NonFlowerBankImportDetailsUpdate) => Promise<NonFlowerBankImport | null>; toggleBuyItem: (id: number) => Promise<boolean>; setBuyListLock: (locked: boolean) => Promise<boolean>; saveActualPurchases: (purchases: BunchPurchaseInput[], receipt: ReceiptPayload) => Promise<boolean>; saveCosts: (costs: MarketCostInput[]) => Promise<boolean>; reportPurchases: () => Promise<boolean>; saveBouquetPlan: (selectedBand: string, count: number) => Promise<boolean>; saveCloseMarket: (counts: Record<string, number>, closed: boolean, reopen?: boolean, notes?: string | null) => Promise<boolean>; saveScheduleOverride: (cycle: number, data: MarketScheduleOverrideUpdate) => Promise<boolean>; clearScheduleOverride: (cycle: number) => Promise<boolean> }) {
+  return <AppShell nextMarket={nextMarket} remainingBuyItems={buyItems.filter((item) => !item.checked).length}><ErrorBoundary resetKey={window.location.pathname}><Switch><Route path="/" component={() => <Dashboard buyItems={buyItems} markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} />} /><Route path="/flowers" component={() => <FlowersPage flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesLoading} />} /><Route path="/flower-price-tracker" component={() => <FlowerPriceTrackerPage reports={flowerPriceTrackerReports} isLoading={flowerPriceTrackerLoading} dashboardObservations={flowerPriceDashboardObservations} sellThroughGuidance={flowerPriceSellThroughGuidance} dashboardLoading={flowerPriceDashboardLoading} saveBackfill={saveBackfill} />} /><Route path="/non-flower-price-tracker" component={() => <NonFlowerPriceTrackingPage periods={nonFlowerPeriods} scheduleOverrides={scheduleOverrides} nextMarket={nextMarket} savePurchases={saveNonFlowerPurchases} importBankFile={importBankFile} saveImportDetails={saveImportDetails} />} /><Route path="/markets" component={() => <div className="space-y-7"><MarketsPage markets={markets} nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /><SellThroughComparisonPanel markets={markets} scheduleOverrides={scheduleOverrides} /></div>} /><Route path="/markets/next/buy" component={() => <BuyPage buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} nextMarket={nextMarket} toggleBuyItem={toggleBuyItem} setBuyListLock={setBuyListLock} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} />} /><Route path="/markets/next/close" component={() => <ClosePage closeMarket={closeMarket} actualPurchases={actualPurchases} nextMarket={nextMarket} saveCloseMarket={saveCloseMarket} />} /><Route path="/markets/next/bouquets" component={() => <BouquetsPage bouquetPlan={bouquetPlan} nextMarket={nextMarket} saveBouquetPlan={saveBouquetPlan} />} /><Route component={NotFound} /></Switch></ErrorBoundary></AppShell>;
 }
 
 export function useUtcDayRollover() {
@@ -1226,6 +1232,8 @@ function AppContent() {
   const scheduleOverrideMutation = useUpsertMarketScheduleOverride();
   const deleteScheduleOverrideMutation = useDeleteMarketScheduleOverride();
   const nonFlowerPurchasesMutation = useReplaceNonFlowerPurchases();
+  const bankImportMutation = useImportNonFlowerBankFile();
+  const bankImportDetailsMutation = useReplaceNonFlowerBankImportDetails();
   const context = marketContextQuery.data;
   const markets = marketsQuery.data ?? [];
   const flowerPrices = flowerPricesQuery.data ?? [];
@@ -1366,13 +1374,39 @@ function AppContent() {
       return false;
     }
   };
+  const importBankFile = async (cycle: number, data: NonFlowerBankImportInput) => {
+    try {
+      const saved = await bankImportMutation.mutateAsync({ cycle, data });
+      queryClient.setQueryData<NonFlowerPurchasePeriod[]>(getListNonFlowerPurchasesQueryKey(), (current) => {
+        const existing = current ?? [];
+        return existing.map((period) => period.marketCycle === cycle
+          ? { ...period, imports: period.imports.some((entry) => entry.id === saved.import.id) ? period.imports : [...period.imports, saved.import].sort((a, b) => a.id - b.id) }
+          : period);
+      });
+      return saved;
+    } catch {
+      return null;
+    }
+  };
+  const saveImportDetails = async (importId: number, data: NonFlowerBankImportDetailsUpdate) => {
+    try {
+      const saved = await bankImportDetailsMutation.mutateAsync({ importId, data });
+      queryClient.setQueryData<NonFlowerPurchasePeriod[]>(getListNonFlowerPurchasesQueryKey(), (current) => current?.map((period) => ({
+        ...period,
+        imports: period.imports.map((entry) => entry.id === saved.id ? saved : entry),
+      })));
+      return saved;
+    } catch {
+      return null;
+    }
+  };
   if (marketContextQuery.isError || marketsQuery.isError || scheduleOverridesQuery.isError || flowerPriceTrackerQuery.isError || flowerPriceDashboardQuery.isError || nonFlowerPeriodsQuery.isError) {
     return <TooltipProvider><div className="flex min-h-[100dvh] items-center justify-center bg-background px-6 text-center font-serif text-lg text-muted-foreground">Your market notes could not be loaded. Refresh to try again.</div></TooltipProvider>;
   }
   if (marketContextQuery.isLoading || marketsQuery.isLoading || scheduleOverridesQuery.isLoading || flowerPriceTrackerQuery.isLoading || flowerPriceDashboardQuery.isLoading || nonFlowerPeriodsQuery.isLoading || !context) {
     return <TooltipProvider><div className="flex min-h-[100dvh] items-center justify-center bg-background font-serif text-lg text-muted-foreground">Loading your market notes…</div></TooltipProvider>;
   }
-  return <TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} markets={markets} bouquetPlan={context.bouquetPlan} closeMarket={context.closeMarket} flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesQuery.isLoading} flowerPriceTrackerReports={flowerPriceTrackerReports} flowerPriceTrackerLoading={flowerPriceTrackerQuery.isLoading} flowerPriceDashboardObservations={flowerPriceDashboardObservations} flowerPriceSellThroughGuidance={flowerPriceSellThroughGuidance} flowerPriceDashboardLoading={flowerPriceDashboardQuery.isLoading} nonFlowerPeriods={nonFlowerPeriods} saveBackfill={saveBackfill} saveNonFlowerPurchases={saveNonFlowerPurchases} toggleBuyItem={toggleBuyItem} setBuyListLock={setBuyListLock} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} saveBouquetPlan={saveBouquetPlan} saveCloseMarket={saveCloseMarket} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /></WouterRouter><Toaster /></TooltipProvider>;
+  return <TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router nextMarket={nextMarket} scheduleOverrides={scheduleOverrides} buyItems={buyItems} actualPurchases={actualPurchases} costs={costs} buyList={buyList} markets={markets} bouquetPlan={context.bouquetPlan} closeMarket={context.closeMarket} flowerPrices={flowerPrices} flowerPricesLoading={flowerPricesQuery.isLoading} flowerPriceTrackerReports={flowerPriceTrackerReports} flowerPriceTrackerLoading={flowerPriceTrackerQuery.isLoading} flowerPriceDashboardObservations={flowerPriceDashboardObservations} flowerPriceSellThroughGuidance={flowerPriceSellThroughGuidance} flowerPriceDashboardLoading={flowerPriceDashboardQuery.isLoading} nonFlowerPeriods={nonFlowerPeriods} saveBackfill={saveBackfill} saveNonFlowerPurchases={saveNonFlowerPurchases} importBankFile={importBankFile} saveImportDetails={saveImportDetails} toggleBuyItem={toggleBuyItem} setBuyListLock={setBuyListLock} saveActualPurchases={saveActualPurchases} saveCosts={saveCosts} reportPurchases={reportPurchases} saveBouquetPlan={saveBouquetPlan} saveCloseMarket={saveCloseMarket} saveScheduleOverride={saveScheduleOverride} clearScheduleOverride={clearScheduleOverride} /></WouterRouter><Toaster /></TooltipProvider>;
 }
 
 function App() {
