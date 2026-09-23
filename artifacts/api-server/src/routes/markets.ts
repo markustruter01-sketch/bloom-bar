@@ -311,7 +311,18 @@ async function readMarketDayTodoPeriod(cycle: number, overrides: ScheduleOverrid
   return formatMarketDayTodoPeriod(cycle, closeMarket?.closed ?? false, items, snapshot, overrides);
 }
 
-async function captureClosedMarketTodoAndGenerateNext(cycle: number, tx: any) {
+function getNextTodoMarketCycle(cycle: number, overrides: ScheduleOverride[]) {
+  let nextCycle = cycle + 1;
+  while (overrides.some((override) => (
+    override.marketCycle === nextCycle
+    && (override.status === "skipped" || override.status === "rescheduled")
+  ))) {
+    nextCycle += 1;
+  }
+  return nextCycle;
+}
+
+async function captureClosedMarketTodoAndGenerateNext(cycle: number, nextCycle: number, tx: any) {
   const [existingSnapshot] = await tx
     .select()
     .from(marketDayTodoSnapshotsTable)
@@ -330,7 +341,6 @@ async function captureClosedMarketTodoAndGenerateNext(cycle: number, tx: any) {
         position: item.position,
       })),
     });
-    const nextCycle = cycle + 1;
     const nextItems = await tx
       .select({ id: marketDayTodoItemsTable.id })
       .from(marketDayTodoItemsTable)
@@ -1684,8 +1694,14 @@ router.patch("/markets/context/:cycle/close", async (req, res): Promise<void> =>
   const notes = Object.prototype.hasOwnProperty.call(body.data, "notes")
     ? (typeof body.data.notes === "string" && body.data.notes.trim() ? body.data.notes.trim() : null)
     : existingCloseMarket?.notes ?? null;
-  if (body.data.closed && !existingCloseMarket?.closed) {
-    await ensureMarketContext(params.data.cycle + 1);
+  const scheduleOverrides = body.data.closed && !existingCloseMarket?.closed
+    ? await readScheduleOverrides()
+    : [];
+  const nextTodoCycle = body.data.closed && !existingCloseMarket?.closed
+    ? getNextTodoMarketCycle(params.data.cycle, scheduleOverrides)
+    : null;
+  if (nextTodoCycle !== null) {
+    await ensureMarketContext(nextTodoCycle);
   }
   const [closeMarket] = await db.transaction(async (tx) => {
     const [updatedCloseMarket] = await tx
@@ -1694,7 +1710,7 @@ router.patch("/markets/context/:cycle/close", async (req, res): Promise<void> =>
       .where(eq(closeMarketsTable.marketCycle, params.data.cycle))
       .returning();
     if (body.data.closed && !existingCloseMarket?.closed) {
-      await captureClosedMarketTodoAndGenerateNext(params.data.cycle, tx);
+      await captureClosedMarketTodoAndGenerateNext(params.data.cycle, nextTodoCycle!, tx);
     }
     return [updatedCloseMarket];
   });

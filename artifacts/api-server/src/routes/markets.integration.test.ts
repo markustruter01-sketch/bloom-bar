@@ -22,7 +22,7 @@ import {
   pool,
 } from "@workspace/db";
 
-const testCycles = [9001, 9002, 9003];
+const testCycles = [9001, 9002, 9003, 9004];
 
 let server: Server;
 let baseUrl: string;
@@ -1068,5 +1068,37 @@ describe("non-flower price tracking", () => {
       ["Rinse buckets", false],
       ["Pack umbrella sign", false],
     ]);
+  });
+
+  it("carries the list past skipped and rescheduled cycles", async () => {
+    const cycle = testCycles[0];
+    const skippedCycle = testCycles[1];
+    const rescheduledCycle = testCycles[2];
+    const nextRealCycle = testCycles[3];
+    const skip = await request(`/markets/schedule/overrides/${skippedCycle}`, {
+      method: "PUT",
+      body: JSON.stringify({ status: "skipped", rescheduledDate: null }),
+    });
+    assert.equal(skip.status, 200);
+    const reschedule = await request(`/markets/schedule/overrides/${rescheduledCycle}`, {
+      method: "PUT",
+      body: JSON.stringify({ status: "rescheduled", rescheduledDate: "2026-10-04" }),
+    });
+    assert.equal(reschedule.status, 200);
+
+    const saved = await request(`/markets/day-todos/${cycle}`, {
+      method: "PUT",
+      body: JSON.stringify({ items: [{ description: "Bring shade cloth", completed: false, position: 0 }] }),
+    });
+    assert.equal(saved.status, 200);
+    const closed = await patch(`/markets/context/${cycle}/close`, { counts: {}, closed: true });
+    assert.equal(closed.status, 200);
+
+    const listed = await request("/markets/day-todos");
+    assert.equal(listed.status, 200);
+    const next = listed.body.find((period: any) => period.marketCycle === nextRealCycle);
+    assert.deepEqual(next.items.map((item: any) => [item.description, item.completed]), [["Bring shade cloth", false]]);
+    assert.equal(listed.body.find((period: any) => period.marketCycle === skippedCycle)?.items.length ?? 0, 0);
+    assert.equal(listed.body.find((period: any) => period.marketCycle === rescheduledCycle)?.items.length ?? 0, 0);
   });
 });
