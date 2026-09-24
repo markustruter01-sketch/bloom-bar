@@ -1,10 +1,10 @@
 ---
 name: Bank PDF import boundary
-description: The supported PDF bank-export shape and the reason OCR remains a separate follow-up.
+description: The supported PDF bank-export shape and the browser-side OCR fallback boundary.
 ---
 
-The bank import flow should treat selectable-text PDFs as the supported baseline and reject image-only PDFs with a clear user-facing message until OCR is added.
+The bank import flow should parse selectable-text PDFs first and fall back to browser-side OCR for image-only pages. Only fully parsed, validated lines should be sent to the API.
 
-**Why:** Browser-side text extraction can reliably preserve dates, merchant text, and amounts without retaining the uploaded file, while image-only statements require a separate OCR pipeline with different accuracy and privacy considerations.
+**Why:** Browser-side parsing keeps the uploaded statement out of storage and preserves the existing duplicate fingerprint, detail breakdown, and reconciliation flow. OCR can be slower and less certain, so an unreadable result must fail before the API call rather than create partial records.
 
-**How to apply:** Keep fingerprinting, parsed-line validation, duplicate protection, and detail reconciliation format-agnostic. Add OCR only as a parser fallback for PDFs that produce no text rows.
+**How to apply:** Keep fingerprinting, parsed-line validation, duplicate protection, and detail reconciliation format-agnostic. Run OCR only when text extraction produces no purchase lines, and surface a clear no-import error when OCR cannot produce any debit lines.

@@ -1,5 +1,6 @@
 import type { NonFlowerBankImportLineInput } from '@workspace/api-client-react';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { createWorker } from 'tesseract.js';
 
 export type ParsedBankLine = NonFlowerBankImportLineInput;
 
@@ -128,37 +129,96 @@ function pdfRows(items: unknown[]) {
     .filter(Boolean);
 }
 
+const unreadablePdfMessage = 'No purchase transactions could be read from this PDF. Make sure the statement is clear and includes debit amounts. No import was created.';
+
+function parseBankStatementRows(rows: string[]): ParsedBankLine[] {
+  const lines: ParsedBankLine[] = [];
+  rows.forEach((row, index) => {
+    if (/^(opening|closing|available|running|account|date|description|transaction|total|balance)/i.test(row)) return;
+    const amountMatch = row.match(/(?:^|\s)([$£€]?\s*\(?\d[\d,]*(?:\.\d{2})\)?)(?:\s*(?:DR|DEBIT))?\s*$/i);
+    if (!amountMatch || amountMatch.index === undefined) return;
+    const amount = parseAmount(amountMatch[1]);
+    if (amount === null || amount === 0) return;
+    const prefix = row.slice(0, amountMatch.index).trim();
+    if (!prefix) return;
+    const dateMatch = prefix.match(/^(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2})\s+(.+)$/);
+    const description = (dateMatch?.[2] ?? prefix).trim();
+    lines.push({
+      sourceLineNumber: index + 1,
+      transactionDate: dateMatch ? normalizeDate(dateMatch[1]) : null,
+      merchant: description,
+      description,
+      amount: Math.abs(amount),
+      reference: null,
+    });
+  });
+  return lines;
+}
+
+export function parseBankStatementText(input: string): ParsedBankLine[] {
+  const lines = parseBankStatementRows(input.split(/\r?\n/).map((row) => row.trim()).filter(Boolean));
+  if (lines.length === 0) throw new Error(unreadablePdfMessage);
+  return lines;
+}
+
+async function recognizePdfPages(pdfDocument: Awaited<ReturnType<typeof pdfjsLib.getDocument>['promise']>) {
+  if (typeof document === 'undefined') {
+    throw new Error('Scanned PDFs can only be read in a browser.');
+  }
+  const worker = await createWorker('eng', 1, {
+    logger: () => undefined,
+  });
+  const recognizedText: string[] = [];
+  try {
+    for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
+      const page = await pdfDocument.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: 2 });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('The browser could not prepare a page for OCR.');
+      await page.render({ canvas: canvas, canvasContext: context, viewport }).promise;
+      const result = await worker.recognize(canvas);
+      recognizedText.push(result.data.text);
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+  } finally {
+    await worker.terminate();
+  }
+  return recognizedText;
+}
+
 export async function parseBankPdf(input: ArrayBuffer): Promise<ParsedBankLine[]> {
-  const document = await pdfjsLib.getDocument({
+  const loadingTask = pdfjsLib.getDocument({
     data: new Uint8Array(input),
     disableWorker: true,
-  } as Parameters<typeof pdfjsLib.getDocument>[0] & { disableWorker: boolean }).promise;
-  const lines: ParsedBankLine[] = [];
-  for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
-    const page = await document.getPage(pageNumber);
+  } as Parameters<typeof pdfjsLib.getDocument>[0] & { disableWorker: boolean });
+  const pdfDocument = await loadingTask.promise;
+  const textRows: string[] = [];
+  for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
+    const page = await pdfDocument.getPage(pageNumber);
     const content = await page.getTextContent();
-    for (const row of pdfRows(content.items)) {
-      if (/^(opening|closing|available|running|account|date|description|transaction|total|balance)/i.test(row)) continue;
-      const amountMatch = row.match(/(?:^|\s)([$£€]?\s*\(?\d[\d,]*(?:\.\d{2})\)?)(?:\s*(?:DR|DEBIT))?\s*$/i);
-      if (!amountMatch || amountMatch.index === undefined) continue;
-      const amount = parseAmount(amountMatch[1]);
-      if (amount === null || amount === 0) continue;
-      const prefix = row.slice(0, amountMatch.index).trim();
-      if (!prefix) continue;
-      const dateMatch = prefix.match(/^(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2})\s+(.+)$/);
-      const description = (dateMatch?.[2] ?? prefix).trim();
-      lines.push({
-        sourceLineNumber: lines.length + 1,
-        transactionDate: dateMatch ? normalizeDate(dateMatch[1]) : null,
-        merchant: description,
-        description,
-        amount: Math.abs(amount),
-        reference: null,
-      });
-    }
+    textRows.push(...pdfRows(content.items));
   }
-  if (lines.length === 0) throw new Error('No purchase transactions could be read from this PDF. Try a text-based bank export.');
-  return lines;
+  const textLines = parseBankStatementRows(textRows);
+  if (textLines.length > 0) {
+    await loadingTask.destroy();
+    return textLines;
+  }
+
+  let ocrRows: string[];
+  try {
+    ocrRows = (await recognizePdfPages(pdfDocument)).flatMap((text) => text.split(/\r?\n/).map((row) => row.trim()).filter(Boolean));
+  } catch {
+    throw new Error('This scanned PDF could not be read. Check that the pages are clear and try again. No import was created.');
+  } finally {
+    await loadingTask.destroy();
+  }
+  const ocrLines = parseBankStatementRows(ocrRows);
+  if (ocrLines.length === 0) throw new Error(unreadablePdfMessage);
+  return ocrLines;
 }
 
 export async function sha256Fingerprint(file: File) {
