@@ -1,0 +1,13 @@
+I'm going to ask you to extract data from receipt images and populate the "Flower Price Tracker" and "Non Flower Price Tracking" tabs. Before I do, please answer these questions about how the app currently works, as precisely as you can:
+
+Data structure: What are the exact column names, data types, and any required or validated fields for each of the two tabs? Are they database tables, a spreadsheet-style UI, or something else? (Please list the schema or the file where it's defined.)
+Existing data: Is there existing data in each tab? How should new entries be handled: append, or check for duplicates first? What counts as a duplicate (same supplier, date, product, and price)?
+Image input: Can you read data from images I attach directly in chat? Is there an upload feature in the app itself? Is there any limit on how many images or how large they can be per message?
+Extraction method: If the app needs to process receipts itself (not just you in chat), what OCR or vision method is used or available? Can it handle crumpled, handwritten, or low-quality receipts?
+Categorisation: How does the app decide whether an item belongs in "Flower" or "Non Flower"? Is there a category field, a product list, or a rule I need to define? What should happen with items you can't classify?
+Units and pricing: How are units handled (per stem, per bunch, per box, per kg)? Is there a price-per-unit calculation I should populate, or should I enter the raw price only? How are currency, GST/tax, and discounts handled?
+Dates and suppliers: What date format does the app expect? Is the supplier a free-text field or a dropdown or linked table? What happens if a supplier doesn't exist yet?
+Missing or unclear data: What should happen when a field on the receipt is unreadable or missing: leave blank, flag it, or ask me? Is there a "notes" or "needs review" field?
+Writing method: How do you write data into the tabs (UI automation, API, direct database insert, editing a file)? Is there a risk of overwriting existing records? Is there an undo or backup option?
+Verification: Can you show me a preview or summary table of the extracted data for approval before saving it?
+Best practice: Based on how this app is built, how would you recommend I word the request so you extract and save the data accurately on the first try?
