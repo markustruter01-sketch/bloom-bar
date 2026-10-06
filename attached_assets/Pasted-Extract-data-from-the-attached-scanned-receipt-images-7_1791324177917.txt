@@ -1,0 +1,25 @@
+Extract data from the attached scanned receipt images (7 pages) and add it to the "Flower Price Tracker" tab only. Do not touch any other tab.
+About the scans
+	•	Pages are often rotated sideways, and each page can hold several receipts. Treat every receipt separately.
+	•	Suppliers and dates are mixed (e.g. FlowerHQ, Jul/Aug/Sep 2026).
+	•	Ignore yellow highlighter marks. They mean nothing.
+What to extract (one row per line item)
+	•	Supplier name, receipt/invoice number, and receipt date (convert to [DATE FORMAT])
+	•	Flower type and variety, e.g. "ASTER / GENERAL" → type: Aster, variety: General. "DELPHINIUM / BUTTERFLY - LOCAL" → Delphinium, Butterfly, origin: Local. "DELPHINIUM / IMPORT - BUTTERFLY" → origin: Import.
+	•	Stem or bunch size where shown, e.g. "CHRYS / 5 STEM - ALL" → 5 stems. "SNAPDRAGON / 10 STEM" → 10 stems.
+	•	Quantity, unit price, and line total
+Pricing rules
+	•	Record exactly what was actually paid, GST-inclusive.
+	•	Where a line has a promo and a struck-through original price, use the discounted price (the "2 @ $17.50 = $35.00" figures). Ignore the struck-through amount. If the tracker has a field for the promo or original price, you may fill it, but the main price must be the amount paid.
+	•	Use the printed line total as the source of truth. Don't recalculate it from rounded unit prices (e.g. 3 @ $6.67 = $20.00).
+	•	Do not record subtotals, GST, or receipt totals as rows. Use them only to check the line items add up to the receipt total.
+Columns: Populate [PASTE EXACT COLUMN NAMES FROM REPLIT'S ANSWER]. Leave calculated columns alone: [LIST ANY AUTO-CALCULATED COLUMNS].
+Sorting and saving
+	•	Sort all rows by date (oldest first), then by supplier, then by receipt number.
+	•	Append to existing data. Do not overwrite or delete anything. Skip any row that duplicates an existing one (same supplier, receipt number, and item).
+	•	Add any new supplier in the way the app normally handles it: [REPLIT'S ANSWER].
+Before saving
+	1.	Show me a preview table of all extracted rows, grouped by receipt, with each receipt's total checked against the sum of its lines.
+	2.	List anything unreadable or uncertain (e.g. blurry receipt numbers or dates) and mark it "needs review" rather than guessing.
+	3.	Wait for my approval, then save.
+After saving, confirm how many rows were added and how many were skipped as duplicates
