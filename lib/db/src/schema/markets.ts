@@ -8,6 +8,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   serial,
   text,
@@ -178,6 +179,80 @@ export const flowerPriceBackfillsTable = pgTable(
     bunchSizePositive: check("flower_price_backfills_bunch_size_positive", sql`"bunch_size" > 0`),
     bunchesPurchasedPositive: check("flower_price_backfills_bunches_positive", sql`"bunches_purchased" > 0`),
     pricePerBunchNonNegative: check("flower_price_backfills_price_per_bunch_non_negative", sql`"price_per_bunch" >= 0`),
+  }),
+);
+
+export const flowerPriceReceiptsTable = pgTable(
+  "flower_price_receipts",
+  {
+    id: serial("id").primaryKey(),
+    supplier: text("supplier").notNull(),
+    receiptNumber: text("receipt_number"),
+    purchaseDate: date("purchase_date", { mode: "string" }).notNull(),
+    receiptTotal: numeric("receipt_total", { precision: 12, scale: 2, mode: "number" }).notNull(),
+    reviewStatus: text("review_status", { enum: ["ready", "needs-review"] }).notNull().default("ready"),
+    reviewNote: text("review_note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    supplierReceiptUnique: unique("flower_price_receipts_supplier_number_unique").on(table.supplier, table.receiptNumber),
+    purchaseDateIndex: index("flower_price_receipts_purchase_date_idx").on(table.purchaseDate),
+    reviewStatusAllowed: check(
+      "flower_price_receipts_review_status_allowed",
+      sql`"review_status" IN ('ready', 'needs-review')`,
+    ),
+    receiptTotalNonNegative: check("flower_price_receipts_total_non_negative", sql`"receipt_total" >= 0`),
+  }),
+);
+
+export const flowerPriceReceiptLinesTable = pgTable(
+  "flower_price_receipt_lines",
+  {
+    id: serial("id").primaryKey(),
+    receiptId: integer("receipt_id")
+      .notNull()
+      .references(() => flowerPriceReceiptsTable.id, { onDelete: "cascade" }),
+    lineNumber: integer("line_number").notNull(),
+    flowerType: text("flower_type").notNull(),
+    varietyOrigin: text("variety_origin"),
+    sizeText: text("size_text"),
+    stemsPerUnit: integer("stems_per_unit"),
+    quantity: integer("quantity").notNull(),
+    unitPrice: numeric("unit_price", { precision: 12, scale: 4, mode: "number" }),
+    printedLineTotal: numeric("printed_line_total", { precision: 12, scale: 2, mode: "number" }),
+    lineTotal: numeric("line_total", { precision: 12, scale: 2, mode: "number" }),
+    taxBasis: text("tax_basis", { enum: ["inclusive", "exclusive", "unknown"] }).notNull(),
+    reviewStatus: text("review_status", { enum: ["ready", "needs-review"] }).notNull().default("ready"),
+    reviewNote: text("review_note"),
+  },
+  (table) => ({
+    receiptLineUnique: unique("flower_price_receipt_lines_receipt_line_unique").on(table.receiptId, table.lineNumber),
+    quantityPositive: check("flower_price_receipt_lines_quantity_positive", sql`"quantity" > 0`),
+    lineNumberPositive: check("flower_price_receipt_lines_line_number_positive", sql`"line_number" > 0`),
+    stemsPerUnitPositive: check(
+      "flower_price_receipt_lines_stems_per_unit_positive",
+      sql`"stems_per_unit" IS NULL OR "stems_per_unit" > 0`,
+    ),
+    unitPriceNonNegative: check(
+      "flower_price_receipt_lines_unit_price_non_negative",
+      sql`"unit_price" IS NULL OR "unit_price" >= 0`,
+    ),
+    printedLineTotalNonNegative: check(
+      "flower_price_receipt_lines_printed_total_non_negative",
+      sql`"printed_line_total" IS NULL OR "printed_line_total" >= 0`,
+    ),
+    lineTotalNonNegative: check(
+      "flower_price_receipt_lines_total_non_negative",
+      sql`"line_total" IS NULL OR "line_total" >= 0`,
+    ),
+    taxBasisAllowed: check(
+      "flower_price_receipt_lines_tax_basis_allowed",
+      sql`"tax_basis" IN ('inclusive', 'exclusive', 'unknown')`,
+    ),
+    reviewStatusAllowed: check(
+      "flower_price_receipt_lines_review_status_allowed",
+      sql`"review_status" IN ('ready', 'needs-review')`,
+    ),
   }),
 );
 
@@ -405,6 +480,8 @@ export const insertMarketBuyListStateSchema = createInsertSchema(marketBuyListSt
 export const insertMarketBuyListEditLogSchema = createInsertSchema(marketBuyListEditLogsTable).omit({ id: true });
 export const insertMarketActualPurchaseSchema = createInsertSchema(marketActualPurchasesTable).omit({ id: true });
 export const insertFlowerPriceBackfillSchema = createInsertSchema(flowerPriceBackfillsTable).omit({ id: true, createdAt: true });
+export const insertFlowerPriceReceiptSchema = createInsertSchema(flowerPriceReceiptsTable).omit({ id: true, createdAt: true });
+export const insertFlowerPriceReceiptLineSchema = createInsertSchema(flowerPriceReceiptLinesTable).omit({ id: true });
 export const insertMarketCostSchema = createInsertSchema(marketCostsTable).omit({ id: true });
 export const insertNonFlowerPurchaseSchema = createInsertSchema(nonFlowerPurchasesTable).omit({ id: true });
 export const insertNonFlowerPurchaseAllocationSchema = createInsertSchema(nonFlowerPurchaseAllocationsTable).omit({ id: true });
@@ -425,6 +502,8 @@ export type InsertMarketBuyListState = z.infer<typeof insertMarketBuyListStateSc
 export type InsertMarketBuyListEditLog = z.infer<typeof insertMarketBuyListEditLogSchema>;
 export type InsertMarketActualPurchase = z.infer<typeof insertMarketActualPurchaseSchema>;
 export type InsertFlowerPriceBackfill = z.infer<typeof insertFlowerPriceBackfillSchema>;
+export type InsertFlowerPriceReceipt = z.infer<typeof insertFlowerPriceReceiptSchema>;
+export type InsertFlowerPriceReceiptLine = z.infer<typeof insertFlowerPriceReceiptLineSchema>;
 export type InsertMarketCost = z.infer<typeof insertMarketCostSchema>;
 export type InsertNonFlowerPurchase = z.infer<typeof insertNonFlowerPurchaseSchema>;
 export type InsertNonFlowerPurchaseAllocation = z.infer<typeof insertNonFlowerPurchaseAllocationSchema>;
@@ -442,6 +521,8 @@ export type MarketBuyListState = typeof marketBuyListStatesTable.$inferSelect;
 export type MarketBuyListEditLog = typeof marketBuyListEditLogsTable.$inferSelect;
 export type MarketActualPurchase = typeof marketActualPurchasesTable.$inferSelect;
 export type FlowerPriceBackfill = typeof flowerPriceBackfillsTable.$inferSelect;
+export type FlowerPriceReceipt = typeof flowerPriceReceiptsTable.$inferSelect;
+export type FlowerPriceReceiptLine = typeof flowerPriceReceiptLinesTable.$inferSelect;
 export type MarketCost = typeof marketCostsTable.$inferSelect;
 export type NonFlowerPurchase = typeof nonFlowerPurchasesTable.$inferSelect;
 export type NonFlowerPurchaseAllocation = typeof nonFlowerPurchaseAllocationsTable.$inferSelect;
