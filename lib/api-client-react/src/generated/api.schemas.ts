@@ -748,6 +748,149 @@ export interface FlowerPriceDashboardResponse {
   sellThroughGuidance: FlowerSellThroughGuidance[];
 }
 
+export type FlowerPriceReceiptLineTaxBasis = typeof FlowerPriceReceiptLineTaxBasis[keyof typeof FlowerPriceReceiptLineTaxBasis];
+
+
+export const FlowerPriceReceiptLineTaxBasis = {
+  inclusive: 'inclusive',
+  exclusive: 'exclusive',
+  unknown: 'unknown',
+} as const;
+
+export type FlowerPriceReceiptLineReviewStatus = typeof FlowerPriceReceiptLineReviewStatus[keyof typeof FlowerPriceReceiptLineReviewStatus];
+
+
+export const FlowerPriceReceiptLineReviewStatus = {
+  ready: 'ready',
+  'needs-review': 'needs-review',
+} as const;
+
+export interface FlowerPriceReceiptLine {
+  id: number;
+  /** @minimum 1 */
+  lineNumber: number;
+  flowerType: string;
+  varietyOrigin: string | null;
+  sizeText: string | null;
+  /** @minimum 1 */
+  stemsPerUnit: number | null;
+  /** @minimum 1 */
+  quantity: number;
+  /**
+     * Unit price printed on the receipt; tax treatment is identified separately.
+     * @minimum 0
+     */
+  unitPrice: number | null;
+  /**
+     * Exact line amount printed on the receipt, before any separately stated GST.
+     * @minimum 0
+     */
+  printedLineTotal: number | null;
+  /**
+     * Exact GST-inclusive paid amount for this line when printed or verified.
+     * @minimum 0
+     */
+  lineTotal: number | null;
+  taxBasis: FlowerPriceReceiptLineTaxBasis;
+  reviewStatus: FlowerPriceReceiptLineReviewStatus;
+  reviewNote: string | null;
+}
+
+export type FlowerPriceReceiptReviewStatus = typeof FlowerPriceReceiptReviewStatus[keyof typeof FlowerPriceReceiptReviewStatus];
+
+
+export const FlowerPriceReceiptReviewStatus = {
+  ready: 'ready',
+  'needs-review': 'needs-review',
+} as const;
+
+export interface FlowerPriceReceipt {
+  id: number;
+  supplier: string;
+  receiptNumber: string | null;
+  /** ISO calendar date of the purchase */
+  purchaseDate: string;
+  /** @minimum 0 */
+  receiptTotal: number;
+  reviewStatus: FlowerPriceReceiptReviewStatus;
+  reviewNote: string | null;
+  lines: FlowerPriceReceiptLine[];
+}
+
+export type FlowerPriceReceiptInputReviewStatus = typeof FlowerPriceReceiptInputReviewStatus[keyof typeof FlowerPriceReceiptInputReviewStatus];
+
+
+export const FlowerPriceReceiptInputReviewStatus = {
+  ready: 'ready',
+  'needs-review': 'needs-review',
+} as const;
+
+export type FlowerPriceReceiptLineInputTaxBasis = typeof FlowerPriceReceiptLineInputTaxBasis[keyof typeof FlowerPriceReceiptLineInputTaxBasis];
+
+
+export const FlowerPriceReceiptLineInputTaxBasis = {
+  inclusive: 'inclusive',
+  exclusive: 'exclusive',
+  unknown: 'unknown',
+} as const;
+
+export type FlowerPriceReceiptLineInputReviewStatus = typeof FlowerPriceReceiptLineInputReviewStatus[keyof typeof FlowerPriceReceiptLineInputReviewStatus];
+
+
+export const FlowerPriceReceiptLineInputReviewStatus = {
+  ready: 'ready',
+  'needs-review': 'needs-review',
+} as const;
+
+export interface FlowerPriceReceiptLineInput {
+  /** @minimum 1 */
+  lineNumber: number;
+  flowerType: string;
+  varietyOrigin: string | null;
+  sizeText: string | null;
+  /** @minimum 1 */
+  stemsPerUnit: number | null;
+  /** @minimum 1 */
+  quantity: number;
+  /** @minimum 0 */
+  unitPrice: number | null;
+  /** @minimum 0 */
+  printedLineTotal: number | null;
+  /** @minimum 0 */
+  lineTotal: number | null;
+  taxBasis: FlowerPriceReceiptLineInputTaxBasis;
+  reviewStatus: FlowerPriceReceiptLineInputReviewStatus;
+  reviewNote: string | null;
+}
+
+export interface FlowerPriceReceiptInput {
+  supplier: string;
+  receiptNumber: string | null;
+  /** ISO calendar date of the purchase */
+  purchaseDate: string;
+  /** @minimum 0 */
+  receiptTotal: number;
+  reviewStatus: FlowerPriceReceiptInputReviewStatus;
+  reviewNote: string | null;
+  lines: FlowerPriceReceiptLineInput[];
+}
+
+export interface CreateFlowerPriceReceiptsInput {
+  receipts: FlowerPriceReceiptInput[];
+}
+
+export interface FlowerPriceReceiptImportResult {
+  /** @minimum 0 */
+  insertedReceipts: number;
+  /** @minimum 0 */
+  skippedReceipts: number;
+  /** @minimum 0 */
+  insertedLines: number;
+  /** @minimum 0 */
+  skippedLines: number;
+  receipts: FlowerPriceReceipt[];
+}
+
 export interface FlowerPriceBackfillInput {
   /** ISO calendar date of the historical purchase */
   purchaseDate: string;

@@ -14,6 +14,8 @@ import {
   marketDayTodoItemsTable,
   marketDayTodoSnapshotsTable,
   flowerPriceBackfillsTable,
+  flowerPriceReceiptLinesTable,
+  flowerPriceReceiptsTable,
   marketBuyListEditLogsTable,
   marketBuyListStatesTable,
   marketCostsTable,
@@ -511,6 +513,149 @@ describe("market context persistence", () => {
     const afterBackfill = await request("/markets/flower-price-dashboard");
     assert.equal(afterBackfill.status, 200);
     assert.deepEqual(afterBackfill.body.observations.filter((observation: any) => observation.flower === "Waratah").map((observation: any) => observation.source), ["backfill", "reported"]);
+  });
+
+  it("stores flower receipt lines and skips an already imported supplier receipt item", async () => {
+    const supplier = "API receipt import fixture";
+    const receiptNumber = "TEST-RECEIPT-1";
+    const payload = {
+      receipts: [{
+        supplier,
+        receiptNumber,
+        purchaseDate: "2026-09-26",
+        receiptTotal: 30,
+        reviewStatus: "ready",
+        reviewNote: null,
+        lines: [{
+          lineNumber: 1,
+          flowerType: "Tulip",
+          varietyOrigin: "White · local",
+          sizeText: "10 stems",
+          stemsPerUnit: 10,
+          quantity: 2,
+          unitPrice: 15,
+          printedLineTotal: 30,
+          lineTotal: 30,
+          taxBasis: "inclusive",
+          reviewStatus: "ready",
+          reviewNote: null,
+        }],
+      }],
+    };
+
+    try {
+      const imported = await request("/markets/flower-price-receipts", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      assert.equal(imported.status, 201);
+      assert.deepEqual({
+        insertedReceipts: imported.body.insertedReceipts,
+        skippedReceipts: imported.body.skippedReceipts,
+        insertedLines: imported.body.insertedLines,
+        skippedLines: imported.body.skippedLines,
+      }, { insertedReceipts: 1, skippedReceipts: 0, insertedLines: 1, skippedLines: 0 });
+
+      const listed = await request("/markets/flower-price-receipts");
+      assert.equal(listed.status, 200);
+      const savedReceipt = listed.body.find((receipt: any) => receipt.receiptNumber === receiptNumber);
+      assert.ok(savedReceipt);
+      assert.equal(savedReceipt.lines[0].lineTotal, 30);
+      assert.equal(savedReceipt.lines[0].stemsPerUnit, 10);
+
+      const duplicate = await request("/markets/flower-price-receipts", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      assert.equal(duplicate.status, 201);
+      assert.deepEqual({
+        insertedReceipts: duplicate.body.insertedReceipts,
+        skippedReceipts: duplicate.body.skippedReceipts,
+        insertedLines: duplicate.body.insertedLines,
+        skippedLines: duplicate.body.skippedLines,
+      }, { insertedReceipts: 0, skippedReceipts: 1, insertedLines: 0, skippedLines: 1 });
+    } finally {
+      const receipts = await db
+        .select({ id: flowerPriceReceiptsTable.id })
+        .from(flowerPriceReceiptsTable)
+        .where(and(
+          eq(flowerPriceReceiptsTable.supplier, supplier),
+          eq(flowerPriceReceiptsTable.receiptNumber, receiptNumber),
+        ));
+      if (receipts.length > 0) {
+        await db.delete(flowerPriceReceiptLinesTable).where(inArray(
+          flowerPriceReceiptLinesTable.receiptId,
+          receipts.map((receipt) => receipt.id),
+        ));
+        await db.delete(flowerPriceReceiptsTable).where(inArray(
+          flowerPriceReceiptsTable.id,
+          receipts.map((receipt) => receipt.id),
+        ));
+      }
+    }
+  });
+
+  it("deduplicates receipts whose invoice number is unreadable using their receipt contents", async () => {
+    const supplier = "API receipt unknown-number fixture";
+    const payload = {
+      receipts: [{
+        supplier,
+        receiptNumber: null,
+        purchaseDate: "2026-08-29",
+        receiptTotal: 15,
+        reviewStatus: "needs-review",
+        reviewNote: "Invoice number unreadable in scan.",
+        lines: [{
+          lineNumber: 1,
+          flowerType: "Tulip",
+          varietyOrigin: "White · local",
+          sizeText: "10 stems",
+          stemsPerUnit: 10,
+          quantity: 1,
+          unitPrice: 15,
+          printedLineTotal: 15,
+          lineTotal: 15,
+          taxBasis: "inclusive",
+          reviewStatus: "ready",
+          reviewNote: null,
+        }],
+      }],
+    };
+
+    try {
+      const firstImport = await request("/markets/flower-price-receipts", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      assert.equal(firstImport.status, 201);
+      assert.equal(firstImport.body.insertedReceipts, 1);
+      assert.equal(firstImport.body.insertedLines, 1);
+
+      const repeatImport = await request("/markets/flower-price-receipts", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      assert.equal(repeatImport.status, 201);
+      assert.equal(repeatImport.body.insertedReceipts, 0);
+      assert.equal(repeatImport.body.skippedReceipts, 1);
+      assert.equal(repeatImport.body.insertedLines, 0);
+      assert.equal(repeatImport.body.skippedLines, 1);
+    } finally {
+      const receipts = await db
+        .select({ id: flowerPriceReceiptsTable.id })
+        .from(flowerPriceReceiptsTable)
+        .where(eq(flowerPriceReceiptsTable.supplier, supplier));
+      if (receipts.length > 0) {
+        await db.delete(flowerPriceReceiptLinesTable).where(inArray(
+          flowerPriceReceiptLinesTable.receiptId,
+          receipts.map((receipt) => receipt.id),
+        ));
+        await db.delete(flowerPriceReceiptsTable).where(inArray(
+          flowerPriceReceiptsTable.id,
+          receipts.map((receipt) => receipt.id),
+        ));
+      }
+    }
   });
 
   it("protects the proposed list, logs unlock edits, and preserves the full purchase flow", async () => {

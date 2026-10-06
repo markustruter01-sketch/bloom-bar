@@ -236,6 +236,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FlowerPriceDashboardResponse"
+  /markets/flower-price-receipts:
+    get:
+      operationId: listFlowerPriceReceipts
+      tags: [markets]
+      summary: List receipt line items in the flower price tracker
+      responses:
+        "200":
+          description: Flower purchase receipts, grouped with their line items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlowerPriceReceipt"
+    post:
+      operationId: createFlowerPriceReceipts
+      tags: [markets]
+      summary: Import flower purchase receipts without duplicating existing lines
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFlowerPriceReceiptsInput"
+      responses:
+        "201":
+          description: Receipt import results and current receipt records
+          content:
+            application/json:
+              schema:
+                  $ref: "#/components/schemas/FlowerPriceReceiptImportResult"
+        "400":
+          description: Invalid receipt data
   /markets/flower-price-backfills:
     post:
       operationId: createFlowerPriceBackfill
@@ -1438,6 +1471,177 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FlowerSellThroughGuidance"
+    FlowerPriceReceiptLine:
+      type: object
+      required: [id, lineNumber, flowerType, varietyOrigin, sizeText, stemsPerUnit, quantity, unitPrice, printedLineTotal, lineTotal, taxBasis, reviewStatus, reviewNote]
+      properties:
+        id:
+          type: number
+        lineNumber:
+          type: number
+          minimum: 1
+        flowerType:
+          type: string
+        varietyOrigin:
+          type: string
+          nullable: true
+        sizeText:
+          type: string
+          nullable: true
+        stemsPerUnit:
+          type: number
+          nullable: true
+          minimum: 1
+        quantity:
+          type: number
+          minimum: 1
+        unitPrice:
+          type: number
+          nullable: true
+          minimum: 0
+          description: Unit price printed on the receipt; tax treatment is identified separately.
+        printedLineTotal:
+          type: number
+          nullable: true
+          minimum: 0
+          description: Exact line amount printed on the receipt, before any separately stated GST.
+        lineTotal:
+          type: number
+          nullable: true
+          minimum: 0
+          description: Exact GST-inclusive paid amount for this line when printed or verified.
+        taxBasis:
+          type: string
+          enum: [inclusive, exclusive, unknown]
+        reviewStatus:
+          type: string
+          enum: [ready, needs-review]
+        reviewNote:
+          type: string
+          nullable: true
+    FlowerPriceReceipt:
+      type: object
+      required: [id, supplier, receiptNumber, purchaseDate, receiptTotal, reviewStatus, reviewNote, lines]
+      properties:
+        id:
+          type: number
+        supplier:
+          type: string
+        receiptNumber:
+          type: string
+          nullable: true
+        purchaseDate:
+          type: string
+          description: ISO calendar date of the purchase
+        receiptTotal:
+          type: number
+          minimum: 0
+        reviewStatus:
+          type: string
+          enum: [ready, needs-review]
+        reviewNote:
+          type: string
+          nullable: true
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowerPriceReceiptLine"
+    CreateFlowerPriceReceiptsInput:
+      type: object
+      required: [receipts]
+      properties:
+        receipts:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowerPriceReceiptInput"
+    FlowerPriceReceiptInput:
+      type: object
+      required: [supplier, receiptNumber, purchaseDate, receiptTotal, reviewStatus, reviewNote, lines]
+      properties:
+        supplier:
+          type: string
+        receiptNumber:
+          type: string
+          nullable: true
+        purchaseDate:
+          type: string
+          description: ISO calendar date of the purchase
+        receiptTotal:
+          type: number
+          minimum: 0
+        reviewStatus:
+          type: string
+          enum: [ready, needs-review]
+        reviewNote:
+          type: string
+          nullable: true
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowerPriceReceiptLineInput"
+    FlowerPriceReceiptLineInput:
+      type: object
+      required: [lineNumber, flowerType, varietyOrigin, sizeText, stemsPerUnit, quantity, unitPrice, printedLineTotal, lineTotal, taxBasis, reviewStatus, reviewNote]
+      properties:
+        lineNumber:
+          type: number
+          minimum: 1
+        flowerType:
+          type: string
+        varietyOrigin:
+          type: string
+          nullable: true
+        sizeText:
+          type: string
+          nullable: true
+        stemsPerUnit:
+          type: number
+          nullable: true
+          minimum: 1
+        quantity:
+          type: number
+          minimum: 1
+        unitPrice:
+          type: number
+          nullable: true
+          minimum: 0
+        printedLineTotal:
+          type: number
+          nullable: true
+          minimum: 0
+        lineTotal:
+          type: number
+          nullable: true
+          minimum: 0
+        taxBasis:
+          type: string
+          enum: [inclusive, exclusive, unknown]
+        reviewStatus:
+          type: string
+          enum: [ready, needs-review]
+        reviewNote:
+          type: string
+          nullable: true
+    FlowerPriceReceiptImportResult:
+      type: object
+      required: [insertedReceipts, skippedReceipts, insertedLines, skippedLines, receipts]
+      properties:
+        insertedReceipts:
+          type: number
+          minimum: 0
+        skippedReceipts:
+          type: number
+          minimum: 0
+        insertedLines:
+          type: number
+          minimum: 0
+        skippedLines:
+          type: number
+          minimum: 0
+        receipts:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowerPriceReceipt"
     FlowerSellThroughGuidance:
       type: object
       required: [flower, averageSellThroughPercent, marketsTracked, guidance]

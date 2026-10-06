@@ -459,6 +459,143 @@ export const ListFlowerPriceDashboardResponse = zod.object({
 
 
 /**
+ * @summary List receipt line items in the flower price tracker
+ */
+export const listFlowerPriceReceiptsResponseReceiptTotalMin = 0;
+
+
+
+
+export const listFlowerPriceReceiptsResponseLinesItemUnitPriceMin = 0;
+
+export const listFlowerPriceReceiptsResponseLinesItemPrintedLineTotalMin = 0;
+
+export const listFlowerPriceReceiptsResponseLinesItemLineTotalMin = 0;
+
+
+
+export const ListFlowerPriceReceiptsResponseItem = zod.object({
+  "id": zod.number(),
+  "supplier": zod.string(),
+  "receiptNumber": zod.string().nullable(),
+  "purchaseDate": zod.string().describe('ISO calendar date of the purchase'),
+  "receiptTotal": zod.number().min(listFlowerPriceReceiptsResponseReceiptTotalMin),
+  "reviewStatus": zod.enum(['ready', 'needs-review']),
+  "reviewNote": zod.string().nullable(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "lineNumber": zod.number().min(1),
+  "flowerType": zod.string(),
+  "varietyOrigin": zod.string().nullable(),
+  "sizeText": zod.string().nullable(),
+  "stemsPerUnit": zod.number().min(1).nullable(),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(listFlowerPriceReceiptsResponseLinesItemUnitPriceMin).nullable().describe('Unit price printed on the receipt; tax treatment is identified separately.'),
+  "printedLineTotal": zod.number().min(listFlowerPriceReceiptsResponseLinesItemPrintedLineTotalMin).nullable().describe('Exact line amount printed on the receipt, before any separately stated GST.'),
+  "lineTotal": zod.number().min(listFlowerPriceReceiptsResponseLinesItemLineTotalMin).nullable().describe('Exact GST-inclusive paid amount for this line when printed or verified.'),
+  "taxBasis": zod.enum(['inclusive', 'exclusive', 'unknown']),
+  "reviewStatus": zod.enum(['ready', 'needs-review']),
+  "reviewNote": zod.string().nullable()
+}))
+})
+export const ListFlowerPriceReceiptsResponse = zod.array(ListFlowerPriceReceiptsResponseItem)
+
+
+/**
+ * @summary Import flower purchase receipts without duplicating existing lines
+ */
+export const createFlowerPriceReceiptsBodyReceiptsItemReceiptTotalMin = 0;
+
+
+
+
+export const createFlowerPriceReceiptsBodyReceiptsItemLinesItemUnitPriceMin = 0;
+
+export const createFlowerPriceReceiptsBodyReceiptsItemLinesItemPrintedLineTotalMin = 0;
+
+export const createFlowerPriceReceiptsBodyReceiptsItemLinesItemLineTotalMin = 0;
+
+
+
+export const CreateFlowerPriceReceiptsBody = zod.object({
+  "receipts": zod.array(zod.object({
+  "supplier": zod.string(),
+  "receiptNumber": zod.string().nullable(),
+  "purchaseDate": zod.string().describe('ISO calendar date of the purchase'),
+  "receiptTotal": zod.number().min(createFlowerPriceReceiptsBodyReceiptsItemReceiptTotalMin),
+  "reviewStatus": zod.enum(['ready', 'needs-review']),
+  "reviewNote": zod.string().nullable(),
+  "lines": zod.array(zod.object({
+  "lineNumber": zod.number().min(1),
+  "flowerType": zod.string(),
+  "varietyOrigin": zod.string().nullable(),
+  "sizeText": zod.string().nullable(),
+  "stemsPerUnit": zod.number().min(1).nullable(),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(createFlowerPriceReceiptsBodyReceiptsItemLinesItemUnitPriceMin).nullable(),
+  "printedLineTotal": zod.number().min(createFlowerPriceReceiptsBodyReceiptsItemLinesItemPrintedLineTotalMin).nullable(),
+  "lineTotal": zod.number().min(createFlowerPriceReceiptsBodyReceiptsItemLinesItemLineTotalMin).nullable(),
+  "taxBasis": zod.enum(['inclusive', 'exclusive', 'unknown']),
+  "reviewStatus": zod.enum(['ready', 'needs-review']),
+  "reviewNote": zod.string().nullable()
+}))
+}))
+})
+
+export const createFlowerPriceReceiptsResponseInsertedReceiptsMin = 0;
+
+export const createFlowerPriceReceiptsResponseSkippedReceiptsMin = 0;
+
+export const createFlowerPriceReceiptsResponseInsertedLinesMin = 0;
+
+export const createFlowerPriceReceiptsResponseSkippedLinesMin = 0;
+
+export const createFlowerPriceReceiptsResponseReceiptsItemReceiptTotalMin = 0;
+
+
+
+
+export const createFlowerPriceReceiptsResponseReceiptsItemLinesItemUnitPriceMin = 0;
+
+export const createFlowerPriceReceiptsResponseReceiptsItemLinesItemPrintedLineTotalMin = 0;
+
+export const createFlowerPriceReceiptsResponseReceiptsItemLinesItemLineTotalMin = 0;
+
+
+
+export const CreateFlowerPriceReceiptsResponse = zod.object({
+  "insertedReceipts": zod.number().min(createFlowerPriceReceiptsResponseInsertedReceiptsMin),
+  "skippedReceipts": zod.number().min(createFlowerPriceReceiptsResponseSkippedReceiptsMin),
+  "insertedLines": zod.number().min(createFlowerPriceReceiptsResponseInsertedLinesMin),
+  "skippedLines": zod.number().min(createFlowerPriceReceiptsResponseSkippedLinesMin),
+  "receipts": zod.array(zod.object({
+  "id": zod.number(),
+  "supplier": zod.string(),
+  "receiptNumber": zod.string().nullable(),
+  "purchaseDate": zod.string().describe('ISO calendar date of the purchase'),
+  "receiptTotal": zod.number().min(createFlowerPriceReceiptsResponseReceiptsItemReceiptTotalMin),
+  "reviewStatus": zod.enum(['ready', 'needs-review']),
+  "reviewNote": zod.string().nullable(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "lineNumber": zod.number().min(1),
+  "flowerType": zod.string(),
+  "varietyOrigin": zod.string().nullable(),
+  "sizeText": zod.string().nullable(),
+  "stemsPerUnit": zod.number().min(1).nullable(),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(createFlowerPriceReceiptsResponseReceiptsItemLinesItemUnitPriceMin).nullable().describe('Unit price printed on the receipt; tax treatment is identified separately.'),
+  "printedLineTotal": zod.number().min(createFlowerPriceReceiptsResponseReceiptsItemLinesItemPrintedLineTotalMin).nullable().describe('Exact line amount printed on the receipt, before any separately stated GST.'),
+  "lineTotal": zod.number().min(createFlowerPriceReceiptsResponseReceiptsItemLinesItemLineTotalMin).nullable().describe('Exact GST-inclusive paid amount for this line when printed or verified.'),
+  "taxBasis": zod.enum(['inclusive', 'exclusive', 'unknown']),
+  "reviewStatus": zod.enum(['ready', 'needs-review']),
+  "reviewNote": zod.string().nullable()
+}))
+}))
+})
+
+
+/**
  * @summary Add a historical flower purchase record
  */
 

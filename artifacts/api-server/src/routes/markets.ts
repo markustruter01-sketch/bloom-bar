@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { createHash } from "node:crypto";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   db,
@@ -11,6 +12,8 @@ import {
   marketDayTodoItemsTable,
   marketDayTodoSnapshotsTable,
   flowerPriceBackfillsTable,
+  flowerPriceReceiptsTable,
+  flowerPriceReceiptLinesTable,
   marketBuyListEditLogsTable,
   marketBuyListStatesTable,
   marketCostsTable,
@@ -31,6 +34,9 @@ import {
   ListFlowerPriceDashboardResponse,
   CreateFlowerPriceBackfillBody,
   CreateFlowerPriceBackfillResponse,
+  CreateFlowerPriceReceiptsBody,
+  CreateFlowerPriceReceiptsResponse,
+  ListFlowerPriceReceiptsResponse,
   ListMarketsResponse,
   GetSellThroughComparisonResponse,
   ReplaceMarketCostsBody,
@@ -1719,6 +1725,234 @@ router.get("/markets/flower-price-dashboard", async (_req, res): Promise<void> =
     .sort((a, b) => a.flower.localeCompare(b.flower));
 
   res.json(ListFlowerPriceDashboardResponse.parse({ observations, sellThroughGuidance }));
+});
+
+function receiptItemKey(line: {
+  flowerType: string;
+  varietyOrigin: string | null;
+  sizeText: string | null;
+}): string {
+  return [line.flowerType, line.varietyOrigin ?? "", line.sizeText ?? ""]
+    .map((value) => value.trim().toLocaleLowerCase("en-AU"))
+    .join("\u001f");
+}
+
+function receiptSupplierSortKey(supplier: string): string {
+  return supplier
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("en-AU")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function receiptDedupeKey(
+  supplier: string,
+  receiptNumber: string | null,
+  purchaseDate: string,
+  receiptTotal: number,
+  lines: Array<{
+    lineNumber: number;
+    flowerType: string;
+    varietyOrigin?: string | null;
+    sizeText?: string | null;
+    stemsPerUnit?: number | null;
+    quantity: number;
+    unitPrice?: number | null;
+    printedLineTotal?: number | null;
+    lineTotal?: number | null;
+    taxBasis: "inclusive" | "exclusive" | "unknown";
+  }>,
+): string {
+  const normalizedSupplier = supplier.normalize("NFKC").trim().toLocaleLowerCase("en-AU");
+  if (receiptNumber) {
+    return `number:${normalizedSupplier}:${receiptNumber.normalize("NFKC").trim().toLocaleLowerCase("en-AU")}`;
+  }
+
+  const canonicalReceipt = {
+    supplier: normalizedSupplier,
+    purchaseDate,
+    receiptTotal: receiptTotal.toFixed(2),
+    lines: [...lines]
+      .sort((left, right) => left.lineNumber - right.lineNumber)
+      .map((line) => ({
+        lineNumber: line.lineNumber,
+        flowerType: line.flowerType.normalize("NFKC").trim().toLocaleLowerCase("en-AU"),
+        varietyOrigin: line.varietyOrigin?.normalize("NFKC").trim().toLocaleLowerCase("en-AU") ?? null,
+        sizeText: line.sizeText?.normalize("NFKC").trim().toLocaleLowerCase("en-AU") ?? null,
+        stemsPerUnit: line.stemsPerUnit ?? null,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice == null ? null : line.unitPrice.toFixed(4),
+        printedLineTotal: line.printedLineTotal == null ? null : line.printedLineTotal.toFixed(2),
+        lineTotal: line.lineTotal == null ? null : line.lineTotal.toFixed(2),
+        taxBasis: line.taxBasis,
+      })),
+  };
+  const digest = createHash("sha256").update(JSON.stringify(canonicalReceipt)).digest("hex");
+  return `content:${digest}`;
+}
+
+async function listFlowerPriceReceiptRows() {
+  const [receipts, lines] = await Promise.all([
+    db
+      .select()
+      .from(flowerPriceReceiptsTable),
+    db
+      .select()
+      .from(flowerPriceReceiptLinesTable)
+      .orderBy(asc(flowerPriceReceiptLinesTable.receiptId), asc(flowerPriceReceiptLinesTable.lineNumber)),
+  ]);
+  const linesByReceipt = new Map<number, typeof lines>();
+  for (const line of lines) {
+    linesByReceipt.set(line.receiptId, [...(linesByReceipt.get(line.receiptId) ?? []), line]);
+  }
+  receipts.sort((left, right) =>
+    left.purchaseDate.localeCompare(right.purchaseDate)
+    || receiptSupplierSortKey(left.supplier).localeCompare(receiptSupplierSortKey(right.supplier), "en-AU")
+    || (left.receiptNumber ?? "\uffff").localeCompare(right.receiptNumber ?? "\uffff", "en-AU")
+    || left.id - right.id,
+  );
+  return receipts.map((receipt) => ({ ...receipt, lines: linesByReceipt.get(receipt.id) ?? [] }));
+}
+
+router.get("/markets/flower-price-receipts", async (_req, res): Promise<void> => {
+  res.json(ListFlowerPriceReceiptsResponse.parse(await listFlowerPriceReceiptRows()));
+});
+
+router.post("/markets/flower-price-receipts", async (req, res): Promise<void> => {
+  const body = CreateFlowerPriceReceiptsBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid flower receipt data." });
+    return;
+  }
+
+  const invalidReceipt = body.data.receipts.some((receipt) => {
+    const parsedDate = new Date(`${receipt.purchaseDate}T00:00:00Z`);
+    return !receipt.supplier.trim()
+      || !/^\d{4}-\d{2}-\d{2}$/.test(receipt.purchaseDate)
+      || Number.isNaN(parsedDate.getTime())
+      || parsedDate.toISOString().slice(0, 10) !== receipt.purchaseDate
+      || !Number.isFinite(receipt.receiptTotal)
+      || receipt.receiptTotal < 0
+      || receipt.lines.length === 0
+      || receipt.lines.some((line) =>
+        !line.flowerType.trim()
+        || !Number.isInteger(line.lineNumber)
+        || line.lineNumber < 1
+        || !Number.isInteger(line.quantity)
+        || line.quantity < 1
+        || (line.stemsPerUnit !== null && (!Number.isInteger(line.stemsPerUnit) || line.stemsPerUnit < 1)),
+      );
+  });
+  if (invalidReceipt) {
+    res.status(400).json({ error: "Enter a valid receipt date, supplier, total, and positive line quantities." });
+    return;
+  }
+
+  const counts = await db.transaction(async (tx) => {
+    let insertedReceipts = 0;
+    let skippedReceipts = 0;
+    let insertedLines = 0;
+    let skippedLines = 0;
+
+    for (const receipt of body.data.receipts) {
+      const supplier = receipt.supplier.trim();
+      const receiptNumber = receipt.receiptNumber?.trim() || null;
+      const dedupeKey = receiptDedupeKey(
+        supplier,
+        receiptNumber,
+        receipt.purchaseDate,
+        receipt.receiptTotal,
+        receipt.lines,
+      );
+      let storedReceipt = (await tx
+        .select({ id: flowerPriceReceiptsTable.id })
+        .from(flowerPriceReceiptsTable)
+        .where(eq(flowerPriceReceiptsTable.dedupeKey, dedupeKey))
+        .limit(1))[0];
+
+      if (!storedReceipt) {
+        const [created] = await tx
+          .insert(flowerPriceReceiptsTable)
+          .values({
+            supplier,
+            receiptNumber,
+            dedupeKey,
+            purchaseDate: receipt.purchaseDate,
+            receiptTotal: receipt.receiptTotal,
+            reviewStatus: receipt.reviewStatus,
+            reviewNote: receipt.reviewNote?.trim() || null,
+          })
+          .onConflictDoNothing()
+          .returning({ id: flowerPriceReceiptsTable.id });
+
+        if (created) {
+          storedReceipt = created;
+          insertedReceipts += 1;
+        } else {
+          storedReceipt = (await tx
+            .select({ id: flowerPriceReceiptsTable.id })
+            .from(flowerPriceReceiptsTable)
+            .where(eq(flowerPriceReceiptsTable.dedupeKey, dedupeKey))
+            .limit(1))[0];
+        }
+      } else {
+        skippedReceipts += 1;
+      }
+
+      if (!storedReceipt) {
+        throw new Error("Receipt insert did not return a stored receipt.");
+      }
+
+      const existingLines = await tx
+        .select({
+          lineNumber: flowerPriceReceiptLinesTable.lineNumber,
+          flowerType: flowerPriceReceiptLinesTable.flowerType,
+          varietyOrigin: flowerPriceReceiptLinesTable.varietyOrigin,
+          sizeText: flowerPriceReceiptLinesTable.sizeText,
+        })
+        .from(flowerPriceReceiptLinesTable)
+        .where(eq(flowerPriceReceiptLinesTable.receiptId, storedReceipt.id));
+      const existingKeys = new Set(existingLines.map(receiptItemKey));
+      const seenKeys = new Set(existingKeys);
+
+      for (const line of receipt.lines) {
+        const itemKey = receiptItemKey(line);
+        if (seenKeys.has(itemKey)) {
+          skippedLines += 1;
+          continue;
+        }
+        seenKeys.add(itemKey);
+        const [createdLine] = await tx
+          .insert(flowerPriceReceiptLinesTable)
+          .values({
+            receiptId: storedReceipt.id,
+            lineNumber: line.lineNumber,
+            flowerType: line.flowerType.trim(),
+            varietyOrigin: line.varietyOrigin?.trim() || null,
+            sizeText: line.sizeText?.trim() || null,
+            stemsPerUnit: line.stemsPerUnit,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            printedLineTotal: line.printedLineTotal,
+            lineTotal: line.lineTotal,
+            taxBasis: line.taxBasis,
+            reviewStatus: line.reviewStatus,
+            reviewNote: line.reviewNote?.trim() || null,
+          })
+          .onConflictDoNothing()
+          .returning({ id: flowerPriceReceiptLinesTable.id });
+        if (createdLine) insertedLines += 1;
+        else skippedLines += 1;
+      }
+    }
+
+    return { insertedReceipts, skippedReceipts, insertedLines, skippedLines };
+  });
+
+  res.status(201).json(CreateFlowerPriceReceiptsResponse.parse({
+    ...counts,
+    receipts: await listFlowerPriceReceiptRows(),
+  }));
 });
 
 router.post("/markets/flower-price-backfills", async (req, res): Promise<void> => {

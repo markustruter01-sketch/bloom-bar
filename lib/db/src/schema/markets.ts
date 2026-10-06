@@ -14,6 +14,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { z } from "zod/v4";
 
@@ -188,6 +189,7 @@ export const flowerPriceReceiptsTable = pgTable(
     id: serial("id").primaryKey(),
     supplier: text("supplier").notNull(),
     receiptNumber: text("receipt_number"),
+    dedupeKey: text("dedupe_key").notNull(),
     purchaseDate: date("purchase_date", { mode: "string" }).notNull(),
     receiptTotal: numeric("receipt_total", { precision: 12, scale: 2, mode: "number" }).notNull(),
     reviewStatus: text("review_status", { enum: ["ready", "needs-review"] }).notNull().default("ready"),
@@ -195,6 +197,7 @@ export const flowerPriceReceiptsTable = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    dedupeKeyUnique: unique("flower_price_receipts_dedupe_key_unique").on(table.dedupeKey),
     supplierReceiptUnique: unique("flower_price_receipts_supplier_number_unique").on(table.supplier, table.receiptNumber),
     purchaseDateIndex: index("flower_price_receipts_purchase_date_idx").on(table.purchaseDate),
     reviewStatusAllowed: check(
@@ -227,6 +230,12 @@ export const flowerPriceReceiptLinesTable = pgTable(
   },
   (table) => ({
     receiptLineUnique: unique("flower_price_receipt_lines_receipt_line_unique").on(table.receiptId, table.lineNumber),
+    receiptItemUnique: uniqueIndex("flower_price_receipt_lines_receipt_item_unique").on(
+      table.receiptId,
+      sql`lower(trim(${table.flowerType}))`,
+      sql`lower(trim(coalesce(${table.varietyOrigin}, '')))`,
+      sql`lower(trim(coalesce(${table.sizeText}, '')))`,
+    ),
     quantityPositive: check("flower_price_receipt_lines_quantity_positive", sql`"quantity" > 0`),
     lineNumberPositive: check("flower_price_receipt_lines_line_number_positive", sql`"line_number" > 0`),
     stemsPerUnitPositive: check(
