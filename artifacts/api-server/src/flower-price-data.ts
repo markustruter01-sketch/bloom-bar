@@ -28,19 +28,21 @@ export function canonicalFlowerName({ flowerType, varietyOrigin }: ReceiptFlower
     type === "disbud chrysanthemum"
     || type === "chrysanthemum (disbud)"
     || type === "chrysanthemum disbud"
+    || type === "disbud pom pom"
     || (type === "chrysanthemum" && /\bdisbud\b/.test(variety))
   ) {
-    return "Disbud chrysanthemum";
+    return "Chrysanthemum (Disbud)";
   }
   if (type === "snapdragon") return "Snapdragon";
   if (type === "emile" || type === "lisianthus") return "Lisianthus";
   if (
     type === "eucalyptus"
     || type === "eucalyptus foliage"
-    || type === "gum cinerea"
-    || (type === "gum" && /\bcinerea\b/.test(variety))
+    || type === "eucalyptus (gum)"
+    || type === "gum"
+    || type.startsWith("gum ")
   ) {
-    return "Eucalyptus";
+    return "Eucalyptus (Gum)";
   }
 
   return flowerType.trim();

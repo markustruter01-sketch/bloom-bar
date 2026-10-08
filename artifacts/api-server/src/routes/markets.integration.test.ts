@@ -128,12 +128,20 @@ after(async () => {
 
 describe("flower price data rules", () => {
   it("normalizes only the requested flower aliases and keeps Daisy separate from Matricaria", () => {
-    assert.equal(canonicalFlowerName({ flowerType: "Chrysanthemum", varietyOrigin: "Disbud · Natural · Pompom" }), "Disbud chrysanthemum");
-    assert.equal(canonicalFlowerName({ flowerType: "Disbud chrysanthemum", varietyOrigin: null }), "Disbud chrysanthemum");
+    assert.equal(canonicalFlowerName({ flowerType: "Chrysanthemum", varietyOrigin: "Disbud · Natural · Pompom" }), "Chrysanthemum (Disbud)");
+    assert.equal(canonicalFlowerName({ flowerType: "Disbud chrysanthemum", varietyOrigin: null }), "Chrysanthemum (Disbud)");
+    assert.equal(canonicalFlowerName({ flowerType: "Chrysanthemum (Disbud)", varietyOrigin: null }), "Chrysanthemum (Disbud)");
+    assert.equal(canonicalFlowerName({ flowerType: "Disbud Pom Pom", varietyOrigin: null }), "Chrysanthemum (Disbud)");
+    assert.equal(canonicalFlowerName({ flowerType: "Chrysanthemum", varietyOrigin: "Import" }), "Chrysanthemum");
     assert.equal(canonicalFlowerName({ flowerType: "Emile", varietyOrigin: "Local" }), "Lisianthus");
-    assert.equal(canonicalFlowerName({ flowerType: "Gum", varietyOrigin: "Cinerea" }), "Eucalyptus");
+    assert.equal(canonicalFlowerName({ flowerType: "Eucalyptus", varietyOrigin: null }), "Eucalyptus (Gum)");
+    assert.equal(canonicalFlowerName({ flowerType: "Gum", varietyOrigin: "Cinerea" }), "Eucalyptus (Gum)");
+    assert.equal(canonicalFlowerName({ flowerType: "Gum", varietyOrigin: "General · Not Polly/Baby Blue" }), "Eucalyptus (Gum)");
+    assert.equal(canonicalFlowerName({ flowerType: "Gum non-Cinerea", varietyOrigin: null }), "Eucalyptus (Gum)");
     assert.equal(canonicalFlowerName({ flowerType: "Daisy", varietyOrigin: null }), "Daisy");
     assert.equal(canonicalFlowerName({ flowerType: "Matricaria", varietyOrigin: "Daisy · Chamomile" }), "Matricaria");
+    assert.equal(canonicalFlowerName({ flowerType: "Wax Bud", varietyOrigin: null }), "Wax Bud");
+    assert.equal(canonicalFlowerName({ flowerType: "Wax Flower", varietyOrigin: null }), "Wax Flower");
   });
 
   it("uses exact inclusive receipt values and estimates GST only for exclusive prices", () => {
@@ -685,7 +693,7 @@ describe("market context persistence", () => {
       const savedReceipt = imported.body.receipts.find((receipt: any) => receipt.receiptNumber === receiptNumber);
       assert.ok(savedReceipt);
       const importedLine = savedReceipt.lines[0];
-      assert.equal(importedLine.canonicalFlower, "Eucalyptus");
+      assert.equal(importedLine.canonicalFlower, "Eucalyptus (Gum)");
       assert.equal(importedLine.gstInclusiveLineTotal, 22);
       assert.equal(importedLine.gstEstimated, true);
       assert.equal(importedLine.stemCount, null);
@@ -723,7 +731,7 @@ describe("market context persistence", () => {
       const flowers = await request("/markets/flower-price-flowers");
       assert.equal(flowers.status, 200);
       const flowerNames = new Set(flowers.body.map((flower: any) => flower.flowerName));
-      assert.ok(flowerNames.has("Eucalyptus"));
+      assert.ok(flowerNames.has("Eucalyptus (Gum)"));
       assert.ok(flowerNames.has("Daisy"));
       assert.ok(flowerNames.has("Matricaria"));
 
