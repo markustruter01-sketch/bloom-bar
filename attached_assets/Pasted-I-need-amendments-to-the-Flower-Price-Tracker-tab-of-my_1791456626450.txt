@@ -1,0 +1,44 @@
+I need amendments to the Flower Price Tracker tab of my Bloom Bar platform. Before changing anything, please:
+
+1. Review the current codebase and data model for this tab: how flowers, receipts, line items, prices and stores are stored, and how the "Line items from older purchases" section and the main tracker currently work.
+2. Review the receipts that have been uploaded or submitted to the platform.
+3. Give me a short summary of what you found and any assumptions you're making. If something is ambiguous or you can't find the receipt data, ask me before proceeding. Don't guess.
+
+Then implement the following changes.
+
+## 1. Clean up the flower list
+- Remove every flower from the tracker that does NOT appear on a receipt I've submitted. Only keep flowers I have physically purchased, as evidenced by the receipts.
+- Before deleting anything, show me a list of the flowers you plan to remove and the flowers you plan to keep (with the receipt each came from), and wait for my confirmation. Back up the data first so nothing is lost permanently.
+
+## 2. Overall tracker table (top of the page)
+- Display the main tracker as a clean table at the top of the page.
+- Columns:
+  - Flower name
+  - Average price per stem
+  - Category (new, see below)
+- Remove the existing "Variety/Origin" and "Size" columns.
+- Average price per stem should be calculated from the purchase data entered in the section below. Use a weighted average: total cost of all purchases of that flower divided by total stems counted across all purchases. Only include line items that have a stem count entered. It should update automatically whenever stem counts are entered or edited.
+- Category column: a dropdown on each row that I can click to choose one of:
+  - Textural foliage
+  - Classic blooms
+  - Statement blooms
+  - Gum
+  The selection must be saved and persist after refreshing the page.
+
+## 3. Purchase history section (bottom of the page)
+- Replace the current "Line items from older purchases" layout. Instead of a separate box for each receipt, build a horizontal row of tabs across the top of the section, with one tab per date on which receipts were submitted. Order them sensibly (most recent first, or chronological, whichever fits the existing design, and tell me which you chose).
+- Clicking a date tab shows ALL items purchased on that date, across every receipt from that date, in one single table.
+- Columns for each date's table:
+  - Flower / item name
+  - Store name (the store the item was purchased from)
+  - Total purchase cost (line total from the receipt)
+  - Qty of stems counted (manual input field, editable, saved automatically)
+  - Cost per stem (calculated automatically = total purchase cost ÷ stem count; show a blank or "-" until a stem count is entered, and handle zero or empty values without errors)
+- Stem counts and calculated cost per stem must save and persist, and flow through to the average price per stem in the main tracker at the top.
+
+## General requirements
+- Match the existing look and feel of the platform.
+- Make sure the layout works on mobile as well as desktop.
+- Format prices consistently in the existing currency.
+- Don't break any other tabs or features.
+- Once finished, summarise what you changed, and flag anything you couldn't do or had to assume.
