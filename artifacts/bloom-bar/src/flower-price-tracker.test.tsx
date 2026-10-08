@@ -5,6 +5,7 @@ import { Window } from 'happy-dom';
 
 const dom = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
+  React,
   window: dom,
   document: dom.document,
   location: dom.location,
@@ -186,6 +187,65 @@ describe('flower price dashboard states and backfill entry point', () => {
     assert.match(screen.getByTestId('trend-not-enough-waratah').textContent ?? '', /Not enough data yet/);
     assert.match(screen.getByTestId('seasonal-row-waratah').textContent ?? '', /Not enough data yet/);
     assert.match(screen.getByTestId('flower-price-dashboard').textContent ?? '', /Early days/);
+  });
+
+  it('hides excluded flowers from active tracker views while keeping the full export available', () => {
+    const observations = [
+      {
+        id: 1,
+        purchaseDate: '2026-09-12',
+        flower: 'Billy buttons',
+        category: 'Textural Foliage' as const,
+        supplier: 'Supplier A',
+        bunchSize: 10,
+        bunchesPurchased: 1,
+        pricePerBunch: 13.5,
+        totalStemQty: 10,
+        costPerStem: 1.35,
+        source: 'reported' as const,
+        marketCycle: 1,
+        sellThrough: null,
+        marketNotes: null,
+      },
+      {
+        id: 2,
+        purchaseDate: '2026-09-12',
+        flower: 'Queen Anne’s lace',
+        category: 'Textural Foliage' as const,
+        supplier: 'Supplier B',
+        bunchSize: 10,
+        bunchesPurchased: 1,
+        pricePerBunch: 18,
+        totalStemQty: 10,
+        costPerStem: 1.8,
+        source: 'reported' as const,
+        marketCycle: 1,
+        sellThrough: null,
+        marketNotes: null,
+      },
+      {
+        id: 3,
+        purchaseDate: '2026-09-12',
+        flower: 'Snapdragon',
+        category: 'Classic Blooms' as const,
+        supplier: 'Supplier C',
+        bunchSize: 10,
+        bunchesPurchased: 1,
+        pricePerBunch: 20,
+        totalStemQty: 10,
+        costPerStem: 2,
+        source: 'reported' as const,
+        marketCycle: 1,
+        sellThrough: null,
+        marketNotes: null,
+      },
+    ];
+    render(<FlowerPriceTrackerPage reports={[]} isLoading={false} dashboardObservations={observations} dashboardLoading={false} />);
+
+    assert.equal(screen.queryByTestId('dashboard-average-billy-buttons'), null);
+    assert.equal(screen.queryByTestId('dashboard-average-queen-anne-s-lace'), null);
+    assert.ok(screen.getByTestId('dashboard-average-snapdragon'));
+    assert.equal(screen.getByTestId('button-export-flower-price-csv').hasAttribute('disabled'), false);
   });
 
   it('opens the historical backfill form and submits a past purchase', async () => {

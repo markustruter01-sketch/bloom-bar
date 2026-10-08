@@ -503,6 +503,17 @@ type PriceDashboardSummary = {
   suppliers: Array<{ name: string; averageCostPerStem: number; dataPoints: number }>;
 };
 
+const excludedFlowerPriceTrackerNames = new Set(["billy buttons", "queen anne's lace"]);
+
+function isActiveFlowerPriceTrackerName(flower: string): boolean {
+  const normalized = flower
+    .normalize("NFKC")
+    .replace(/[’‘]/g, "'")
+    .trim()
+    .toLocaleLowerCase("en-AU");
+  return !excludedFlowerPriceTrackerNames.has(normalized);
+}
+
 const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function weightedCostPerStem(observations: FlowerPriceDashboardObservation[]) {
@@ -588,7 +599,33 @@ function BackfillForm({ onSave }: { onSave?: (data: FlowerPriceBackfillInput) =>
   return <form onSubmit={submit} className="rounded-lg border border-primary/15 bg-[#e8e4cd] p-5 md:p-6" data-testid="form-flower-price-backfill"><div className="flex items-start justify-between gap-4"><div><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.15em] text-primary"><Pencil size={13} /> Historical backfill</div><h2 className="mt-2 font-serif text-2xl text-primary">Add an old receipt</h2><p className="mt-1 max-w-2xl text-xs leading-relaxed text-primary/65">Use one row per flower and supplier. Bunch size lets the dashboard calculate a comparable cost per stem.</p></div></div><div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><label className="text-xs font-semibold text-primary">Flower type<input value={form.flower} onChange={(event) => update('flower', event.target.value)} placeholder="e.g. Waratah" data-testid="input-backfill-flower" className="mt-1 h-10 w-full rounded-md border border-primary/15 bg-background px-3 text-sm outline-none focus:border-primary" /></label><label className="text-xs font-semibold text-primary">Purchase date<input type="date" value={form.purchaseDate} onChange={(event) => update('purchaseDate', event.target.value)} data-testid="input-backfill-date" className="mt-1 h-10 w-full rounded-md border border-primary/15 bg-background px-3 text-sm outline-none focus:border-primary" /></label><label className="text-xs font-semibold text-primary">Supplier<input value={form.supplier ?? ''} onChange={(event) => update('supplier', event.target.value)} placeholder="Optional" data-testid="input-backfill-supplier" className="mt-1 h-10 w-full rounded-md border border-primary/15 bg-background px-3 text-sm outline-none focus:border-primary" /></label><label className="text-xs font-semibold text-primary">Category<select value={form.category} onChange={(event) => update('category', event.target.value as FlowerCategory)} data-testid="select-backfill-category" className="mt-1 h-10 w-full rounded-md border border-primary/15 bg-background px-3 text-sm outline-none focus:border-primary">{flowerCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select></label><label className="text-xs font-semibold text-primary">Stems per bunch<input type="number" min="1" value={form.bunchSize} onChange={(event) => update('bunchSize', Number(event.target.value))} data-testid="input-backfill-bunch-size" className="mt-1 h-10 w-full rounded-md border border-primary/15 bg-background px-3 text-sm outline-none focus:border-primary" /></label><label className="text-xs font-semibold text-primary">Bunches<input type="number" min="1" value={form.bunchesPurchased} onChange={(event) => update('bunchesPurchased', Number(event.target.value))} data-testid="input-backfill-bunches" className="mt-1 h-10 w-full rounded-md border border-primary/15 bg-background px-3 text-sm outline-none focus:border-primary" /></label><label className="text-xs font-semibold text-primary">Cost per bunch (AUD)<input type="number" min="0" step="0.01" value={form.pricePerBunch} onChange={(event) => update('pricePerBunch', Number(event.target.value))} data-testid="input-backfill-cost" className="mt-1 h-10 w-full rounded-md border border-primary/15 bg-background px-3 text-sm outline-none focus:border-primary" /></label><div className="flex items-end"><Button type="submit" disabled={state === 'saving'} className="h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90" testId="button-save-backfill">{state === 'saving' ? <LoaderCircle size={15} className="animate-spin" /> : <Plus size={15} />} {state === 'saving' ? 'Adding…' : 'Add historical record'}</Button></div></div>{state !== 'idle' && <p className={`mt-3 text-xs ${state === 'error' ? 'text-destructive' : 'text-primary'}`} role={state === 'error' ? 'alert' : 'status'}>{message}</p>}</form>;
 }
 
-export function FlowerPriceTrackerPage({ reports, isLoading, dashboardObservations = [], sellThroughGuidance = [], dashboardLoading = false, receipts = [], receiptsLoading = false, receiptsError = false, saveBackfill }: { reports: FlowerPriceTrackerMarket[]; isLoading: boolean; dashboardObservations?: FlowerPriceDashboardObservation[]; sellThroughGuidance?: FlowerSellThroughGuidance[]; dashboardLoading?: boolean; receipts?: FlowerPriceReceipt[]; receiptsLoading?: boolean; receiptsError?: boolean; saveBackfill?: (data: FlowerPriceBackfillInput) => Promise<boolean> }) {
+export function FlowerPriceTrackerPage({
+  reports,
+  isLoading,
+  dashboardObservations: allDashboardObservations = [],
+  sellThroughGuidance: allSellThroughGuidance = [],
+  dashboardLoading = false,
+  receipts = [],
+  receiptsLoading = false,
+  receiptsError = false,
+  saveBackfill,
+}: {
+  reports: FlowerPriceTrackerMarket[];
+  isLoading: boolean;
+  dashboardObservations?: FlowerPriceDashboardObservation[];
+  sellThroughGuidance?: FlowerSellThroughGuidance[];
+  dashboardLoading?: boolean;
+  receipts?: FlowerPriceReceipt[];
+  receiptsLoading?: boolean;
+  receiptsError?: boolean;
+  saveBackfill?: (data: FlowerPriceBackfillInput) => Promise<boolean>;
+}) {
+  const dashboardObservations = allDashboardObservations.filter((observation) =>
+    isActiveFlowerPriceTrackerName(observation.flower),
+  );
+  const sellThroughGuidance = allSellThroughGuidance.filter((signal) =>
+    isActiveFlowerPriceTrackerName(signal.flower),
+  );
   const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
   useEffect(() => {
     if (reports.length === 0) {
@@ -610,7 +647,7 @@ export function FlowerPriceTrackerPage({ reports, isLoading, dashboardObservatio
       eyebrow="The studio / cost intelligence"
       title="Flower Price Tracker"
       description="See your real cost per stem, learn which seasons are kindest to each flower, and keep older receipts in the same history."
-      action={<div className="flex flex-wrap gap-2"><Button onClick={() => exportFlowerPriceData(dashboardObservations)} disabled={dashboardObservations.length === 0} className="border border-foreground/15 bg-card text-foreground hover:border-primary" testId="button-export-flower-price-csv"><Download size={15} /> Export CSV</Button><Button onClick={() => setBackfillOpen((open) => !open)} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-toggle-backfill"><Pencil size={15} /> {backfillOpen ? 'Close backfill' : 'Add historical record'}</Button></div>}
+      action={<div className="flex flex-wrap gap-2"><Button onClick={() => exportFlowerPriceData(allDashboardObservations)} disabled={allDashboardObservations.length === 0} className="border border-foreground/15 bg-card text-foreground hover:border-primary" testId="button-export-flower-price-csv"><Download size={15} /> Export CSV</Button><Button onClick={() => setBackfillOpen((open) => !open)} className="bg-primary text-primary-foreground hover:bg-primary/90" testId="button-toggle-backfill"><Pencil size={15} /> {backfillOpen ? 'Close backfill' : 'Add historical record'}</Button></div>}
     />
     {backfillOpen && <div className="mb-6"><BackfillForm onSave={saveBackfill} /></div>}
      {dashboardLoading ? <p className="rounded-md bg-muted px-4 py-3 text-xs text-muted-foreground" role="status">Loading price dashboard…</p> : <section className="space-y-6" data-testid="flower-price-dashboard">
