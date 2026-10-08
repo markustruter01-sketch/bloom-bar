@@ -11,6 +11,7 @@ export interface FlowerPriceTrackerLineItem {
   id: number;
   marketCycle: number;
   flower: string;
+  canonicalFlower: string;
   supplier: string | null;
   /** @minimum 1 */
   bunchSize: number;

@@ -669,6 +669,7 @@ export interface FlowerPriceTrackerLineItem {
   id: number;
   marketCycle: number;
   flower: string;
+  canonicalFlower: string;
   supplier: string | null;
   /** @minimum 1 */
   bunchSize: number;
@@ -699,12 +700,24 @@ export const FlowerPriceDashboardObservationSource = {
   backfill: 'backfill',
 } as const;
 
+export type FlowerPriceTrackerCategory = typeof FlowerPriceTrackerCategory[keyof typeof FlowerPriceTrackerCategory];
+
+
+export const FlowerPriceTrackerCategory = {
+  Textural_foliage: 'Textural foliage',
+  Classic_blooms: 'Classic blooms',
+  Statement_blooms: 'Statement blooms',
+  Gum: 'Gum',
+} as const;
+
 export interface FlowerPriceDashboardObservation {
   id: number;
   /** ISO calendar date of the purchase */
   purchaseDate: string;
   flower: string;
+  canonicalFlower: string;
   category: FlowerCategory;
+  trackerCategory: FlowerPriceTrackerCategory | null;
   supplier: string | null;
   /** @minimum 1 */
   bunchSize: number;
@@ -748,6 +761,24 @@ export interface FlowerPriceDashboardResponse {
   sellThroughGuidance: FlowerSellThroughGuidance[];
 }
 
+export interface FlowerPriceTrackerFlower {
+  flowerName: string;
+  category: FlowerPriceTrackerCategory | null;
+}
+
+export interface UpdateFlowerPriceTrackerFlowerCategoryInput {
+  flowerName: string;
+  category: FlowerPriceTrackerCategory | null;
+}
+
+export interface FlowerPriceReceiptLineStemCountInput {
+  /**
+     * Manually entered whole-number stem count; null clears it.
+     * @minimum 0
+     */
+  stemCount: number | null;
+}
+
 export type FlowerPriceReceiptLineTaxBasis = typeof FlowerPriceReceiptLineTaxBasis[keyof typeof FlowerPriceReceiptLineTaxBasis];
 
 
@@ -770,6 +801,8 @@ export interface FlowerPriceReceiptLine {
   /** @minimum 1 */
   lineNumber: number;
   flowerType: string;
+  canonicalFlower: string;
+  trackerCategory: FlowerPriceTrackerCategory | null;
   varietyOrigin: string | null;
   sizeText: string | null;
   /** @minimum 1 */
@@ -791,6 +824,23 @@ export interface FlowerPriceReceiptLine {
      * @minimum 0
      */
   lineTotal: number | null;
+  /**
+     * GST-inclusive line amount, calculated from the receipt price when necessary.
+     * @minimum 0
+     */
+  gstInclusiveLineTotal: number | null;
+  /** True when GST was estimated from a pre-GST printed amount. */
+  gstEstimated: boolean;
+  /**
+     * Manually entered whole-number stem count.
+     * @minimum 0
+     */
+  stemCount: number | null;
+  /**
+     * GST-inclusive line total divided by stem count, or null when no positive count is available.
+     * @minimum 0
+     */
+  costPerStem: number | null;
   taxBasis: FlowerPriceReceiptLineTaxBasis;
   reviewStatus: FlowerPriceReceiptLineReviewStatus;
   reviewNote: string | null;

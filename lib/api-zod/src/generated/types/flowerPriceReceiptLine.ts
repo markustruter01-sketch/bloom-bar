@@ -7,12 +7,15 @@
  */
 import type { FlowerPriceReceiptLineReviewStatus } from './flowerPriceReceiptLineReviewStatus';
 import type { FlowerPriceReceiptLineTaxBasis } from './flowerPriceReceiptLineTaxBasis';
+import type { FlowerPriceTrackerCategory } from './flowerPriceTrackerCategory';
 
 export interface FlowerPriceReceiptLine {
   id: number;
   /** @minimum 1 */
   lineNumber: number;
   flowerType: string;
+  canonicalFlower: string;
+  trackerCategory: FlowerPriceTrackerCategory | null;
   varietyOrigin: string | null;
   sizeText: string | null;
   /** @minimum 1 */
@@ -34,6 +37,23 @@ export interface FlowerPriceReceiptLine {
      * @minimum 0
      */
   lineTotal: number | null;
+  /**
+     * GST-inclusive line amount, calculated from the receipt price when necessary.
+     * @minimum 0
+     */
+  gstInclusiveLineTotal: number | null;
+  /** True when GST was estimated from a pre-GST printed amount. */
+  gstEstimated: boolean;
+  /**
+     * Manually entered whole-number stem count.
+     * @minimum 0
+     */
+  stemCount: number | null;
+  /**
+     * GST-inclusive line total divided by stem count, or null when no positive count is available.
+     * @minimum 0
+     */
+  costPerStem: number | null;
   taxBasis: FlowerPriceReceiptLineTaxBasis;
   reviewStatus: FlowerPriceReceiptLineReviewStatus;
   reviewNote: string | null;

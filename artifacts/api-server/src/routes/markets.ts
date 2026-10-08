@@ -14,6 +14,7 @@ import {
   flowerPriceBackfillsTable,
   flowerPriceReceiptsTable,
   flowerPriceReceiptLinesTable,
+  flowerPriceTrackerFlowersTable,
   marketBuyListEditLogsTable,
   marketBuyListStatesTable,
   marketCostsTable,
@@ -37,6 +38,12 @@ import {
   CreateFlowerPriceReceiptsBody,
   CreateFlowerPriceReceiptsResponse,
   ListFlowerPriceReceiptsResponse,
+  ListFlowerPriceTrackerFlowersResponse,
+  UpdateFlowerPriceTrackerFlowerCategoryBody,
+  UpdateFlowerPriceTrackerFlowerCategoryResponse,
+  UpdateFlowerPriceReceiptLineStemCountParams,
+  UpdateFlowerPriceReceiptLineStemCountBody,
+  UpdateFlowerPriceReceiptLineStemCountResponse,
   ListMarketsResponse,
   GetSellThroughComparisonResponse,
   ReplaceMarketCostsBody,
@@ -87,15 +94,55 @@ import {
   ReplaceNonFlowerPurchasesParams,
   ReplaceNonFlowerPurchasesResponse,
 } from "@workspace/api-zod";
-import type { FlowerCategory, FlowerKnowledgeSection, SellThroughRecord } from "@workspace/db";
+import type {
+  FlowerCategory,
+  FlowerKnowledgeSection,
+  FlowerPriceTrackerCategory,
+  SellThroughRecord,
+} from "@workspace/db";
 import {
   formatScheduledMarketDate,
   getScheduledMarketDate,
   isSkippedMarketCycle,
   type MarketScheduleOverride as ScheduleOverride,
 } from "../lib/market-schedule";
+import { canonicalFlowerName, costPerStem, receiptGstValues } from "../flower-price-data";
 
 const router: IRouter = Router();
+
+async function ensureFlowerPriceTrackerFlower(
+  executor: Pick<typeof db, "insert">,
+  flowerName: string,
+): Promise<void> {
+  await executor
+    .insert(flowerPriceTrackerFlowersTable)
+    .values({ flowerName, category: null })
+    .onConflictDoNothing();
+}
+
+async function readFlowerPriceTrackerCategories(): Promise<Map<string, FlowerPriceTrackerCategory | null>> {
+  const rows = await db.select().from(flowerPriceTrackerFlowersTable);
+  return new Map(rows.map((row) => [row.flowerName, row.category]));
+}
+
+function serializeFlowerPriceReceiptLine(
+  line: typeof flowerPriceReceiptLinesTable.$inferSelect,
+  categories: Map<string, FlowerPriceTrackerCategory | null>,
+) {
+  const canonicalFlower = canonicalFlowerName({
+    flowerType: line.flowerType,
+    varietyOrigin: line.varietyOrigin,
+  });
+  const gst = receiptGstValues(line);
+  return {
+    ...line,
+    canonicalFlower,
+    trackerCategory: categories.get(canonicalFlower) ?? null,
+    gstInclusiveLineTotal: gst.gstInclusiveLineTotal,
+    gstEstimated: gst.gstEstimated,
+    costPerStem: costPerStem(gst.gstInclusiveLineTotal, line.stemCount),
+  };
+}
 
 const seededMarkets = [
   { cycle: 0, venue: "Redcliffe Markets", spend: 642.8, revenue: 1846, margin: 65.2 },
@@ -1577,6 +1624,7 @@ router.get("/markets/flower-price-tracker", async (_req, res): Promise<void> => 
       id: number;
       marketCycle: number;
       flower: string;
+      canonicalFlower: string;
       supplier: string | null;
       bunchSize: number;
       bunchesPurchased: number;
@@ -1600,6 +1648,7 @@ router.get("/markets/flower-price-tracker", async (_req, res): Promise<void> => 
       id: row.id,
       marketCycle: row.marketCycle,
       flower: row.flower,
+      canonicalFlower: canonicalFlowerName({ flowerType: row.flower, varietyOrigin: null }),
       supplier: row.supplier,
       bunchSize: row.bunchSize,
       bunchesPurchased: row.bunchesPurchased,
@@ -1618,7 +1667,7 @@ router.get("/markets/flower-price-tracker", async (_req, res): Promise<void> => 
 
 router.get("/markets/flower-price-dashboard", async (_req, res): Promise<void> => {
   const overrides = await readScheduleOverrides();
-  const [reportedRows, backfillRows, closeRecords] = await Promise.all([
+  const [reportedRows, backfillRows, closeRecords, trackerFlowers] = await Promise.all([
     db
       .select({
         id: marketActualPurchasesTable.id,
@@ -1655,7 +1704,11 @@ router.get("/markets/flower-price-dashboard", async (_req, res): Promise<void> =
       .from(flowerPriceBackfillsTable)
       .orderBy(asc(flowerPriceBackfillsTable.purchaseDate), asc(flowerPriceBackfillsTable.id)),
     db.select().from(closeMarketsTable),
+    db.select().from(flowerPriceTrackerFlowersTable),
   ]);
+  const trackerCategoryByFlower = new Map(
+    trackerFlowers.map((flower) => [flower.flowerName, flower.category]),
+  );
   const closeByCycle = new Map(
     closeRecords.filter((record) => record.closed).map((record) => [record.marketCycle, record]),
   );
@@ -1665,11 +1718,14 @@ router.get("/markets/flower-price-dashboard", async (_req, res): Promise<void> =
       .filter((row) => !isSkippedMarketCycle(row.marketCycle, overrides))
       .map((row) => {
         const closeRecord = closeByCycle.get(row.marketCycle);
+        const canonicalFlower = canonicalFlowerName({ flowerType: row.flower, varietyOrigin: null });
         return {
           id: row.id,
           purchaseDate: getScheduledMarketDate(row.marketCycle, overrides),
           flower: row.flower,
+          canonicalFlower,
           category: row.category,
+          trackerCategory: trackerCategoryByFlower.get(canonicalFlower) ?? null,
           supplier: row.supplier,
           bunchSize: row.bunchSize,
           bunchesPurchased: row.bunchesPurchased,
@@ -1682,22 +1738,27 @@ router.get("/markets/flower-price-dashboard", async (_req, res): Promise<void> =
           marketNotes: closeRecord?.notes ?? null,
         };
       }),
-    ...backfillRows.map((row) => ({
-      id: row.id,
-      purchaseDate: row.purchaseDate,
-      flower: row.flower,
-      category: row.category,
-      supplier: row.supplier,
-      bunchSize: row.bunchSize,
-      bunchesPurchased: row.bunchesPurchased,
-      pricePerBunch: row.pricePerBunch,
-      totalStemQty: row.totalStemQty ?? row.bunchSize * row.bunchesPurchased,
-      costPerStem: row.costPerStem ?? row.pricePerBunch / row.bunchSize,
-      source: "backfill" as const,
-      marketCycle: null,
-      sellThrough: null,
-      marketNotes: null,
-    })),
+    ...backfillRows.map((row) => {
+      const canonicalFlower = canonicalFlowerName({ flowerType: row.flower, varietyOrigin: null });
+      return {
+        id: row.id,
+        purchaseDate: row.purchaseDate,
+        flower: row.flower,
+        canonicalFlower,
+        category: row.category,
+        trackerCategory: trackerCategoryByFlower.get(canonicalFlower) ?? null,
+        supplier: row.supplier,
+        bunchSize: row.bunchSize,
+        bunchesPurchased: row.bunchesPurchased,
+        pricePerBunch: row.pricePerBunch,
+        totalStemQty: row.totalStemQty ?? row.bunchSize * row.bunchesPurchased,
+        costPerStem: row.costPerStem ?? row.pricePerBunch / row.bunchSize,
+        source: "backfill" as const,
+        marketCycle: null,
+        sellThrough: null,
+        marketNotes: null,
+      };
+    }),
   ].sort((a, b) => a.purchaseDate.localeCompare(b.purchaseDate) || a.id - b.id);
 
   const guidanceByFlower = new Map<string, { totalPercent: number; markets: Set<number> }>();
@@ -1792,7 +1853,7 @@ function receiptDedupeKey(
 }
 
 async function listFlowerPriceReceiptRows() {
-  const [receipts, lines] = await Promise.all([
+  const [receipts, lines, trackerCategories] = await Promise.all([
     db
       .select()
       .from(flowerPriceReceiptsTable),
@@ -1800,10 +1861,14 @@ async function listFlowerPriceReceiptRows() {
       .select()
       .from(flowerPriceReceiptLinesTable)
       .orderBy(asc(flowerPriceReceiptLinesTable.receiptId), asc(flowerPriceReceiptLinesTable.lineNumber)),
+    readFlowerPriceTrackerCategories(),
   ]);
-  const linesByReceipt = new Map<number, typeof lines>();
+  const linesByReceipt = new Map<number, Array<ReturnType<typeof serializeFlowerPriceReceiptLine>>>();
   for (const line of lines) {
-    linesByReceipt.set(line.receiptId, [...(linesByReceipt.get(line.receiptId) ?? []), line]);
+    linesByReceipt.set(line.receiptId, [
+      ...(linesByReceipt.get(line.receiptId) ?? []),
+      serializeFlowerPriceReceiptLine(line, trackerCategories),
+    ]);
   }
   receipts.sort((left, right) =>
     left.purchaseDate.localeCompare(right.purchaseDate)
@@ -1814,8 +1879,91 @@ async function listFlowerPriceReceiptRows() {
   return receipts.map((receipt) => ({ ...receipt, lines: linesByReceipt.get(receipt.id) ?? [] }));
 }
 
+router.get("/markets/flower-price-flowers", async (_req, res): Promise<void> => {
+  const [receiptLines, reportedRows, backfillRows, savedFlowers] = await Promise.all([
+    db
+      .select({
+        flowerType: flowerPriceReceiptLinesTable.flowerType,
+        varietyOrigin: flowerPriceReceiptLinesTable.varietyOrigin,
+      })
+      .from(flowerPriceReceiptLinesTable),
+    db
+      .select({ flower: marketActualPurchasesTable.flower })
+      .from(marketActualPurchasesTable)
+      .innerJoin(
+        marketBuyListStatesTable,
+        eq(marketBuyListStatesTable.marketCycle, marketActualPurchasesTable.marketCycle),
+      )
+      .where(eq(marketBuyListStatesTable.reported, true)),
+    db.select({ flower: flowerPriceBackfillsTable.flower }).from(flowerPriceBackfillsTable),
+    db.select().from(flowerPriceTrackerFlowersTable),
+  ]);
+  const categories = new Map(savedFlowers.map((flower) => [flower.flowerName, flower.category]));
+  const flowerNames = new Set(savedFlowers.map((flower) => flower.flowerName));
+  for (const line of receiptLines) {
+    flowerNames.add(canonicalFlowerName(line));
+  }
+  for (const row of [...reportedRows, ...backfillRows]) {
+    flowerNames.add(canonicalFlowerName({ flowerType: row.flower, varietyOrigin: null }));
+  }
+
+  res.json(ListFlowerPriceTrackerFlowersResponse.parse(
+    [...flowerNames]
+      .sort((left, right) => left.localeCompare(right, "en-AU"))
+      .map((flowerName) => ({ flowerName, category: categories.get(flowerName) ?? null })),
+  ));
+});
+
+router.patch("/markets/flower-price-flowers", async (req, res): Promise<void> => {
+  const body = UpdateFlowerPriceTrackerFlowerCategoryBody.safeParse(req.body);
+  if (!body.success || !body.data.flowerName.trim()) {
+    res.status(400).json({ error: "Provide a flower name and a valid tracker category or null." });
+    return;
+  }
+  const flowerName = canonicalFlowerName({ flowerType: body.data.flowerName, varietyOrigin: null });
+  const [saved] = await db
+    .insert(flowerPriceTrackerFlowersTable)
+    .values({ flowerName, category: body.data.category })
+    .onConflictDoUpdate({
+      target: flowerPriceTrackerFlowersTable.flowerName,
+      set: { category: body.data.category },
+    })
+    .returning();
+
+  res.json(UpdateFlowerPriceTrackerFlowerCategoryResponse.parse(saved));
+});
+
 router.get("/markets/flower-price-receipts", async (_req, res): Promise<void> => {
   res.json(ListFlowerPriceReceiptsResponse.parse(await listFlowerPriceReceiptRows()));
+});
+
+router.patch("/markets/flower-price-receipt-lines/:lineId", async (req, res): Promise<void> => {
+  const params = UpdateFlowerPriceReceiptLineStemCountParams.safeParse(req.params);
+  const body = UpdateFlowerPriceReceiptLineStemCountBody.safeParse(req.body);
+  if (
+    !params.success
+    || !Number.isInteger(params.data.lineId)
+    || !body.success
+    || (body.data.stemCount !== null && !Number.isInteger(body.data.stemCount))
+  ) {
+    res.status(400).json({ error: "Provide a valid receipt line ID and a whole-number stem count or null." });
+    return;
+  }
+
+  const [updated] = await db
+    .update(flowerPriceReceiptLinesTable)
+    .set({ stemCount: body.data.stemCount })
+    .where(eq(flowerPriceReceiptLinesTable.id, params.data.lineId))
+    .returning();
+  if (!updated) {
+    res.status(404).json({ error: "Receipt line was not found." });
+    return;
+  }
+
+  const categories = await readFlowerPriceTrackerCategories();
+  res.json(UpdateFlowerPriceReceiptLineStemCountResponse.parse(
+    serializeFlowerPriceReceiptLine(updated, categories),
+  ));
 });
 
 router.post("/markets/flower-price-receipts", async (req, res): Promise<void> => {
@@ -1922,19 +2070,28 @@ router.post("/markets/flower-price-receipts", async (req, res): Promise<void> =>
           continue;
         }
         seenKeys.add(itemKey);
+        const normalizedLine = {
+          flowerType: line.flowerType.trim(),
+          varietyOrigin: line.varietyOrigin?.trim() || null,
+        };
+        const canonicalFlower = canonicalFlowerName(normalizedLine);
+        const gst = receiptGstValues(line);
+        await ensureFlowerPriceTrackerFlower(tx, canonicalFlower);
         const [createdLine] = await tx
           .insert(flowerPriceReceiptLinesTable)
           .values({
             receiptId: storedReceipt.id,
             lineNumber: line.lineNumber,
-            flowerType: line.flowerType.trim(),
-            varietyOrigin: line.varietyOrigin?.trim() || null,
+            ...normalizedLine,
             sizeText: line.sizeText?.trim() || null,
             stemsPerUnit: line.stemsPerUnit,
             quantity: line.quantity,
             unitPrice: line.unitPrice,
             printedLineTotal: line.printedLineTotal,
             lineTotal: line.lineTotal,
+            stemCount: null,
+            gstInclusiveLineTotal: gst.gstInclusiveLineTotal,
+            gstEstimated: gst.gstEstimated,
             taxBasis: line.taxBasis,
             reviewStatus: line.reviewStatus,
             reviewNote: line.reviewNote?.trim() || null,
@@ -1979,24 +2136,34 @@ router.post("/markets/flower-price-backfills", async (req, res): Promise<void> =
     return;
   }
 
-  const [created] = await db
-    .insert(flowerPriceBackfillsTable)
-    .values({
-      purchaseDate,
-      flower: body.data.flower.trim(),
-      category: body.data.category,
-      supplier: typeof body.data.supplier === "string" && body.data.supplier.trim() ? body.data.supplier.trim() : null,
-      bunchSize: body.data.bunchSize,
-      bunchesPurchased: body.data.bunchesPurchased,
-      pricePerBunch: body.data.pricePerBunch,
-    })
-    .returning();
+  const normalizedFlower = body.data.flower.trim();
+  const canonicalFlower = canonicalFlowerName({ flowerType: normalizedFlower, varietyOrigin: null });
+  const created = await db.transaction(async (tx) => {
+    await ensureFlowerPriceTrackerFlower(tx, canonicalFlower);
+    const [backfill] = await tx
+      .insert(flowerPriceBackfillsTable)
+      .values({
+        purchaseDate,
+        flower: normalizedFlower,
+        category: body.data.category,
+        supplier: typeof body.data.supplier === "string" && body.data.supplier.trim() ? body.data.supplier.trim() : null,
+        bunchSize: body.data.bunchSize,
+        bunchesPurchased: body.data.bunchesPurchased,
+        pricePerBunch: body.data.pricePerBunch,
+      })
+      .returning();
+    return backfill;
+  });
 
+  const trackerCategories = await readFlowerPriceTrackerCategories();
+  const canonicalBackfillFlower = canonicalFlowerName({ flowerType: created.flower, varietyOrigin: null });
   res.status(201).json(CreateFlowerPriceBackfillResponse.parse({
     id: created.id,
     purchaseDate: created.purchaseDate,
     flower: created.flower,
+    canonicalFlower: canonicalBackfillFlower,
     category: created.category,
+    trackerCategory: trackerCategories.get(canonicalBackfillFlower) ?? null,
     supplier: created.supplier,
     bunchSize: created.bunchSize,
     bunchesPurchased: created.bunchesPurchased,
@@ -2216,10 +2383,13 @@ router.put("/markets/context/:cycle/actual-purchases", async (req, res): Promise
   const saved = await db.transaction(async (tx) => {
     await tx.delete(marketActualPurchasesTable).where(eq(marketActualPurchasesTable.marketCycle, params.data.cycle));
     if (normalizedPurchases.length > 0) {
-      await tx.insert(marketActualPurchasesTable).values(normalizedPurchases.map((purchase) => ({
-        marketCycle: params.data.cycle,
-        ...purchase,
-      })));
+      const purchasesWithTrackerFlowers = [];
+      for (const purchase of normalizedPurchases) {
+        const flowerName = canonicalFlowerName({ flowerType: purchase.flower, varietyOrigin: null });
+        await ensureFlowerPriceTrackerFlower(tx, flowerName);
+        purchasesWithTrackerFlowers.push({ marketCycle: params.data.cycle, ...purchase });
+      }
+      await tx.insert(marketActualPurchasesTable).values(purchasesWithTrackerFlowers);
     }
     const [updatedBuyList] = await tx
       .update(marketBuyListStatesTable)

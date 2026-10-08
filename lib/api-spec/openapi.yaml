@@ -269,6 +269,68 @@ paths:
                   $ref: "#/components/schemas/FlowerPriceReceiptImportResult"
         "400":
           description: Invalid receipt data
+  /markets/flower-price-receipt-lines/{lineId}:
+    patch:
+      operationId: updateFlowerPriceReceiptLineStemCount
+      tags: [markets]
+      summary: Save a manual stem count for a receipt line
+      parameters:
+        - name: lineId
+          in: path
+          required: true
+          schema:
+            type: number
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlowerPriceReceiptLineStemCountInput"
+      responses:
+        "200":
+          description: Updated receipt line with calculated GST-inclusive total and cost per stem
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlowerPriceReceiptLine"
+        "400":
+          description: Invalid line ID or stem count
+        "404":
+          description: Receipt line was not found
+  /markets/flower-price-flowers:
+    get:
+      operationId: listFlowerPriceTrackerFlowers
+      tags: [markets]
+      summary: List canonical flower groups and saved categories
+      responses:
+        "200":
+          description: Flower names represented in the tracker and their saved category
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlowerPriceTrackerFlower"
+    patch:
+      operationId: updateFlowerPriceTrackerFlowerCategory
+      tags: [markets]
+      summary: Save a category for a canonical flower
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFlowerPriceTrackerFlowerCategoryInput"
+      responses:
+        "200":
+          description: Updated flower category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlowerPriceTrackerFlower"
+        "400":
+          description: Invalid flower name or category
   /markets/flower-price-backfills:
     post:
       operationId: createFlowerPriceBackfill
@@ -1368,13 +1430,15 @@ components:
             $ref: "#/components/schemas/FlowerKnowledgeSection"
     FlowerPriceTrackerLineItem:
       type: object
-      required: [id, marketCycle, flower, supplier, bunchSize, bunchesPurchased, pricePerBunch, totalStemQty, costPerStem, sellThrough]
+      required: [id, marketCycle, flower, canonicalFlower, supplier, bunchSize, bunchesPurchased, pricePerBunch, totalStemQty, costPerStem, sellThrough]
       properties:
         id:
           type: number
         marketCycle:
           type: number
         flower:
+          type: string
+        canonicalFlower:
           type: string
         supplier:
           type: string
@@ -1417,7 +1481,7 @@ components:
             $ref: "#/components/schemas/FlowerPriceTrackerLineItem"
     FlowerPriceDashboardObservation:
       type: object
-      required: [id, purchaseDate, flower, category, supplier, bunchSize, bunchesPurchased, pricePerBunch, totalStemQty, costPerStem, source, marketCycle, sellThrough, marketNotes]
+      required: [id, purchaseDate, flower, canonicalFlower, category, trackerCategory, supplier, bunchSize, bunchesPurchased, pricePerBunch, totalStemQty, costPerStem, source, marketCycle, sellThrough, marketNotes]
       properties:
         id:
           type: number
@@ -1426,8 +1490,13 @@ components:
           description: ISO calendar date of the purchase
         flower:
           type: string
+        canonicalFlower:
+          type: string
         category:
           $ref: "#/components/schemas/FlowerCategory"
+        trackerCategory:
+          $ref: "#/components/schemas/FlowerPriceTrackerCategory"
+          nullable: true
         supplier:
           type: string
           nullable: true
@@ -1471,9 +1540,40 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FlowerSellThroughGuidance"
+    FlowerPriceTrackerCategory:
+      type: string
+      enum: [Textural foliage, Classic blooms, Statement blooms, Gum]
+    FlowerPriceTrackerFlower:
+      type: object
+      required: [flowerName, category]
+      properties:
+        flowerName:
+          type: string
+        category:
+          $ref: "#/components/schemas/FlowerPriceTrackerCategory"
+          nullable: true
+    UpdateFlowerPriceTrackerFlowerCategoryInput:
+      type: object
+      required: [flowerName, category]
+      properties:
+        flowerName:
+          type: string
+        category:
+          $ref: "#/components/schemas/FlowerPriceTrackerCategory"
+          nullable: true
+    FlowerPriceReceiptLineStemCountInput:
+      type: object
+      required: [stemCount]
+      properties:
+        stemCount:
+          type: number
+          nullable: true
+          minimum: 0
+          multipleOf: 1
+          description: Manually entered whole-number stem count; null clears it.
     FlowerPriceReceiptLine:
       type: object
-      required: [id, lineNumber, flowerType, varietyOrigin, sizeText, stemsPerUnit, quantity, unitPrice, printedLineTotal, lineTotal, taxBasis, reviewStatus, reviewNote]
+      required: [id, lineNumber, flowerType, canonicalFlower, trackerCategory, varietyOrigin, sizeText, stemsPerUnit, quantity, unitPrice, printedLineTotal, lineTotal, gstInclusiveLineTotal, gstEstimated, stemCount, costPerStem, taxBasis, reviewStatus, reviewNote]
       properties:
         id:
           type: number
@@ -1482,6 +1582,11 @@ components:
           minimum: 1
         flowerType:
           type: string
+        canonicalFlower:
+          type: string
+        trackerCategory:
+          $ref: "#/components/schemas/FlowerPriceTrackerCategory"
+          nullable: true
         varietyOrigin:
           type: string
           nullable: true
@@ -1510,6 +1615,25 @@ components:
           nullable: true
           minimum: 0
           description: Exact GST-inclusive paid amount for this line when printed or verified.
+        gstInclusiveLineTotal:
+          type: number
+          nullable: true
+          minimum: 0
+          description: GST-inclusive line amount, calculated from the receipt price when necessary.
+        gstEstimated:
+          type: boolean
+          description: True when GST was estimated from a pre-GST printed amount.
+        stemCount:
+          type: number
+          nullable: true
+          minimum: 0
+          multipleOf: 1
+          description: Manually entered whole-number stem count.
+        costPerStem:
+          type: number
+          nullable: true
+          minimum: 0
+          description: GST-inclusive line total divided by stem count, or null when no positive count is available.
         taxBasis:
           type: string
           enum: [inclusive, exclusive, unknown]

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { after, before, beforeEach, describe, it } from "node:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import app from "../app";
 import {
   bouquetPlansTable,
@@ -16,6 +16,7 @@ import {
   flowerPriceBackfillsTable,
   flowerPriceReceiptLinesTable,
   flowerPriceReceiptsTable,
+  flowerPriceTrackerFlowersTable,
   marketBuyListEditLogsTable,
   marketBuyListStatesTable,
   marketCostsTable,
@@ -25,8 +26,16 @@ import {
   marketsTable,
   pool,
 } from "@workspace/db";
+import { canonicalFlowerName, costPerStem, receiptGstValues } from "../flower-price-data";
 
 const testCycles = [9001, 9002, 9003, 9004];
+const testTrackerFlowerNames = [
+  "API history-only flower",
+  "API knowledge history fixture",
+  "Daffodil",
+  "David Austin roses",
+  "Waratah",
+];
 
 let server: Server;
 let baseUrl: string;
@@ -68,6 +77,16 @@ async function resetTestCycles() {
     await tx.delete(marketScheduleOverridesTable).where(inArray(marketScheduleOverridesTable.marketCycle, testCycles));
     await tx.delete(marketsTable).where(inArray(marketsTable.cycle, testCycles));
   });
+  await cleanupTestTrackerFlowers();
+}
+
+async function cleanupTestTrackerFlowers() {
+  await db
+    .delete(flowerPriceTrackerFlowersTable)
+    .where(and(
+      inArray(flowerPriceTrackerFlowersTable.flowerName, testTrackerFlowerNames),
+      isNull(flowerPriceTrackerFlowersTable.category),
+    ));
 }
 
 async function getContext(cycle: number): Promise<any> {
@@ -100,10 +119,43 @@ before(async () => {
 beforeEach(resetTestCycles);
 
 after(async () => {
+  await cleanupTestTrackerFlowers();
   await new Promise<void>((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
   await pool.end();
+});
+
+describe("flower price data rules", () => {
+  it("normalizes only the requested flower aliases and keeps Daisy separate from Matricaria", () => {
+    assert.equal(canonicalFlowerName({ flowerType: "Chrysanthemum", varietyOrigin: "Disbud · Natural · Pompom" }), "Disbud chrysanthemum");
+    assert.equal(canonicalFlowerName({ flowerType: "Disbud chrysanthemum", varietyOrigin: null }), "Disbud chrysanthemum");
+    assert.equal(canonicalFlowerName({ flowerType: "Emile", varietyOrigin: "Local" }), "Lisianthus");
+    assert.equal(canonicalFlowerName({ flowerType: "Gum", varietyOrigin: "Cinerea" }), "Eucalyptus");
+    assert.equal(canonicalFlowerName({ flowerType: "Daisy", varietyOrigin: null }), "Daisy");
+    assert.equal(canonicalFlowerName({ flowerType: "Matricaria", varietyOrigin: "Daisy · Chamomile" }), "Matricaria");
+  });
+
+  it("uses exact inclusive receipt values and estimates GST only for exclusive prices", () => {
+    assert.deepEqual(receiptGstValues({
+      lineTotal: 18.5,
+      printedLineTotal: 18.5,
+      taxBasis: "inclusive",
+    }), { gstInclusiveLineTotal: 18.5, gstEstimated: false });
+    assert.deepEqual(receiptGstValues({
+      lineTotal: null,
+      printedLineTotal: 25,
+      taxBasis: "exclusive",
+    }), { gstInclusiveLineTotal: 27.5, gstEstimated: true });
+    assert.deepEqual(receiptGstValues({
+      lineTotal: null,
+      printedLineTotal: 25,
+      taxBasis: "unknown",
+    }), { gstInclusiveLineTotal: null, gstEstimated: false });
+    assert.equal(costPerStem(27.5, null), null);
+    assert.equal(costPerStem(27.5, 0), null);
+    assert.equal(costPerStem(27.5, 11), 2.5);
+  });
 });
 
 describe("market context persistence", () => {
@@ -592,6 +644,121 @@ describe("market context persistence", () => {
           receipts.map((receipt) => receipt.id),
         ));
       }
+    }
+  });
+
+  it("persists manual stem counts, GST estimates, flower groups, and saved categories", async () => {
+    const supplier = "API flower tracker data fixture";
+    const receiptNumber = "TEST-GST-1";
+    const categoryFixture = "API category fixture";
+    const payload = {
+      receipts: [{
+        supplier,
+        receiptNumber,
+        purchaseDate: "2026-09-26",
+        receiptTotal: 22,
+        reviewStatus: "ready",
+        reviewNote: null,
+        lines: [{
+          lineNumber: 1,
+          flowerType: "Gum",
+          varietyOrigin: "Cinerea",
+          sizeText: "5 stems",
+          stemsPerUnit: 5,
+          quantity: 1,
+          unitPrice: 20,
+          printedLineTotal: 20,
+          lineTotal: null,
+          taxBasis: "exclusive",
+          reviewStatus: "ready",
+          reviewNote: null,
+        }],
+      }],
+    };
+
+    try {
+      const imported = await request("/markets/flower-price-receipts", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      assert.equal(imported.status, 201);
+      const savedReceipt = imported.body.receipts.find((receipt: any) => receipt.receiptNumber === receiptNumber);
+      assert.ok(savedReceipt);
+      const importedLine = savedReceipt.lines[0];
+      assert.equal(importedLine.canonicalFlower, "Eucalyptus");
+      assert.equal(importedLine.gstInclusiveLineTotal, 22);
+      assert.equal(importedLine.gstEstimated, true);
+      assert.equal(importedLine.stemCount, null);
+      assert.equal(importedLine.costPerStem, null);
+
+      const counted = await patch(`/markets/flower-price-receipt-lines/${importedLine.id}`, { stemCount: 11 });
+      assert.equal(counted.status, 200);
+      assert.equal(counted.body.stemCount, 11);
+      assert.equal(counted.body.costPerStem, 2);
+
+      const zeroCount = await patch(`/markets/flower-price-receipt-lines/${importedLine.id}`, { stemCount: 0 });
+      assert.equal(zeroCount.status, 200);
+      assert.equal(zeroCount.body.costPerStem, null);
+      const invalidCount = await patch(`/markets/flower-price-receipt-lines/${importedLine.id}`, { stemCount: 1.5 });
+      assert.equal(invalidCount.status, 400);
+
+      const savedCategory = await patch("/markets/flower-price-flowers", {
+        flowerName: categoryFixture,
+        category: "Gum",
+      });
+      assert.equal(savedCategory.status, 200);
+      assert.equal(savedCategory.body.category, "Gum");
+      const invalidCategory = await patch("/markets/flower-price-flowers", {
+        flowerName: categoryFixture,
+        category: "Premium Natives",
+      });
+      assert.equal(invalidCategory.status, 400);
+      const emptyCategory = await patch("/markets/flower-price-flowers", {
+        flowerName: categoryFixture,
+        category: null,
+      });
+      assert.equal(emptyCategory.status, 200);
+      assert.equal(emptyCategory.body.category, null);
+
+      const flowers = await request("/markets/flower-price-flowers");
+      assert.equal(flowers.status, 200);
+      const flowerNames = new Set(flowers.body.map((flower: any) => flower.flowerName));
+      assert.ok(flowerNames.has("Eucalyptus"));
+      assert.ok(flowerNames.has("Daisy"));
+      assert.ok(flowerNames.has("Matricaria"));
+
+      const receipts = await request("/markets/flower-price-receipts");
+      assert.equal(receipts.status, 200);
+      const flowerHqLines = receipts.body
+        .filter((receipt: any) => receipt.supplier === "FlowerHQ" && receipt.purchaseDate === "2026-09-26")
+        .flatMap((receipt: any) => receipt.lines)
+        .filter((line: any) => line.taxBasis === "exclusive");
+      assert.equal(flowerHqLines.length, 8);
+      for (const line of flowerHqLines) {
+        assert.equal(line.gstEstimated, true);
+        assert.equal(line.gstInclusiveLineTotal, Math.round(line.printedLineTotal * 1.1 * 100) / 100);
+      }
+    } finally {
+      const receipts = await db
+        .select({ id: flowerPriceReceiptsTable.id })
+        .from(flowerPriceReceiptsTable)
+        .where(and(
+          eq(flowerPriceReceiptsTable.supplier, supplier),
+          eq(flowerPriceReceiptsTable.receiptNumber, receiptNumber),
+        ));
+      if (receipts.length > 0) {
+        await db.delete(flowerPriceReceiptLinesTable).where(inArray(
+          flowerPriceReceiptLinesTable.receiptId,
+          receipts.map((receipt) => receipt.id),
+        ));
+        await db.delete(flowerPriceReceiptsTable).where(inArray(
+          flowerPriceReceiptsTable.id,
+          receipts.map((receipt) => receipt.id),
+        ));
+      }
+      await db.delete(flowerPriceTrackerFlowersTable).where(
+        eq(flowerPriceTrackerFlowersTable.flowerName, categoryFixture),
+      );
     }
   });
 

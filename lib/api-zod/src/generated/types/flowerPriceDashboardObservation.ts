@@ -7,6 +7,7 @@
  */
 import type { FlowerCategory } from './flowerCategory';
 import type { FlowerPriceDashboardObservationSource } from './flowerPriceDashboardObservationSource';
+import type { FlowerPriceTrackerCategory } from './flowerPriceTrackerCategory';
 import type { SellThroughRecord } from './sellThroughRecord';
 
 export interface FlowerPriceDashboardObservation {
@@ -14,7 +15,9 @@ export interface FlowerPriceDashboardObservation {
   /** ISO calendar date of the purchase */
   purchaseDate: string;
   flower: string;
+  canonicalFlower: string;
   category: FlowerCategory;
+  trackerCategory: FlowerPriceTrackerCategory | null;
   supplier: string | null;
   /** @minimum 1 */
   bunchSize: number;

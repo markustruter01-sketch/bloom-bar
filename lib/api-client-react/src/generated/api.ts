@@ -40,6 +40,9 @@ import type {
   FlowerPriceHistory,
   FlowerPriceReceipt,
   FlowerPriceReceiptImportResult,
+  FlowerPriceReceiptLine,
+  FlowerPriceReceiptLineStemCountInput,
+  FlowerPriceTrackerFlower,
   FlowerPriceTrackerMarket,
   GetSellThroughComparisonParams,
   HealthStatus,
@@ -58,7 +61,8 @@ import type {
   NonFlowerBankImportUploadResponse,
   NonFlowerPurchasePeriod,
   NonFlowerPurchasesUpdate,
-  SellThroughComparison
+  SellThroughComparison,
+  UpdateFlowerPriceTrackerFlowerCategoryInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -1233,6 +1237,226 @@ export const useCreateFlowerPriceReceipts = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getCreateFlowerPriceReceiptsMutationOptions(options));
+    }
+
+export const getUpdateFlowerPriceReceiptLineStemCountUrl = (lineId: number,) => {
+
+
+
+
+  return `/api/markets/flower-price-receipt-lines/${lineId}`
+}
+
+/**
+ * @summary Save a manual stem count for a receipt line
+ */
+export const updateFlowerPriceReceiptLineStemCount = async (lineId: number,
+    flowerPriceReceiptLineStemCountInput: FlowerPriceReceiptLineStemCountInput, options?: Parameters<typeof customFetch>[1]): Promise<FlowerPriceReceiptLine> => {
+
+  return customFetch<FlowerPriceReceiptLine>(getUpdateFlowerPriceReceiptLineStemCountUrl(lineId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(flowerPriceReceiptLineStemCountInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateFlowerPriceReceiptLineStemCountMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFlowerPriceReceiptLineStemCount>>, TError,{lineId: number;data: BodyType<FlowerPriceReceiptLineStemCountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateFlowerPriceReceiptLineStemCount>>, TError,{lineId: number;data: BodyType<FlowerPriceReceiptLineStemCountInput>}, TContext> => {
+
+const mutationKey = ['updateFlowerPriceReceiptLineStemCount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateFlowerPriceReceiptLineStemCount>>, {lineId: number;data: BodyType<FlowerPriceReceiptLineStemCountInput>}> = (props) => {
+          const {lineId,data} = props ?? {};
+
+          return  updateFlowerPriceReceiptLineStemCount(lineId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateFlowerPriceReceiptLineStemCountMutationResult = NonNullable<Awaited<ReturnType<typeof updateFlowerPriceReceiptLineStemCount>>>
+    export type UpdateFlowerPriceReceiptLineStemCountMutationBody = BodyType<FlowerPriceReceiptLineStemCountInput>
+    export type UpdateFlowerPriceReceiptLineStemCountMutationError = ErrorType<void>
+
+    /**
+ * @summary Save a manual stem count for a receipt line
+ */
+export const useUpdateFlowerPriceReceiptLineStemCount = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFlowerPriceReceiptLineStemCount>>, TError,{lineId: number;data: BodyType<FlowerPriceReceiptLineStemCountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateFlowerPriceReceiptLineStemCount>>,
+        TError,
+        {lineId: number;data: BodyType<FlowerPriceReceiptLineStemCountInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateFlowerPriceReceiptLineStemCountMutationOptions(options));
+    }
+
+export const getListFlowerPriceTrackerFlowersUrl = () => {
+
+
+
+
+  return `/api/markets/flower-price-flowers`
+}
+
+/**
+ * @summary List canonical flower groups and saved categories
+ */
+export const listFlowerPriceTrackerFlowers = async ( options?: Parameters<typeof customFetch>[1]): Promise<FlowerPriceTrackerFlower[]> => {
+
+  return customFetch<FlowerPriceTrackerFlower[]>(getListFlowerPriceTrackerFlowersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFlowerPriceTrackerFlowersQueryKey = () => {
+    return [
+    `/api/markets/flower-price-flowers`
+    ] as const;
+    }
+
+
+export const getListFlowerPriceTrackerFlowersQueryOptions = <TData = Awaited<ReturnType<typeof listFlowerPriceTrackerFlowers>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFlowerPriceTrackerFlowers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFlowerPriceTrackerFlowersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFlowerPriceTrackerFlowers>>> = ({ signal }) => listFlowerPriceTrackerFlowers({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFlowerPriceTrackerFlowers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListFlowerPriceTrackerFlowersQueryResult = NonNullable<Awaited<ReturnType<typeof listFlowerPriceTrackerFlowers>>>
+export type ListFlowerPriceTrackerFlowersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List canonical flower groups and saved categories
+ */
+
+export function useListFlowerPriceTrackerFlowers<TData = Awaited<ReturnType<typeof listFlowerPriceTrackerFlowers>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFlowerPriceTrackerFlowers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListFlowerPriceTrackerFlowersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateFlowerPriceTrackerFlowerCategoryUrl = () => {
+
+
+
+
+  return `/api/markets/flower-price-flowers`
+}
+
+/**
+ * @summary Save a category for a canonical flower
+ */
+export const updateFlowerPriceTrackerFlowerCategory = async (updateFlowerPriceTrackerFlowerCategoryInput: UpdateFlowerPriceTrackerFlowerCategoryInput, options?: Parameters<typeof customFetch>[1]): Promise<FlowerPriceTrackerFlower> => {
+
+  return customFetch<FlowerPriceTrackerFlower>(getUpdateFlowerPriceTrackerFlowerCategoryUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateFlowerPriceTrackerFlowerCategoryInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateFlowerPriceTrackerFlowerCategoryMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFlowerPriceTrackerFlowerCategory>>, TError,{data: BodyType<UpdateFlowerPriceTrackerFlowerCategoryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateFlowerPriceTrackerFlowerCategory>>, TError,{data: BodyType<UpdateFlowerPriceTrackerFlowerCategoryInput>}, TContext> => {
+
+const mutationKey = ['updateFlowerPriceTrackerFlowerCategory'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateFlowerPriceTrackerFlowerCategory>>, {data: BodyType<UpdateFlowerPriceTrackerFlowerCategoryInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateFlowerPriceTrackerFlowerCategory(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateFlowerPriceTrackerFlowerCategoryMutationResult = NonNullable<Awaited<ReturnType<typeof updateFlowerPriceTrackerFlowerCategory>>>
+    export type UpdateFlowerPriceTrackerFlowerCategoryMutationBody = BodyType<UpdateFlowerPriceTrackerFlowerCategoryInput>
+    export type UpdateFlowerPriceTrackerFlowerCategoryMutationError = ErrorType<void>
+
+    /**
+ * @summary Save a category for a canonical flower
+ */
+export const useUpdateFlowerPriceTrackerFlowerCategory = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFlowerPriceTrackerFlowerCategory>>, TError,{data: BodyType<UpdateFlowerPriceTrackerFlowerCategoryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateFlowerPriceTrackerFlowerCategory>>,
+        TError,
+        {data: BodyType<UpdateFlowerPriceTrackerFlowerCategoryInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateFlowerPriceTrackerFlowerCategoryMutationOptions(options));
     }
 
 export const getCreateFlowerPriceBackfillUrl = () => {

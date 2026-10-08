@@ -381,6 +381,7 @@ export const ListFlowerPriceTrackerResponseItem = zod.object({
   "id": zod.number(),
   "marketCycle": zod.number(),
   "flower": zod.string(),
+  "canonicalFlower": zod.string(),
   "supplier": zod.string().nullable(),
   "bunchSize": zod.number().min(1),
   "bunchesPurchased": zod.number().min(1),
@@ -431,7 +432,9 @@ export const ListFlowerPriceDashboardResponse = zod.object({
   "id": zod.number(),
   "purchaseDate": zod.string().describe('ISO calendar date of the purchase'),
   "flower": zod.string(),
+  "canonicalFlower": zod.string(),
   "category": zod.enum(['Gum', 'Textural Foliage', 'Classic Blooms', 'Statement Blooms', 'Premium Natives']),
+  "trackerCategory": zod.enum(['Textural foliage', 'Classic blooms', 'Statement blooms', 'Gum']).nullable(),
   "supplier": zod.string().nullable(),
   "bunchSize": zod.number().min(1),
   "bunchesPurchased": zod.number().min(1),
@@ -472,6 +475,13 @@ export const listFlowerPriceReceiptsResponseLinesItemPrintedLineTotalMin = 0;
 
 export const listFlowerPriceReceiptsResponseLinesItemLineTotalMin = 0;
 
+export const listFlowerPriceReceiptsResponseLinesItemGstInclusiveLineTotalMin = 0;
+
+export const listFlowerPriceReceiptsResponseLinesItemStemCountMin = 0;
+export const listFlowerPriceReceiptsResponseLinesItemStemCountMultipleOf = 1;
+
+export const listFlowerPriceReceiptsResponseLinesItemCostPerStemMin = 0;
+
 
 
 export const ListFlowerPriceReceiptsResponseItem = zod.object({
@@ -486,6 +496,8 @@ export const ListFlowerPriceReceiptsResponseItem = zod.object({
   "id": zod.number(),
   "lineNumber": zod.number().min(1),
   "flowerType": zod.string(),
+  "canonicalFlower": zod.string(),
+  "trackerCategory": zod.enum(['Textural foliage', 'Classic blooms', 'Statement blooms', 'Gum']).nullable(),
   "varietyOrigin": zod.string().nullable(),
   "sizeText": zod.string().nullable(),
   "stemsPerUnit": zod.number().min(1).nullable(),
@@ -493,6 +505,10 @@ export const ListFlowerPriceReceiptsResponseItem = zod.object({
   "unitPrice": zod.number().min(listFlowerPriceReceiptsResponseLinesItemUnitPriceMin).nullable().describe('Unit price printed on the receipt; tax treatment is identified separately.'),
   "printedLineTotal": zod.number().min(listFlowerPriceReceiptsResponseLinesItemPrintedLineTotalMin).nullable().describe('Exact line amount printed on the receipt, before any separately stated GST.'),
   "lineTotal": zod.number().min(listFlowerPriceReceiptsResponseLinesItemLineTotalMin).nullable().describe('Exact GST-inclusive paid amount for this line when printed or verified.'),
+  "gstInclusiveLineTotal": zod.number().min(listFlowerPriceReceiptsResponseLinesItemGstInclusiveLineTotalMin).nullable().describe('GST-inclusive line amount, calculated from the receipt price when necessary.'),
+  "gstEstimated": zod.boolean().describe('True when GST was estimated from a pre-GST printed amount.'),
+  "stemCount": zod.number().min(listFlowerPriceReceiptsResponseLinesItemStemCountMin).multipleOf(listFlowerPriceReceiptsResponseLinesItemStemCountMultipleOf).nullable().describe('Manually entered whole-number stem count.'),
+  "costPerStem": zod.number().min(listFlowerPriceReceiptsResponseLinesItemCostPerStemMin).nullable().describe('GST-inclusive line total divided by stem count, or null when no positive count is available.'),
   "taxBasis": zod.enum(['inclusive', 'exclusive', 'unknown']),
   "reviewStatus": zod.enum(['ready', 'needs-review']),
   "reviewNote": zod.string().nullable()
@@ -561,6 +577,13 @@ export const createFlowerPriceReceiptsResponseReceiptsItemLinesItemPrintedLineTo
 
 export const createFlowerPriceReceiptsResponseReceiptsItemLinesItemLineTotalMin = 0;
 
+export const createFlowerPriceReceiptsResponseReceiptsItemLinesItemGstInclusiveLineTotalMin = 0;
+
+export const createFlowerPriceReceiptsResponseReceiptsItemLinesItemStemCountMin = 0;
+export const createFlowerPriceReceiptsResponseReceiptsItemLinesItemStemCountMultipleOf = 1;
+
+export const createFlowerPriceReceiptsResponseReceiptsItemLinesItemCostPerStemMin = 0;
+
 
 
 export const CreateFlowerPriceReceiptsResponse = zod.object({
@@ -580,6 +603,8 @@ export const CreateFlowerPriceReceiptsResponse = zod.object({
   "id": zod.number(),
   "lineNumber": zod.number().min(1),
   "flowerType": zod.string(),
+  "canonicalFlower": zod.string(),
+  "trackerCategory": zod.enum(['Textural foliage', 'Classic blooms', 'Statement blooms', 'Gum']).nullable(),
   "varietyOrigin": zod.string().nullable(),
   "sizeText": zod.string().nullable(),
   "stemsPerUnit": zod.number().min(1).nullable(),
@@ -587,11 +612,99 @@ export const CreateFlowerPriceReceiptsResponse = zod.object({
   "unitPrice": zod.number().min(createFlowerPriceReceiptsResponseReceiptsItemLinesItemUnitPriceMin).nullable().describe('Unit price printed on the receipt; tax treatment is identified separately.'),
   "printedLineTotal": zod.number().min(createFlowerPriceReceiptsResponseReceiptsItemLinesItemPrintedLineTotalMin).nullable().describe('Exact line amount printed on the receipt, before any separately stated GST.'),
   "lineTotal": zod.number().min(createFlowerPriceReceiptsResponseReceiptsItemLinesItemLineTotalMin).nullable().describe('Exact GST-inclusive paid amount for this line when printed or verified.'),
+  "gstInclusiveLineTotal": zod.number().min(createFlowerPriceReceiptsResponseReceiptsItemLinesItemGstInclusiveLineTotalMin).nullable().describe('GST-inclusive line amount, calculated from the receipt price when necessary.'),
+  "gstEstimated": zod.boolean().describe('True when GST was estimated from a pre-GST printed amount.'),
+  "stemCount": zod.number().min(createFlowerPriceReceiptsResponseReceiptsItemLinesItemStemCountMin).multipleOf(createFlowerPriceReceiptsResponseReceiptsItemLinesItemStemCountMultipleOf).nullable().describe('Manually entered whole-number stem count.'),
+  "costPerStem": zod.number().min(createFlowerPriceReceiptsResponseReceiptsItemLinesItemCostPerStemMin).nullable().describe('GST-inclusive line total divided by stem count, or null when no positive count is available.'),
   "taxBasis": zod.enum(['inclusive', 'exclusive', 'unknown']),
   "reviewStatus": zod.enum(['ready', 'needs-review']),
   "reviewNote": zod.string().nullable()
 }))
 }))
+})
+
+
+/**
+ * @summary Save a manual stem count for a receipt line
+ */
+
+
+
+export const UpdateFlowerPriceReceiptLineStemCountParams = zod.object({
+  "lineId": zod.coerce.number().min(1)
+})
+
+export const updateFlowerPriceReceiptLineStemCountBodyStemCountMin = 0;
+export const updateFlowerPriceReceiptLineStemCountBodyStemCountMultipleOf = 1;
+
+
+
+export const UpdateFlowerPriceReceiptLineStemCountBody = zod.object({
+  "stemCount": zod.number().min(updateFlowerPriceReceiptLineStemCountBodyStemCountMin).multipleOf(updateFlowerPriceReceiptLineStemCountBodyStemCountMultipleOf).nullable().describe('Manually entered whole-number stem count; null clears it.')
+})
+
+
+
+
+export const updateFlowerPriceReceiptLineStemCountResponseUnitPriceMin = 0;
+
+export const updateFlowerPriceReceiptLineStemCountResponsePrintedLineTotalMin = 0;
+
+export const updateFlowerPriceReceiptLineStemCountResponseLineTotalMin = 0;
+
+export const updateFlowerPriceReceiptLineStemCountResponseGstInclusiveLineTotalMin = 0;
+
+export const updateFlowerPriceReceiptLineStemCountResponseStemCountMin = 0;
+export const updateFlowerPriceReceiptLineStemCountResponseStemCountMultipleOf = 1;
+
+export const updateFlowerPriceReceiptLineStemCountResponseCostPerStemMin = 0;
+
+
+
+export const UpdateFlowerPriceReceiptLineStemCountResponse = zod.object({
+  "id": zod.number(),
+  "lineNumber": zod.number().min(1),
+  "flowerType": zod.string(),
+  "canonicalFlower": zod.string(),
+  "trackerCategory": zod.enum(['Textural foliage', 'Classic blooms', 'Statement blooms', 'Gum']).nullable(),
+  "varietyOrigin": zod.string().nullable(),
+  "sizeText": zod.string().nullable(),
+  "stemsPerUnit": zod.number().min(1).nullable(),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(updateFlowerPriceReceiptLineStemCountResponseUnitPriceMin).nullable().describe('Unit price printed on the receipt; tax treatment is identified separately.'),
+  "printedLineTotal": zod.number().min(updateFlowerPriceReceiptLineStemCountResponsePrintedLineTotalMin).nullable().describe('Exact line amount printed on the receipt, before any separately stated GST.'),
+  "lineTotal": zod.number().min(updateFlowerPriceReceiptLineStemCountResponseLineTotalMin).nullable().describe('Exact GST-inclusive paid amount for this line when printed or verified.'),
+  "gstInclusiveLineTotal": zod.number().min(updateFlowerPriceReceiptLineStemCountResponseGstInclusiveLineTotalMin).nullable().describe('GST-inclusive line amount, calculated from the receipt price when necessary.'),
+  "gstEstimated": zod.boolean().describe('True when GST was estimated from a pre-GST printed amount.'),
+  "stemCount": zod.number().min(updateFlowerPriceReceiptLineStemCountResponseStemCountMin).multipleOf(updateFlowerPriceReceiptLineStemCountResponseStemCountMultipleOf).nullable().describe('Manually entered whole-number stem count.'),
+  "costPerStem": zod.number().min(updateFlowerPriceReceiptLineStemCountResponseCostPerStemMin).nullable().describe('GST-inclusive line total divided by stem count, or null when no positive count is available.'),
+  "taxBasis": zod.enum(['inclusive', 'exclusive', 'unknown']),
+  "reviewStatus": zod.enum(['ready', 'needs-review']),
+  "reviewNote": zod.string().nullable()
+})
+
+
+/**
+ * @summary List canonical flower groups and saved categories
+ */
+export const ListFlowerPriceTrackerFlowersResponseItem = zod.object({
+  "flowerName": zod.string(),
+  "category": zod.enum(['Textural foliage', 'Classic blooms', 'Statement blooms', 'Gum']).nullable()
+})
+export const ListFlowerPriceTrackerFlowersResponse = zod.array(ListFlowerPriceTrackerFlowersResponseItem)
+
+
+/**
+ * @summary Save a category for a canonical flower
+ */
+export const UpdateFlowerPriceTrackerFlowerCategoryBody = zod.object({
+  "flowerName": zod.string(),
+  "category": zod.enum(['Textural foliage', 'Classic blooms', 'Statement blooms', 'Gum']).nullable()
+})
+
+export const UpdateFlowerPriceTrackerFlowerCategoryResponse = zod.object({
+  "flowerName": zod.string(),
+  "category": zod.enum(['Textural foliage', 'Classic blooms', 'Statement blooms', 'Gum']).nullable()
 })
 
 
@@ -637,7 +750,9 @@ export const CreateFlowerPriceBackfillResponse = zod.object({
   "id": zod.number(),
   "purchaseDate": zod.string().describe('ISO calendar date of the purchase'),
   "flower": zod.string(),
+  "canonicalFlower": zod.string(),
   "category": zod.enum(['Gum', 'Textural Foliage', 'Classic Blooms', 'Statement Blooms', 'Premium Natives']),
+  "trackerCategory": zod.enum(['Textural foliage', 'Classic blooms', 'Statement blooms', 'Gum']).nullable(),
   "supplier": zod.string().nullable(),
   "bunchSize": zod.number().min(1),
   "bunchesPurchased": zod.number().min(1),

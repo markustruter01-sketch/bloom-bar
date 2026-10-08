@@ -40,6 +40,15 @@ export const flowerCategories = [
 
 export type FlowerCategory = (typeof flowerCategories)[number];
 
+export const flowerPriceTrackerCategories = [
+  "Textural foliage",
+  "Classic blooms",
+  "Statement blooms",
+  "Gum",
+] as const;
+
+export type FlowerPriceTrackerCategory = (typeof flowerPriceTrackerCategories)[number];
+
 const flowerCategoryConstraint = sql`"category" IN ('Gum', 'Textural Foliage', 'Classic Blooms', 'Statement Blooms', 'Premium Natives')`;
 
 export type SellThroughRecord = {
@@ -67,6 +76,20 @@ export const marketsTable = pgTable(
     margin: doublePrecision("margin").notNull().default(0),
   },
   (table) => ({ cycleUnique: unique("markets_cycle_unique").on(table.cycle) }),
+);
+
+export const flowerPriceTrackerFlowersTable = pgTable(
+  "flower_price_tracker_flowers",
+  {
+    flowerName: text("flower_name").primaryKey(),
+    category: text("category", { enum: flowerPriceTrackerCategories }),
+  },
+  (table) => ({
+    categoryAllowed: check(
+      "flower_price_tracker_flowers_category_allowed",
+      sql`"category" IS NULL OR "category" IN ('Textural foliage', 'Classic blooms', 'Statement blooms', 'Gum')`,
+    ),
+  }),
 );
 
 export const marketScheduleOverridesTable = pgTable(
@@ -224,6 +247,9 @@ export const flowerPriceReceiptLinesTable = pgTable(
     unitPrice: numeric("unit_price", { precision: 12, scale: 4, mode: "number" }),
     printedLineTotal: numeric("printed_line_total", { precision: 12, scale: 2, mode: "number" }),
     lineTotal: numeric("line_total", { precision: 12, scale: 2, mode: "number" }),
+    stemCount: integer("stem_count"),
+    gstInclusiveLineTotal: numeric("gst_inclusive_line_total", { precision: 12, scale: 2, mode: "number" }),
+    gstEstimated: boolean("gst_estimated").notNull().default(false),
     taxBasis: text("tax_basis", { enum: ["inclusive", "exclusive", "unknown"] }).notNull(),
     reviewStatus: text("review_status", { enum: ["ready", "needs-review"] }).notNull().default("ready"),
     reviewNote: text("review_note"),
@@ -253,6 +279,14 @@ export const flowerPriceReceiptLinesTable = pgTable(
     lineTotalNonNegative: check(
       "flower_price_receipt_lines_total_non_negative",
       sql`"line_total" IS NULL OR "line_total" >= 0`,
+    ),
+    stemCountNonNegative: check(
+      "flower_price_receipt_lines_stem_count_non_negative",
+      sql`"stem_count" IS NULL OR "stem_count" >= 0`,
+    ),
+    gstInclusiveLineTotalNonNegative: check(
+      "flower_price_receipt_lines_gst_inclusive_total_non_negative",
+      sql`"gst_inclusive_line_total" IS NULL OR "gst_inclusive_line_total" >= 0`,
     ),
     taxBasisAllowed: check(
       "flower_price_receipt_lines_tax_basis_allowed",
@@ -532,6 +566,7 @@ export type MarketActualPurchase = typeof marketActualPurchasesTable.$inferSelec
 export type FlowerPriceBackfill = typeof flowerPriceBackfillsTable.$inferSelect;
 export type FlowerPriceReceipt = typeof flowerPriceReceiptsTable.$inferSelect;
 export type FlowerPriceReceiptLine = typeof flowerPriceReceiptLinesTable.$inferSelect;
+export type FlowerPriceTrackerFlower = typeof flowerPriceTrackerFlowersTable.$inferSelect;
 export type MarketCost = typeof marketCostsTable.$inferSelect;
 export type NonFlowerPurchase = typeof nonFlowerPurchasesTable.$inferSelect;
 export type NonFlowerPurchaseAllocation = typeof nonFlowerPurchaseAllocationsTable.$inferSelect;
